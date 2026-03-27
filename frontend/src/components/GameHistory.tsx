@@ -32,6 +32,7 @@ export default function GameHistory() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [gameFilter, setGameFilter] = useState<'all' | 'coinflip' | 'dice' | 'plinko'>('all');
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchHistory = useCallback(async (showSpinner = true) => {
@@ -72,6 +73,11 @@ export default function GameHistory() {
     };
   }, [isConnected, walletAddress, fetchHistory]);
 
+  // Client-side filter for game type (all bets are coinflip for now)
+  const filteredBets = gameFilter === 'all' || gameFilter === 'coinflip' 
+    ? bets 
+    : [];
+
   // ── Not connected ───────────────────────────────────────────────
 
   if (!isConnected) {
@@ -96,6 +102,19 @@ export default function GameHistory() {
         </button>
       </div>
 
+      {/* Game Type Filter Tabs */}
+      <div className="gh-filter-tabs">
+        {(['all', 'coinflip', 'dice', 'plinko'] as const).map((filter) => (
+          <button
+            key={filter}
+            className={`gh-filter-tab ${gameFilter === filter ? 'gh-filter-tab--active' : ''}`}
+            onClick={() => setGameFilter(filter)}
+          >
+            {filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1)}
+          </button>
+        ))}
+      </div>
+
       {error && <div className="gh-error">{error}</div>}
 
       {loading ? (
@@ -110,8 +129,12 @@ export default function GameHistory() {
             </div>
           ))}
         </div>
-      ) : bets.length === 0 ? (
-        <div className="gh-empty">No bets yet. Place your first flip!</div>
+      ) : filteredBets.length === 0 ? (
+        <div className="gh-empty">
+          {gameFilter === 'all' 
+            ? 'No bets yet. Place your first flip!' 
+            : `No ${gameFilter} bets yet.`}
+        </div>
       ) : (
         <div className="gh-table-wrap">
           <table className="gh-table">
@@ -126,7 +149,7 @@ export default function GameHistory() {
               </tr>
             </thead>
             <tbody>
-              {bets.map((bet) => (
+              {filteredBets.map((bet) => (
                 <tr key={bet.betId}>
                   <td className="gh-date">{formatDate(bet.timestamp)}</td>
                   <td>

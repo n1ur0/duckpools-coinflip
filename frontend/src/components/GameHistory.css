@@ -190,13 +190,54 @@
   100% { background-position: -200% 0; }
 }
 
-/* ── Connect Prompt ─────────────────────────────── */
+/* ── Connect Prompt ─────────────────────────────────── */
 
 .gh-connect {
   text-align: center;
   padding: 24px;
   color: var(--text-secondary, #8892b0);
   font-size: 0.9rem;
+}
+
+/* ── Filter Tabs ─────────────────────────────────── */
+
+.gh-filter-tabs {
+  display: flex;
+  gap: var(--space-2, 0.5rem);
+  margin-bottom: var(--space-4, 1rem);
+  flex-wrap: wrap;
+}
+
+.gh-filter-tab {
+  background: transparent;
+  border: 1px solid var(--border-default, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-full, 9999px);
+  padding: var(--space-2, 0.5rem) var(--space-4, 1rem);
+  color: var(--text-secondary, #8892b0);
+  font-family: var(--font-body, 'Inter', sans-serif);
+  font-size: var(--text-sm, 0.8rem);
+  font-weight: var(--font-medium, 500);
+  cursor: pointer;
+  transition: all var(--transition-fast, 150ms ease);
+  text-transform: capitalize;
+}
+
+.gh-filter-tab:hover {
+  background: var(--bg-card-hover, rgba(255, 255, 255, 0.06));
+  color: var(--text-primary, #f0f0f0);
+  border-color: var(--border-strong, rgba(255, 255, 255, 0.15));
+}
+
+.gh-filter-tab--active {
+  background: var(--accent-gold, #f0b429);
+  color: var(--text-inverse, #080b14);
+  border-color: var(--accent-gold, #f0b429);
+  font-weight: var(--font-semibold, 600);
+}
+
+.gh-filter-tab--active:hover {
+  background: var(--accent-gold-light, #ffd700);
+  border-color: var(--accent-gold-light, #ffd700);
 }
 
 /* ── Responsive ─────────────────────────────────── */
