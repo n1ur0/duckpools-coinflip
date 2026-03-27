@@ -1,0 +1,195 @@
+# =============================================================================
+# DuckPools Coinflip - Docker Compose Setup
+# =============================================================================
+#
+# This Docker Compose configuration spins up the DuckPools Coinflip stack:
+#
+# 1. Backend API (port 8000)
+# 2. Frontend Dev Server (port 3000)
+# 3. Off-Chain Bot (no port exposure, internal only)
+#
+# IMPORTANT: Ergo node runs NATIVE on host (NOT containerized)
+# - Node URL: http://host.docker.internal:9052
+# - Ensure Ergo node is running on host:9052 before starting services
+#
+# Quick Start:
+#   cp .env.example .env
+#   # Edit .env with your configuration
+#   docker compose build
+#   docker compose up -d
+#
+# Services:
+#   - backend-api:    Runs FastAPI backend with hot-reload
+#   - frontend:       Runs Vite dev server with hot-reload
+#   - off-chain-bot:  Runs off-chain bot for bet resolution
+#
+# Volumes:
+#   - backend-vendor:    Python dependencies cache
+#   - frontend-modules:  Node modules cache
+#   - bot-vendor:        Bot Python dependencies cache
+#
+# Networks:
+#   - coinflip-net:      Internal network for service communication
+#
+# =============================================================================
+
+services:
+  # =============================================================================
+  # Backend API (FastAPI)
+  # =============================================================================
+  backend-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: coinflip-backend-api
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./backend:/app
+      - backend-vendor:/app/.venv
+    environment:
+      # Node connection (using host.docker.internal to reach host)
+      - NODE_URL=${NODE_URL:-http://host.docker.internal:9052}
+      - EXPLORER_URL=${EXPLORER_URL:-http://localhost:9052}
+      
+      # Game configuration
+      - COINFLIP_NFT_ID=${COINFLIP_NFT_ID}
+      - V2_PENDING_BET_SCRIPT=${V2_PENDING_BET_SCRIPT}
+      - V2_GAME_STATE_SCRIPT=${V2_GAME_STATE_SCRIPT}
+      - HOUSE_ADDRESS=${HOUSE_ADDRESS}
+      
+      # API keys
+      - API_KEY=${API_KEY:-hello}
+      
+      # CORS
+      - CORS_ORIGINS_STR=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      
+      # Logging
+      - LOG_LEVEL=${BACKEND_LOG_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - coinflip-net
+    restart: unless-stopped
+    extra_hosts:
+      # Allow container to reach host Ergo node
+      - "host.docker.internal:host-gateway"
+
+  # =============================================================================
+  # Frontend (React + Vite Dev Server)
+  # =============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: coinflip-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+      - "${FRONTEND_HMR_PORT:-24678}:24678"
+    volumes:
+      - ./frontend:/app
+      - frontend-modules:/app/node_modules
+      - /app/node_modules/.vite
+    environment:
+      # Network (testnet or mainnet)
+      - VITE_NETWORK=${VITE_NETWORK:-testnet}
+      
+      # API endpoint (from inside Docker network, use container name)
+      - VITE_API_ENDPOINT=${VITE_API_ENDPOINT:-http://localhost:8000}
+      
+      # Explorer URL
+      - VITE_EXPLORER_URL=${VITE_EXPLORER_URL:-https://testnet.ergoplatform.com}
+      
+      # Ergo node URL (for browser access, use localhost)
+      - VITE_NODE_URL=${VITE_NODE_URL:-http://localhost:9052}
+      
+      # Game settings
+      - VITE_MIN_BET=${VITE_MIN_BET:-0.001}
+      - VITE_MAX_BET_PERCENTAGE=${VITE_MAX_BET_PERCENTAGE:-10}
+      
+      # File watching
+      - CHOKIDAR_USEPOLLING=true
+    depends_on:
+      backend-api:
+        condition: service_healthy
+    networks:
+      - coinflip-net
+    restart: unless-stopped
+    extra_hosts:
+      # Allow container to reach host Ergo node
+      - "host.docker.internal:host-gateway"
+
+  # =============================================================================
+  # Off-Chain Bot
+  # =============================================================================
+  off-chain-bot:
+    build:
+      context: ./off-chain-bot
+      dockerfile: Dockerfile
+      target: development
+    container_name: coinflip-off-chain-bot
+    volumes:
+      - ./off-chain-bot:/app
+      - bot-vendor:/app/.venv
+      - coinflip-bot-logs:/app/logs
+    environment:
+      # Node connection (using host.docker.internal to reach host)
+      - NODE_URL=${NODE_URL:-http://host.docker.internal:9052}
+      - EXPLORER_URL=${EXPLORER_URL:-http://localhost:9052}
+      
+      # Wallet configuration
+      - HOUSE_ADDRESS=${HOUSE_ADDRESS}
+      - WALLET_PASS=${WALLET_PASS}
+      
+      # Game assets
+      - COINFLIP_NFT_ID=${COINFLIP_NFT_ID}
+      
+      # Contract scripts
+      - PENDING_BET_ERGOTREE=${PENDING_BET_ERGOTREE}
+      - V2_PENDING_BET_ERGOTREE=${V2_PENDING_BET_ERGOTREE}
+      - V2_GAME_STATE_SCRIPT=${V2_GAME_STATE_SCRIPT}
+      
+      # API configuration
+      - API_KEY=${API_KEY:-hello}
+      
+      # Bot configuration
+      - ENABLE_BOT=${ENABLE_BOT:-true}
+      - SETUP_MODE=${SETUP_MODE:-false}
+      - AUTO_LIQUIDITY=${AUTO_LIQUIDITY:-false}
+      - DISCORD_NOTIFICATIONS=${DISCORD_NOTIFICATIONS:-false}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      
+      # Development settings
+      - DEBUG_MODE=${DEBUG_MODE:-false}
+      - REPORT_BALANCE=${REPORT_BALANCE:-true}
+      - DRY_RUN=${DRY_RUN:-false}
+    depends_on:
+      backend-api:
+        condition: service_healthy
+    networks:
+      - coinflip-net
+    restart: unless-stopped
+    extra_hosts:
+      # Allow container to reach host Ergo node
+      - "host.docker.internal:host-gateway"
+
+networks:
+  coinflip-net:
+    name: coinflip-network
+    driver: bridge
+
+volumes:
+  backend-vendor:
+    name: coinflip-backend-vendor
+  frontend-modules:
+    name: coinflip-frontend-modules
+  bot-vendor:
+    name: coinflip-bot-vendor
+  coinflip-bot-logs:
+    name: coinflip-bot-logs

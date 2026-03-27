@@ -1,0 +1,310 @@
+# ==============================================================================
+# DuckPools Coinflip - Comprehensive .gitignore
+# ==============================================================================
+
+# -----------------------------------------------------------------------------
+# Environment Variables & Secrets (NEVER COMMIT THESE)
+# -----------------------------------------------------------------------------
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+*.env
+secrets/
+*.key
+*.pem
+*.p12
+*.pfx
+wallet-seed.txt
+wallet-mnemonic.txt
+api_keys.txt
+
+# -----------------------------------------------------------------------------
+# Logs
+# -----------------------------------------------------------------------------
+logs/
+*.log
+*.log.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+server.log
+pm2-logs/
+
+# -----------------------------------------------------------------------------
+# Python
+# -----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+ruff.toml
+.ruff_cache/
+venv/
+ENV/
+env/
+.venv/
+*.venv
+
+# -----------------------------------------------------------------------------
+# Node.js / Frontend
+# -----------------------------------------------------------------------------
+node_modules/
+dist/
+dist-ssr/
+*.local
+.cache/
+.parcel-cache/
+.vite/
+.nuxt/
+.cache/
+.temp/
+.next/
+out/
+.vercel/
+.netlify/
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+.turbo/
+
+# -----------------------------------------------------------------------------
+# Database
+# -----------------------------------------------------------------------------
+*.db
+*.sqlite
+*.sqlite3
+*.sql.gz
+pgdata/
+data/
+db-backups/
+*.dump
+*.bak
+*.backup
+
+# -----------------------------------------------------------------------------
+# IDE & Editor Files
+# -----------------------------------------------------------------------------
+# VSCode
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# JetBrains / IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Vim
+*.swp
+*.swo
+*.swn
+*~
+vim-tmp/
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+.directory
+.Trash-*
+.nfs*
+
+# -----------------------------------------------------------------------------
+# Testing & Coverage
+# -----------------------------------------------------------------------------
+coverage/
+.nyc_output/
+test-results/
+junit.xml
+test-results.xml
+.playwright-cache/
+playwright-report/
+playwright/.cache/
+
+# -----------------------------------------------------------------------------
+# Build Artifacts
+# -----------------------------------------------------------------------------
+*.class
+*.jar
+*.war
+*.ear
+target/
+build/
+*.tgz
+*.tar.gz
+
+# -----------------------------------------------------------------------------
+# Docker
+# -----------------------------------------------------------------------------
+.dockerignore
+docker-compose.override.yml
+.docker/
+
+# -----------------------------------------------------------------------------
+# OS / Temporary Files
+#-------------
+*.tmp
+*.temp
+tmp/
+temp/
+*.cache
+.cache/
+
+# -----------------------------------------------------------------------------
+# Documentation (Drafts)
+#-------------
+docs/draft/
+docs/WIP/
+*_DRAFT.md
+*_TODO.md
+~$*.doc* # Office temp files
+
+# -----------------------------------------------------------------------------
+# CI/CD
+#-------------
+.github/workflows/*.local.yml
+.github/deploy-keys/
+deploy/
+secrets/
+
+# -----------------------------------------------------------------------------
+# Ergo / Blockchain Specific
+#-------------
+ergo-testnet/data/
+ergo-mainnet/data/
+*.ergo
+wallet.json
+*.wallet
+blockchain-data/
+
+# -----------------------------------------------------------------------------
+# Paperclip (Project Management)
+#-------------
+.paperclip/
+paperclip-config.local.json
+
+# -----------------------------------------------------------------------------
+# Backup Files
+#-------------
+*.backup
+*.old
+*.orig
+*.bak
+backup/
+backups/
+
+# -----------------------------------------------------------------------------
+# PM2
+#-------------
+.pm2/
+ecosystem.config.local.js
+
+# -----------------------------------------------------------------------------
+# Misc
+#-------------
+.DS_Store
+*.pid
+*.seed
+*.pid.lock
+.env.test
+.heroku/
+.vercel
+.now
+.netlify
+
+# -----------------------------------------------------------------------------
+# Development Only (Keep in development branch, exclude in main)
+#-------------
+# Uncomment these for local development only:
+# dev-scripts/
+# scratchpad/
+# experiments/

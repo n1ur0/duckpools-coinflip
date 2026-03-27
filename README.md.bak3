@@ -1,0 +1,167 @@
+# DuckPools Coinflip
+
+![Build Status](https://img.shields.io/badge/build-passing-success)
+![Platform](https://img.shields.io/badge/platform-Ergo-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+A decentralized coinflip betting game built on the Ergo blockchain using commit-reveal scheme and smart contracts.
+
+## Quick Start
+
+```bash
+# 1. Start Ergo node (testnet with mining enabled)
+cd ~/Documents/git/ergo-testnet/
+# Ensure ergo.jar is running with config
+
+# 2. Start backend API (Python/FastAPI on port 8000)
+cd backend
+pip install -r requirements.txt
+python api_server.py
+
+# 3. Start frontend (React/Vite on port 3000)
+cd frontend
+npm install
+npm run dev
+# Open http://localhost:3000
+
+# 4. Optional: Start off-chain bot for automatic bet resolution
+
+
+
+## Docker Quick Start
+
+The fastest way to run DuckPools Coinflip is using Docker Compose:
+
+```bash
+# 1. Copy environment template
+cp .env.example .env
+
+# 2. Edit .env with your configuration
+nano .env
+
+# 3. Start all services
+docker compose up -d
+
+# 4. Access the application
+#   Frontend: http://localhost:3000
+#   Backend: http://localhost:8000
+```
+
+For detailed Docker setup instructions, see [DOCKER.md](DOCKER.md).
+
+**Note**: Docker setup requires the Ergo node to be running natively on host port 9052 (not in a container).
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Frontend (React)                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
+│  │  BetForm.tsx │  │ WalletConn.. │  │ GameHistory  │          │
+│  │ (Nautilus)   │  │ (EIP-12)     │  │ (Stats)      │          │
+│  └──────┬───────┘  └──────────────┘  └──────────────┘          │
+│         │                                                   │
+│         └───────────────┬───────────────────────────────┘         │
+│                         │                                        │
+└─────────────────────────┼────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Backend API (FastAPI)                         │
+│  ┌──────────────────────────────────────────────────────┐       │
+│  │  /health  /pool/state  /place-bet  /reveal-bet       │       │
+│  └──────────────────────┬───────────────────────────────┘       │
+│                         │                                         │
+└─────────────────────────┼────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Ergo Testnet Node                            │
+│  ┌──────────────────────────────────────────────────────┐       │
+│  │  PendingBet Box  ──  GameState Box  ──  House Wallet │       │
+│  │  (Commitment)       (RNG State)                     │       │
+│  └──────────────────────────────────────────────────────┘       │
+└─────────────────────────────────────────────────────────────────┘
+                          ▲
+                          │
+┌─────────────────────────────────────────────────────────────────┐
+│                    Off-chain Bot (Python)                        │
+│  Monitors PendingBet boxes, reveals secrets, calculates RNG     │
+│  and settles bets automatically                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Key Features
+
+- **Commit-Reveal Scheme**: Fair randomness using block hashes and player secrets
+- **Smart Contracts**: ErgoTree contracts enforce bet logic on-chain
+- **Wallet Integration**: EIP-12 via Nautilus browser extension
+- **House Edge**: 3% house edge on winning bets (1.94x payout instead of 2x)
+- **Auto-Resolution**: Off-chain bot monitors and settles bets
+- **LP Liquidity Pool** (MAT-15): External ERG holders provide bankroll liquidity, earn yield from house edge profits, with cooldown-gated withdrawals
+
+## How It Works
+
+### Commit Phase
+1. Player generates secret (8 bytes) and bet choice (0=heads, 1=tails)
+2. Computes commitment: `SHA256(secret || choice)`
+3. Submits bet with commitment (stored in R5 register)
+4. Player's ERG + tokens locked in PendingBet box
+
+### Reveal Phase
+1. Bot/player reveals the secret on-chain
+2. Contract verifies: `SHA256(revealed_secret || choice) == R5_commitment`
+3. RNG computed: `SHA256(blockHash || secret)`, outcome = `first_byte % 2`
+4. Winner gets 1.94x payout, loser's ERG goes to house
+
+## Documentation
+
+- [Getting Started Guide](docs/GETTING_STARTED.md) - Installation and first run
+- [Architecture Overview](docs/ARCHITECTURE.md) - System design and data flow
+- [Ergo Concepts](docs/ERGO_CONCEPTS.md) - UTXO model, ErgoTree, registers, serialization
+- [Contributing Guide](docs/CONTRIBUTING.md) - Code style, PR process, testing
+
+## Tech Stack
+
+### Backend
+- Python 3.12+ with FastAPI
+- httpx for async HTTP
+- structlog, slowapi for logging/rate limiting
+
+### Frontend
+- React 18 + TypeScript + Vite 5
+- FleetSDK for Ergo transaction building
+- ergo-lib-wasm-browser for WASM operations
+- Nautilus EIP-12 wallet integration
+
+### Blockchain
+- Ergo Testnet
+- ErgoTree smart contracts
+- UTXO model with Sigma protocols
+
+## Ports
+
+| Service    | Port | Description                  |
+|------------|------|------------------------------|
+| Ergo Node  | 9052 | REST API, wallet, blockchain |
+| Backend    | 8000 | FastAPI server               |
+| Frontend   | 3000 | Vite dev server              |
+
+## LP Liquidity Pool Endpoints
+
+| Method | Path                                | Description                    |
+|--------|-------------------------------------|--------------------------------|
+| GET    | `/api/lp/pool`                      | Pool TVL, supply, price, stats |
+| GET    | `/api/lp/price`                     | LP token price                 |
+| GET    | `/api/lp/balance/{address}`         | LP balance for address         |
+| GET    | `/api/lp/apy`                       | APY calculation                |
+| GET    | `/api/lp/estimate/deposit`          | Deposit share estimate         |
+| GET    | `/api/lp/estimate/withdraw`         | Withdraw ERG estimate          |
+| POST   | `/api/lp/deposit`                   | Build deposit transaction      |
+| POST   | `/api/lp/request-withdraw`          | Request withdrawal (cooldown)  |
+| POST   | `/api/lp/execute-withdraw`          | Execute matured withdrawal     |
+| POST   | `/api/lp/cancel-withdraw`           | Cancel pending withdrawal      |
+
+## License
+
+MIT License - see LICENSE file for details
