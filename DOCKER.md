@@ -64,6 +64,32 @@ The Docker Compose setup includes:
 
 **Important**: The Ergo node runs natively on the host machine, not in a container. Services communicate with it via `host.docker.internal`.
 
+### Development Enhancements
+
+The project includes `docker-compose.override.yml` which provides development-specific optimizations:
+
+- **Enhanced Hot-Reload**: Better file watching with optimized volume mounts
+- **Debug Support**: Built-in debug ports for VS Code debugging
+- **Resource Management**: Memory and CPU limits for development
+- **Enhanced Logging**: DEBUG level logging and development-specific configurations
+- **Redis Service**: Optional Redis for development caching/session storage
+- **Optimized Builds**: `.dockerignore` files for faster builds
+
+### Debug Ports
+
+The development environment includes these debug ports:
+- **Backend**: Port 5678 (Python debugpy)
+- **Frontend**: Port 9229 (Node.js debugger)
+- **Bot**: Port 5679 (Python debugpy)
+
+### Docker Build Optimization
+
+Each service includes a `.dockerignore` file to:
+- Exclude unnecessary files from Docker builds
+- Reduce image size
+- Speed up build times
+- Prevent sensitive files from being included in images
+
 ## Services
 
 | Service | Port | Description |
@@ -295,6 +321,78 @@ docker-compose -f docker-compose.prod.yml up -d --scale backend=3
 2. Changes are automatically reflected (hot-reload)
 3. View logs: `docker compose logs -f <service>`
 4. To rebuild after major changes: `docker compose build <service>`
+
+## Debugging in Development
+
+### VS Code Debug Configuration
+
+The Docker setup includes debug ports for VS Code debugging:
+
+#### Backend Debugging
+```json
+// .vscode/launch.json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Remote Debug (Backend)",
+      "type": "python",
+      "request": "attach",
+      "connect": {
+        "host": "localhost",
+        "port": 5678
+      },
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}/backend",
+          "remoteRoot": "/app"
+        }
+      ]
+    }
+  ]
+}
+```
+
+#### Frontend Debugging
+```json
+// .vscode/launch.json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "JavaScript: Remote Debug (Frontend)",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "localRoot": "${workspaceFolder}/frontend",
+      "remoteRoot": "/app"
+    }
+  ]
+}
+```
+
+### Bot Debugging
+Similar to backend debugging, use port 5679 for the off-chain bot.
+
+### Development Tips
+
+1. **Hot-Reload Issues**: If hot-reload isn't working, try:
+   ```bash
+   docker compose restart <service>
+   # Or check if volume mounts are working:
+   docker compose config
+   ```
+
+2. **Debug Port Conflicts**: Ensure ports 5678, 5679, and 9229 are not in use:
+   ```bash
+   lsof -i :5678
+   lsof -i :5679
+   lsof -i :9229
+   ```
+
+3. **Development Performance**: The `docker-compose.override.yml` includes resource limits to prevent your development machine from becoming unresponsive.
+
+4. **Redis for Development**: A Redis container is included for development caching. You can access it at `redis://localhost:6379`.
 
 ## Production Deployment
 
