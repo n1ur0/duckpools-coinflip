@@ -88,7 +88,7 @@ export class BetManager {
       playerPubKey: this.pendingBetAddress,
       commitment,
       choice: options.choice,
-      secret: parseInt(secret, 16),
+      secret: secret,
       betId,
       timeoutHeight,
       inputBoxId: '', // Will be filled by wallet
