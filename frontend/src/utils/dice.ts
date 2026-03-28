@@ -9,7 +9,7 @@
  * - Payout multiplier displayed live as the user adjusts the target
  */
 
-import { sha256, bytesToHex, hexToBytes, generateSecret } from './crypto';
+import { sha256, bytesToHex, generateSecret } from './crypto';
 
 // ─── Constants ─────────────────────────────────────────────────
 
@@ -158,75 +158,6 @@ export function isDiceWin(rngOutcome: number, rollTarget: number): boolean {
   return rngOutcome < rollTarget;
 }
 
-// ─── Sigma-State Serialization Helpers ─────────────────────────
+// ─── Sigma-State Serialization (re-exported from sigmaSerializer) ──
 
-/**
- * Encode an integer as an ErgoScript IntConstant SValue hex.
- * Used for rollTarget in R6.
- */
-export function encodeIntConstant(value: number): string {
-  // ZigZag encode
-  const zigzag = (value << 1) ^ (value >> 31);
-  // Convert to unsigned 32-bit
-  const unsigned = zigzag >>> 0;
-  // VLQ encode
-  const vlq = encodeVLQ(unsigned);
-  return `02${vlq}`;
-}
-
-/**
- * Encode a bigint as an ErgoScript LongConstant SValue hex.
- * Used for player secret in R7.
- */
-export function encodeLongConstant(value: bigint): string {
-  // ZigZag encode for i64
-  const zigzag = Number((value << 1n) ^ (value >> 63n));
-  const vlq = encodeVLQBigInt(BigInt.asUintN(64, BigInt(zigzag)));
-  return `04${vlq}`;
-}
-
-/**
- * Encode bytes as an ErgoScript Coll[Byte] SValue hex.
- * Format: 0e 01 VLQ(len) rawBytes
- */
-export function encodeCollByte(hexData: string): string {
-  const data = hexToBytes(hexData);
-  const len = data.length;
-  return `0e01${encodeVLQ(len)}${hexData}`;
-}
-
-/**
- * Encode a UTF-8 string as Coll[Byte].
- */
-export function encodeStringAsCollByte(str: string): string {
-  const bytes = new TextEncoder().encode(str);
-  return `0e01${encodeVLQ(bytes.length)}${bytesToHex(bytes)}`;
-}
-
-// ─── Internal VLQ helpers ──────────────────────────────────────
-
-function encodeVLQ(value: number): string {
-  if (value === 0) return '00';
-  const bytes: number[] = [];
-  let remaining = value >>> 0; // unsigned 32-bit
-  while (remaining > 0) {
-    let byte = remaining & 0x7f;
-    remaining >>>= 7;
-    if (remaining > 0) byte |= 0x80;
-    bytes.push(byte);
-  }
-  return bytes.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-function encodeVLQBigInt(value: bigint): string {
-  if (value === 0n) return '00';
-  const bytes: number[] = [];
-  let remaining = value;
-  while (remaining > 0n) {
-    let byte = Number(remaining & 0x7fn);
-    remaining >>= 7n;
-    if (remaining > 0n) byte |= 0x80;
-    bytes.push(byte);
-  }
-  return bytes.map(b => b.toString(16).padStart(2, '0')).join('');
-}
+export { encodeIntConstant, encodeLongConstant, encodeCollByte, encodeStringAsCollByte } from './sigmaSerializer';

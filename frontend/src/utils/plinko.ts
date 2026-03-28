@@ -15,7 +15,7 @@
  * - This ensures the house edge is exactly the stated edge regardless of rows
  */
 
-import { sha256, bytesToHex, hexToBytes, generateSecret } from './crypto';
+import { sha256, bytesToHex, generateSecret } from './crypto';
 
 // ─── Constants ─────────────────────────────────────────────────
 

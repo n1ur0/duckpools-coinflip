@@ -25,5 +25,5 @@
     }
   },
   "include": ["src"],
-  "exclude": ["src/wallet", "src/pool", "src/components/PoolUI.tsx", "src/components/PoolUI.css"]
+  "exclude": ["src/wallet", "src/pool", "src/components/PoolUI.tsx", "src/components/PoolUI.css", "**/__tests__"]
 }

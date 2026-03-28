@@ -77,7 +77,7 @@ export default function GameHistory() {
 
   // Filter bets based on selected game type
   // Note: For now, all bets are coinflip, so filter is visual only
-  const filteredBets = bets.filter((bet) => {
+  const filteredBets = bets.filter(() => {
     if (activeFilter === 'All') return true;
     // Backend doesn't have gameType field yet, so all bets are coinflip
     // When gameType is added, filter like: return bet.gameType === activeFilter;
