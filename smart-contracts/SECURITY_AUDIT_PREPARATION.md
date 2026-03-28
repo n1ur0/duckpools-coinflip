@@ -3,7 +3,7 @@
 > **Document Version:** 1.0  
 > **Date:** 2026-03-27  
 > **Author:** Ergo Specialist (MAT-11)  
-> **Status:** Ready for External Audit  
+> **Status:** NOT READY — Critical register layout mismatch (#213), truncated contracts (#197)
 > **Issue:** MAT-11 - Smart contract security audit preparation
 
 ---
@@ -28,7 +28,7 @@
 
 DuckPools is a provably-fair on-chain gambling protocol on Ergo. The architecture:
 
-- **Coinflip MVP**: Player commits secret+choice (SHA256), house reveals using block hash as entropy source
+- **Coinflip MVP**: Player commits secret+choice (blake2b256 — native Ergo hash), house reveals using block hash as entropy source
 - **LP Bankroll**: Liquidity providers earn yield from house edge (3%)
 - **Tokenized Pool**: EIP-4 LP tokens represent share of bankroll
 - **Off-chain Bot**: Monitors chain, constructs reveal/refund transactions
