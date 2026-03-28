@@ -1,0 +1,42 @@
+/*
+ * DiceGame Component Styles
+ * TODO: Implement full visual design per DuckPools design system
+ * Tracking: FEAT-2
+ */
+
+/* Layout */
+.dice-title {}
+.dice-connect-prompt {}
+.dice-connect-btn {}
+.dice-error {}
+.dice-pending {}
+.dice-pending-title {}
+.dice-pending-spinner {}
+.dice-pending-link {}
+.dice-pending-row {}
+.dice-pending-row-label {}
+.dice-pending-row-value {}
+.dice-spinner {}
+
+/* Amount section */
+.dice-amount-section {}
+.dice-amount-label {}
+.dice-amount-input-row {}
+.dice-amount-input {}
+.dice-amount-suffix {}
+.dice-quick-picks {}
+.dice-quick-pick {}
+
+/* Target section */
+.dice-target-section {}
+.dice-target-label {}
+.dice-target-input-row {}
+.dice-target-input {}
+.dice-target-value {}
+.dice-target-hint {}
+.dice-touch-area {}
+
+/* Stats & payout */
+.dice-stats {}
+.dice-stat {}
+.dice-payout-preview {}
