@@ -1,21 +1,44 @@
 /**
  * DuckPools Coinflip Game Contract v1
- * 
+ *
  * Classic coinflip game with commit-reveal scheme.
  * Fixed: NFT preservation in refund path to prevent protocol breakage.
  *
- * TRUST ASSUMPTIONS (see ARCHITECTURE.md for details):
- * - TA-1: Player secret stored in R8 is visible on-chain. Any observer
- *   can read the player's choice after commit. This is a fundamental
- *   trade-off — the contract needs the secret to verify the commitment.
- * - TA-2: No on-chain RNG. v1 has no block-hash based outcome; the
- *   house determines the result off-chain. v2 fixes this.
- * - TA-3: Reveal path does NOT enforce payout amount. A malicious house
- *   could reveal with 0 ERG to the player. v2 enforces payout on-chain.
- * - TA-4: Only the house can trigger reveal. If the house is offline,
- *   the player must wait for timeout to claim a 98% refund.
+ * ========== SECURITY DESIGN TRADE-OFFS (PoC vs Production) ==========
  *
- * STATUS: Superseded by coinflip_v2.es. Kept for reference only.
+ * 1. PLAYER SECRET VISIBLE ON-CHAIN (R8 register)
+ *    - SEC-HIGH finding (MAT-348)
+ *    - Player secret is stored in R8[Int] which is readable by anyone
+ *    - House can peek at player's choice before reveal
+ *    - TRUST ASSUMPTION: House is honest and does not read R8
+ *    - PRODUCTION: Use ZK-proof or commitment scheme without storing secret
+ *
+ * 2. NO PAYOUT AMOUNT ENFORCEMENT
+ *    - SEC-MEDIUM finding (MAT-336)
+ *    - Contract verifies player gets OUTPUTS(0), but not how much ERG
+ *    - Malicious house could pay 0 ERG and pocket everything
+ *    - TRUST ASSUMPTION: House follows payout rules (bet * 0.97 if win)
+ *    - PRODUCTION: Add guard: OUTPUTS(0).value >= bet_amount * 0.97
+ *
+ * 3. BLOCK HASH SELECTION BY HOUSE
+ *    - SEC-MEDIUM finding (MAT-336)
+ *    - House chooses which block height/hash to use for RNG
+ *    - House could grind blocks for favorable outcome
+ *    - TRUST ASSUMPTION: House uses current block hash without manipulation
+ *    - PRODUCTION: Pre-commit to block height or use oracle
+ *
+ * 4. ONLY HOUSE CAN REVEAL
+ *    - SEC-MEDIUM finding (MAT-336)
+ *    - No player-initiated reveal path
+ *    - If house goes offline, player must wait for timeout
+ *    - TRUST ASSUMPTION: House is always available to reveal
+ *    - PRODUCTION: Add player self-reveal with on-chain RNG
+ *
+ * ========== SUMMARY ==========
+ * This is a PROOF-OF-CONTRACT. It trusts the house operator to be honest.
+ * For production deployment, cryptographic guarantees must be enforced on-chain.
+ *
+ * See ARCHITECTURE.md for full security analysis.
  */
 
 {
