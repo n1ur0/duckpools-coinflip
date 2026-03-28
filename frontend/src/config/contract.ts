@@ -30,6 +30,12 @@ export const CONTRACT_ERGO_TREE = import.meta.env.VITE_CONTRACT_ERGO_TREE || '';
 /** House compressed public key (33 bytes, hex) */
 export const HOUSE_PUB_KEY = import.meta.env.VITE_HOUSE_PUB_KEY || '';
 
+/** House wallet P2PK address (for reveal payouts when house wins) */
+export const HOUSE_ADDRESS = import.meta.env.VITE_HOUSE_ADDRESS || '';
+
+/** Ergo node REST API URL (for fetching block headers, box info) */
+export const NODE_URL = import.meta.env.VITE_NODE_URL || 'http://127.0.0.1:9052';
+
 /** Game NFT token ID (hex) — optional, for off-chain box indexing only */
 export const GAME_NFT_ID = import.meta.env.VITE_GAME_NFT_ID || '';
 
