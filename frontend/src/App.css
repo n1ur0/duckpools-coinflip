@@ -146,6 +146,52 @@
   50% { box-shadow: 0 0 20px rgba(240, 180, 41, 0.3); border-radius: 12px; }
 }
 
+/* ─── Game Selector ───────────────────────────────────────────── */
+
+.game-selector {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-bottom: 2rem;
+}
+
+.game-selector-btn {
+  flex: 1;
+  max-width: 200px;
+  padding: 0.75rem 1.5rem;
+  background: var(--bg-card, rgba(15, 20, 35, 0.8));
+  border: 2px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.game-selector-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--accent-gold, #f0b429);
+  color: var(--text-primary, #e2e8f0);
+  transform: translateY(-2px);
+}
+
+.game-selector-btn--active {
+  background: linear-gradient(135deg, var(--accent-gold, #f0b429) 0%, #ffd700 100%);
+  border-color: var(--accent-gold, #f0b429);
+  color: #000;
+  box-shadow: 0 4px 12px rgba(240, 180, 41, 0.3);
+}
+
+.game-selector-btn--active:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(240, 180, 41, 0.5);
+}
+
 /* ─── Dev Panel ─────────────────────────────────────────────────── */
 
 .dev-panel {

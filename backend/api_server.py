@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from pool_manager import PoolConfig, PoolStateManager
 from lp_routes import router as lp_router
+from plinko_routes import router as plinko_router, set_pool_manager as set_plinko_pool_manager
 from ws_manager import ConnectionManager
 from ws_routes import router as ws_router
 
@@ -48,17 +49,22 @@ async def lifespan(app: FastAPI):
     # Pool manager
     config = PoolConfig(
         pool_nft_id=POOL_NFT_ID or None,
-        lp_token_id=LP_TOKEN_ID or None,
+        lp_token_id=*** or None,
         bankroll_tree_hex=BANKROLL_TREE_HEX or None,
         withdraw_request_tree_hex=WITHDRAW_REQUEST_TREE_HEX or None,
         house_edge_bps=HOUSE_EDGE_BPS,
         cooldown_blocks=COOLDOWN_BLOCKS,
     )
-    app.state.pool_manager = PoolStateManager(
+    pool_manager = PoolStateManager(
         node_url=NODE_URL,
-        api_key=API_KEY,
+        api_key=***
         config=config,
     )
+    app.state.pool_manager = pool_manager
+
+    # Set pool manager for Plinko routes
+    set_plinko_pool_manager(pool_manager)
+
     yield
     # Cleanup on shutdown
     app.state.pool_manager = None
@@ -86,6 +92,7 @@ app.add_middleware(
 
 # Register routers
 app.include_router(lp_router, prefix="/api")
+app.include_router(plinko_router, prefix="/api")
 app.include_router(ws_router)
 
 

@@ -5,6 +5,7 @@ import StatsDashboard from './components/StatsDashboard';
 import Leaderboard from './components/Leaderboard';
 import CompPoints from './components/CompPoints';
 import BetForm from './components/BetForm';
+import PlinkoGame from './components/PlinkoGame';
 import PoolManager from './components/PoolManager';
 import TestWallet from './components/TestWallet';
 import WalletConnector from './components/WalletConnector';
@@ -62,6 +63,9 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [manuallyTriggeredOnboarding, setManuallyTriggeredOnboarding] = useState(false);
   const [highlightBetForm, setHighlightBetForm] = useState(false);
+
+  // Game selection state
+  const [selectedGame, setSelectedGame] = useState<'coinflip' | 'plinko'>('coinflip');
 
   useEffect(() => {
     if (!hasCompletedOnboarding()) {
@@ -136,8 +140,25 @@ function App() {
           {/* Main */}
           <main id="main-content" className="app-main">
             <div className="main-content">
+              {/* Game Selector */}
+              <div className="game-selector">
+                <button
+                  className={`game-selector-btn ${selectedGame === 'coinflip' ? 'game-selector-btn--active' : ''}`}
+                  onClick={() => setSelectedGame('coinflip')}
+                >
+                  Coin Flip
+                </button>
+                <button
+                  className={`game-selector-btn ${selectedGame === 'plinko' ? 'game-selector-btn--active' : ''}`}
+                  onClick={() => setSelectedGame('plinko')}
+                >
+                  Plinko
+                </button>
+              </div>
+
+              {/* Selected Game */}
               <div className={highlightBetForm ? 'bet-form-highlight' : ''}>
-                <BetForm />
+                {selectedGame === 'coinflip' ? <BetForm /> : <PlinkoGame />}
               </div>
               <PoolManager />
               <GameHistory />

@@ -57,9 +57,10 @@ class BetPlacedPayload(BaseModel):
     player_address: str
     amount_nanoerg: int
     amount_erg: str
-    choice: str  # "heads" or "tails"
-    game_type: str = "coinflip"
+    choice: Optional[str] = None  # "heads" or "tails" for coinflip, None for plinko
+    game_type: str = "coinflip"  # "coinflip", "plinko", "dice"
     commitment_hash: Optional[str] = None
+    plinko_rows: Optional[int] = None  # Number of peg rows for plinko
 
 
 class BetRevealedPayload(BaseModel):
@@ -68,7 +69,9 @@ class BetRevealedPayload(BaseModel):
     player_address: str
     block_hash: Optional[str] = None
     server_secret: Optional[str] = None
-    rng_result: Optional[str] = None  # "heads" or "tails"
+    rng_result: Optional[str] = None  # "heads" or "tails" for coinflip, zone number for plinko
+    plinko_zone: Optional[int] = None  # Landing zone for plinko (0-12)
+    plinko_path: Optional[List[str]] = None  # Path of left/right for plinko animation
 
 
 class BetSettledPayload(BaseModel):
@@ -78,9 +81,12 @@ class BetSettledPayload(BaseModel):
     outcome: str  # "win" or "lose"
     payout_nanoerg: int
     payout_erg: str
-    player_choice: str
+    player_choice: Optional[str] = None  # For coinflip/dice
     rng_result: str
+    game_type: str = "coinflip"  # "coinflip", "plinko", "dice"
     house_edge_bps: int = 300
+    plinko_zone: Optional[int] = None  # Landing zone for plinko
+    plinko_multiplier: Optional[float] = None  # Multiplier used for plinko
 
 
 class BetRefundedPayload(BaseModel):
@@ -189,6 +195,83 @@ def make_bet_refunded_event(
             refund_nanoerg=refund_nanoerg,
             refund_erg=f"{refund_nanoerg / 1e9:.9f}",
             reason=reason,
+        ).model_dump(),
+    ).model_dump()
+
+
+def make_plinko_bet_placed_event(
+    bet_id: str,
+    player_address: str,
+    amount_nanoerg: int,
+    commitment_hash: str,
+    rows: int = 12,
+) -> dict:
+    """Build a bet_placed event for Plinko."""
+    return BetEvent(
+        type=BetEventType.BET_PLACED,
+        bet_id=bet_id,
+        player_address=player_address,
+        payload=BetPlacedPayload(
+            bet_id=bet_id,
+            player_address=player_address,
+            amount_nanoerg=amount_nanoerg,
+            amount_erg=f"{amount_nanoerg / 1e9:.9f}",
+            game_type="plinko",
+            commitment_hash=commitment_hash,
+            plinko_rows=rows,
+        ).model_dump(),
+    ).model_dump()
+
+
+def make_plinko_bet_revealed_event(
+    bet_id: str,
+    player_address: str,
+    block_hash: str,
+    zone: int,
+    path: List[str],
+) -> dict:
+    """Build a bet_revealed event for Plinko."""
+    return BetEvent(
+        type=BetEventType.BET_REVEALED,
+        bet_id=bet_id,
+        player_address=player_address,
+        payload=BetRevealedPayload(
+            bet_id=bet_id,
+            player_address=player_address,
+            block_hash=block_hash,
+            rng_result=str(zone),
+            plinko_zone=zone,
+            plinko_path=path,
+        ).model_dump(),
+    ).model_dump()
+
+
+def make_plinko_bet_settled_event(
+    bet_id: str,
+    player_address: str,
+    outcome: str,
+    payout_nanoerg: int,
+    zone: int,
+    multiplier: float,
+    house_edge_bps: int = 300,
+) -> dict:
+    """Build a bet_settled event for Plinko."""
+    return BetEvent(
+        type=BetEventType.BET_SETTLED,
+        bet_id=bet_id,
+        player_address=player_address,
+        payload=BetSettledPayload(
+            bet_id=bet_id,
+            player_address=player_address,
+            outcome=outcome,
+            payout_nanoerg=payout_nanoerg,
+            payout_erg=f"{payout_nanoerg / 1e9:.9f}",
+            player_choice=None,
+            rng_result=str(zone),
+            game_type="plinko",
+            house_edge_bps=house_edge_bps,
+            plinko_zone=zone,
+            plinko_multiplier=multiplier,
         ).model_dump(),
     ).model_dump()
 
