@@ -495,15 +495,22 @@ class PoolStateManager:
         )
 
     def _extract_int_from_serialized(self, hex_str: str) -> int:
-        """Extract an Int value from a serialized SValue hex string."""
+        """Extract a signed integer from a serialized SValue hex string.
+
+        Handles both IntConstant (0x02) and LongConstant (0x04).
+        Both use identical VLQ + ZigZag encoding — only the type prefix differs.
+
+        SEC-A6 fix: Previously only handled 0x02, causing R6/R7 Long-encoded
+        registers to silently return 0 (house edge = 0, cooldown = 0).
+        """
         if not hex_str or len(hex_str) < 4:
             return 0
 
         buf = bytes.fromhex(hex_str)
-        if buf[0] != 0x02:
+        if buf[0] not in (0x02, 0x04):
             return 0
 
-        # Decode VLQ
+        # Decode VLQ (variable-length quantity)
         value = 0
         shift = 0
         for i in range(1, len(buf)):
@@ -513,5 +520,5 @@ class PoolStateManager:
                 break
             shift += 7
 
-        # ZigZag decode
+        # ZigZag decode: maps unsigned back to signed
         return (value >> 1) ^ -(value & 1)

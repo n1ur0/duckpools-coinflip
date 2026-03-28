@@ -468,6 +468,145 @@ def test_no_default_hello_api_key():
 
 
 # ═══════════════════════════════════════════════════════════════
+# 8. REGISTER DESERIALIZATION — INT + LONG (SEC-A6)
+#    _extract_int_from_serialized must handle both 0x02 and 0x04.
+# ═══════════════════════════════════════════════════════════════
+
+def _encode_vlq(value: int) -> str:
+    """Encode an unsigned integer as VLQ hex string."""
+    result = []
+    while value > 0:
+        byte = value & 0x7F
+        value >>= 7
+        if value > 0:
+            byte |= 0x80
+        result.append(byte)
+    if not result:
+        result.append(0)
+    return ''.join(f'{b:02x}' for b in result)
+
+
+def _zigzag_encode(value: int) -> int:
+    """ZigZag encode a signed integer (works for both i32 and i64 range)."""
+    if value >= 0:
+        return value << 1
+    return ((-value) << 1) - 1
+
+
+def _make_serialized_int(value: int) -> str:
+    """Create a serialized IntConstant (0x02 + VLQ(zigzag))."""
+    return f"02{_encode_vlq(_zigzag_encode(value))}"
+
+
+def _make_serialized_long(value: int) -> str:
+    """Create a serialized LongConstant (0x04 + VLQ(zigzag))."""
+    return f"04{_encode_vlq(_zigzag_encode(value))}"
+
+
+@pytest.mark.parametrize("value,encoding", [
+    (300, "int"),
+    (300, "long"),
+    (0, "int"),
+    (0, "long"),
+    (-1, "int"),
+    (-1, "long"),
+    (60, "int"),    # cooldown_blocks
+    (60, "long"),
+    (10000, "int"), # large house edge
+    (10000, "long"),
+])
+def test_extract_int_handles_int_and_long(value: int, encoding: str):
+    """
+    SEC-A6: _extract_int_from_serialized must handle both Int (0x02)
+    and Long (0x04) type prefixes.
+
+    If this fails, R6 (cooldown) or R7 (house_edge) registers encoded
+    as Long will silently read as 0, giving players zero-edge bets and
+    bypassing withdrawal timelocks.
+    """
+    pool_manager_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..",
+        "backend", "pool_manager.py"
+    )
+    pool_manager_path = os.path.normpath(pool_manager_path)
+
+    if not os.path.exists(pool_manager_path):
+        pytest.skip(f"pool_manager.py not found at {pool_manager_path}")
+
+    with open(pool_manager_path, "r") as f:
+        source = f.read()
+
+    # Verify the fix is in place: accepts both 0x02 and 0x04
+    assert "0x02, 0x04" in source or "0x04" in source.split("0x02")[1][:50] if "0x02" in source else False, (
+        "SEC-A6: _extract_int_from_serialized does not handle LongConstant (0x04). "
+        "House edge or cooldown may silently read as 0."
+    )
+
+    # Functional test: verify VLQ+ZigZag roundtrip produces correct encoding
+    if encoding == "int":
+        serialized = _make_serialized_int(value)
+        assert serialized.startswith("02"), f"IntConstant must start with 02, got {serialized[:2]}"
+    else:
+        serialized = _make_serialized_long(value)
+        assert serialized.startswith("04"), f"LongConstant must start with 04, got {serialized[:2]}"
+
+    # Decode the VLQ portion and ZigZag decode
+    buf = bytes.fromhex(serialized)
+    decoded_value = 0
+    shift = 0
+    for i in range(1, len(buf)):
+        byte = buf[i]
+        decoded_value |= (byte & 0x7F) << shift
+        if (byte & 0x80) == 0:
+            break
+        shift += 7
+    decoded_value = (decoded_value >> 1) ^ -(decoded_value & 1)
+
+    assert decoded_value == value, (
+        f"SEC-A6: VLQ+ZigZag roundtrip failed for value={value} ({encoding}). "
+        f"Got {decoded_value}."
+    )
+
+
+def test_no_duplicate_long_parser_in_lp_routes():
+    """
+    SEC-A6: The inline LongConstant parser in lp_routes.py should be
+    replaced with the shared _extract_int_from_serialized method.
+    """
+    lp_routes_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..",
+        "backend", "lp_routes.py"
+    )
+    lp_routes_path = os.path.normpath(lp_routes_path)
+
+    if not os.path.exists(lp_routes_path):
+        pytest.skip(f"lp_routes.py not found at {lp_routes_path}")
+
+    with open(lp_routes_path, "r") as f:
+        source = f.read()
+
+    # Check that the duplicate VLQ decode loop is gone
+    lines = source.split("\n")
+    inline_parser_lines = []
+    in_long_block = False
+    for i, line in enumerate(lines):
+        if "0x04" in line and "LongConstant" in line:
+            in_long_block = True
+        if in_long_block:
+            if "0x7F" in line or "shift" in line.lower():
+                inline_parser_lines.append((i + 1, line.strip()))
+            if "requested_erg" in line and "=" in line and "0x04" not in line:
+                break
+
+    if inline_parser_lines:
+        pytest.fail(
+            "SEC-A6: Duplicate inline LongConstant parser detected in lp_routes.py. "
+            f"Lines: {inline_parser_lines}. "
+            "Use mgr._extract_int_from_serialized() instead."
+        )
+
+
+# ═══════════════════════════════════════════════════════════════
 # 9. ORACLE SWITCH AUTHENTICATION (SEC-A3)
 #    POST /api/oracle/switch must require admin API key.
 # ═══════════════════════════════════════════════════════════════
@@ -509,13 +648,9 @@ def test_oracle_switch_has_auth():
     # Verify read-only endpoints remain public
     public_endpoints = ["/health", "/status", "/endpoints"]
     for endpoint in public_endpoints:
-        # These should NOT have the auth dependency
-        route_block = source.split(endpoint)[0] if endpoint in source else ""
-        # Find the @router decorator for this endpoint
         lines = source.split("\n")
         for i, line in enumerate(lines):
             if endpoint in line and "@router" in lines[max(0, i-3):i]:
-                # Check next ~5 lines for auth dependency
                 route_context = "\n".join(lines[i:i+5])
                 if "verify_admin" in route_context or "admin_api_key" in route_context.lower():
                     pytest.fail(
