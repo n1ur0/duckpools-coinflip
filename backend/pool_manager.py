@@ -8,11 +8,15 @@ Backend services for managing the LP token pool:
 - Withdrawal request management
 
 MAT-15: Tokenized bankroll and liquidity pool
+
+IMPORTANT: All monetary calculations use decimal.Decimal for precision,
+per AGENTS.md convention. Never use float for monetary values.
 """
 
 import time
 from dataclasses import dataclass, field
 from typing import Optional
+from decimal import Decimal, getcontext, ROUND_DOWN
 
 # ─── Constants ───────────────────────────────────────────────────────
 
@@ -24,6 +28,10 @@ LP_TOKEN_DECIMALS = 9                     # nanoERG-level precision
 PRECISION_FACTOR = 1_000_000_000
 
 BLOCKS_PER_YEAR = 262_800  # ~2 min block time * 60 * 24 * 365
+
+# Set decimal context for monetary calculations
+getcontext().prec = 50  # Sufficient precision for nanoERG operations
+getcontext().rounding = ROUND_DOWN  # Consistent rounding for financial calc
 
 
 # ─── Data Classes ────────────────────────────────────────────────────
@@ -122,10 +130,19 @@ def calculate_price_per_share(
     price = totalValue * PRECISION / totalSupply
 
     Returns precision (1:1) if no supply (first deposit).
+
+    Uses decimal.Decimal for precise monetary calculations.
     """
     if total_supply == 0 or total_value == 0:
         return precision  # 1:1 for first deposit
-    return (total_value * precision) // total_supply
+
+    # Use Decimal for precise division
+    total_value_dec = Decimal(total_value)
+    total_supply_dec = Decimal(total_supply)
+    precision_dec = Decimal(precision)
+
+    price_dec = (total_value_dec * precision_dec) / total_supply_dec
+    return int(price_dec.to_integral_value(rounding=ROUND_DOWN))
 
 
 def calculate_deposit_shares(
@@ -139,10 +156,19 @@ def calculate_deposit_shares(
     newShares = depositAmount * totalSupply / totalValue
 
     For first deposit: 1:1 ratio.
+
+    Uses decimal.Decimal for precise monetary calculations.
     """
     if total_supply == 0 or total_value == 0:
         return deposit_amount  # First deposit: 1:1
-    return (deposit_amount * total_supply) // total_value
+
+    # Use Decimal for precise division
+    deposit_dec = Decimal(deposit_amount)
+    total_value_dec = Decimal(total_value)
+    total_supply_dec = Decimal(total_supply)
+
+    shares_dec = (deposit_dec * total_supply_dec) / total_value_dec
+    return int(shares_dec.to_integral_value(rounding=ROUND_DOWN))
 
 
 def calculate_withdraw_erg(
@@ -154,10 +180,19 @@ def calculate_withdraw_erg(
     Calculate ERG to return for burning LP shares.
 
     withdrawERG = burnAmount * totalValue / totalSupply
+
+    Uses decimal.Decimal for precise monetary calculations.
     """
     if total_supply == 0:
         return 0
-    return (burn_amount * total_value) // total_supply
+
+    # Use Decimal for precise division
+    burn_dec = Decimal(burn_amount)
+    total_value_dec = Decimal(total_value)
+    total_supply_dec = Decimal(total_supply)
+
+    erg_dec = (burn_dec * total_value_dec) / total_supply_dec
+    return int(erg_dec.to_integral_value(rounding=ROUND_DOWN))
 
 
 def calculate_shares_to_burn_for_erg(
@@ -171,10 +206,19 @@ def calculate_shares_to_burn_for_erg(
     burnShares = desiredERG * totalSupply / totalValue
 
     This is the inverse of calculate_withdraw_erg.
+
+    Uses decimal.Decimal for precise monetary calculations.
     """
     if total_value == 0 or total_supply == 0:
         return 0
-    return (desired_erg * total_supply) // total_value
+
+    # Use Decimal for precise division
+    desired_dec = Decimal(desired_erg)
+    total_value_dec = Decimal(total_value)
+    total_supply_dec = Decimal(total_supply)
+
+    shares_dec = (desired_dec * total_supply_dec) / total_value_dec
+    return int(shares_dec.to_integral_value(rounding=ROUND_DOWN))
 
 
 def calculate_apy(
@@ -190,6 +234,8 @@ def calculate_apy(
     APY = (profitPerBlock / bankroll) * blocksPerYear * 100
 
     profitPerBlock = avgBetSize * houseEdgeBps/10000 * betsPerBlock
+
+    Uses decimal.Decimal for precise monetary calculations.
     """
     if bankroll == 0:
         return APYInfo(
@@ -203,7 +249,16 @@ def calculate_apy(
             estimated_yearly_profit=0,
         )
 
-    profit_per_block = (avg_bet_size * house_edge_bps * int(bets_per_block * 1000)) // (10000 * 1000)
+    # Use Decimal for precise calculations
+    house_edge_dec = Decimal(house_edge_bps) / Decimal(10000)
+    avg_bet_dec = Decimal(avg_bet_size)
+    bets_dec = Decimal(str(bets_per_block))
+    bankroll_dec = Decimal(bankroll)
+
+    # profitPerBlock = avgBetSize * houseEdgeBps/10000 * betsPerBlock
+    profit_per_block_dec = avg_bet_dec * house_edge_dec * bets_dec
+    profit_per_block = int(profit_per_block_dec.to_integral_value(rounding=ROUND_DOWN))
+
     blocks_per_day = 720  # 2 min blocks
     blocks_per_month = 21_600  # ~30 days
 
@@ -211,7 +266,12 @@ def calculate_apy(
     monthly_profit = profit_per_block * blocks_per_month
     yearly_profit = profit_per_block * blocks_per_year
 
-    apy = (yearly_profit * 10000) // bankroll / 100  # percentage with 2 decimals
+    # APY = (yearly_profit / bankroll) * 100
+    if bankroll_dec > 0:
+        apy_dec = (Decimal(yearly_profit) / bankroll_dec) * Decimal(100)
+        apy = float(apy_dec)  # Convert to float for JSON serialization
+    else:
+        apy = 0.0
 
     return APYInfo(
         apy_percent=apy,
