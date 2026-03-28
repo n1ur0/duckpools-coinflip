@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, TouchEvent } from 'react';
 import { useWallet } from '../../contexts/WalletContext';
 import CoinFlip from '../../components/animations/CoinFlip';
 import { Button, Input } from '../../components/ui';
-import { generateSecret, bytesToHex, blake2b256 } from '../../utils/crypto';
+import { bytesToHex, blake2b256 } from '../../utils/crypto';
 import { ergToNanoErg, formatErg } from '../../utils/ergo';
 import { buildApiUrl } from '../../utils/network';
 import './CoinFlipGame.css';
@@ -38,10 +38,6 @@ function calculatePayout(amountNanoErg: string): string {
   return (nano * BigInt(Math.round(PAYOUT_MULTIPLIER * 1e9)) / BigInt(1e9)).toString();
 }
 
-function getExplorerTxUrl(txId: string): string {
-  return `https://explorer.ergoplatform.com/en/transactions/${txId}`;
-}
-
 // ─── Component ──────────────────────────────────────────────────────
 
 interface CoinFlipGameProps {
@@ -58,11 +54,11 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
   const [result, setResult] = useState<'heads' | 'tails' | null>(null);
   const [winOutcome, setWinOutcome] = useState<'win' | 'loss' | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pendingBet, setPendingBet] = useState<{
-    txId: string;
+  const [betPlaced, setBetPlaced] = useState<{
     betId: string;
     amount: string;
     choiceLabel: string;
+    commitment: string;
   } | null>(null);
 
   // Touch gesture state
@@ -140,7 +136,7 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
 
 try {
       // 1. Generate secret & commitment
-      const secret = generateSecret();
+      const secret = crypto.getRandomValues(new Uint8Array(32));
       const commitment = generateCommitment(secret, choice);
       const betId = generateBetId();
 
@@ -169,20 +165,15 @@ try {
         throw new Error(data.error || `Server error ${res.status}`);
       }
 
-      // 4. Trigger coin flip animation for chosen side
-      const flipResult: 'heads' | 'tails' = Math.random() < 0.5 ? 'heads' : 'tails';
-      const won = (choice === 0 && flipResult === 'heads') || (choice === 1 && flipResult === 'tails');
-      
-      setResult(flipResult);
-      setWinOutcome(won ? 'win' : 'loss');
-      setIsFlipping(true);
-
-      // 5. Show pending state
-      setPendingBet({
-        txId: data.txId,
+      // 4. Show "Bet Placed — Pending On-Chain Reveal" state.
+      // NO Math.random() — the outcome is determined on-chain via
+      // blake2b256(blockHash || secret)[0] % 2 when the house reveals.
+      // The coin flip animation should only trigger after a real outcome.
+      setBetPlaced({
         betId,
         amount,
         choiceLabel: choice === 0 ? 'Heads' : 'Tails',
+        commitment,
       });
 
       // Reset form
@@ -256,9 +247,9 @@ try {
                       <div className="coinflip-outcome-text">
                         {winOutcome === 'win' ? 'YOU WIN!' : 'YOU LOSE'}
                       </div>
-                      {pendingBet && (
+                      {betPlaced && (
                         <div className="coinflip-bet-amount">
-                          Bet: {pendingBet.amount} ERG
+                          Bet: {betPlaced.amount} ERG
                         </div>
                       )}
                     </div>
@@ -381,7 +372,7 @@ try {
       {/* ── Error ────────────────────────────────────────────────── */}
       {error && <div className="coinflip-error">{error}</div>}
 
-      {/* ── Result Actions ─────────────────────────────────────────── */}
+      {/* ── Result Actions (for when on-chain reveal completes) ─── */}
       {!isFlipping && result && winOutcome && (
         <div className="coinflip-result-actions">
           <button
@@ -389,6 +380,7 @@ try {
             onClick={() => {
               setResult(null);
               setWinOutcome(null);
+              setBetPlaced(null);
               setError(null);
             }}
           >
@@ -397,36 +389,41 @@ try {
         </div>
       )}
 
-      {/* ── Pending Bet ──────────────────────────────────────────── */}
-      {pendingBet && (
+      {/* ── Bet Placed — Pending On-Chain Reveal ─────────────── */}
+      {betPlaced && !result && (
         <div className="coinflip-pending">
           <div className="coinflip-pending-title">
             <span className="coinflip-pending-spinner" />
-            Bet Pending Confirmation
+            Bet Placed — Awaiting On-Chain Reveal
           </div>
           <div className="coinflip-pending-row">
             <span className="coinflip-pending-row-label">Bet ID</span>
-            <span className="coinflip-pending-row-value">{pendingBet.betId.slice(0, 16)}...</span>
+            <span className="coinflip-pending-row-value">{betPlaced.betId.slice(0, 16)}...</span>
           </div>
           <div className="coinflip-pending-row">
             <span className="coinflip-pending-row-label">Amount</span>
-            <span className="coinflip-pending-row-value">{pendingBet.amount} ERG</span>
+            <span className="coinflip-pending-row-value">{betPlaced.amount} ERG</span>
           </div>
           <div className="coinflip-pending-row">
             <span className="coinflip-pending-row-label">Choice</span>
-            <span className="coinflip-pending-row-value">{pendingBet.choiceLabel}</span>
+            <span className="coinflip-pending-row-value">{betPlaced.choiceLabel}</span>
           </div>
           <div className="coinflip-pending-row">
-            <span className="coinflip-pending-row-label">TX</span>
-            <a
-              className="coinflip-pending-link"
-              href={getExplorerTxUrl(pendingBet.txId)}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {pendingBet.txId.slice(0, 16)}...
-            </a>
+            <span className="coinflip-pending-row-label">Commitment</span>
+            <span className="coinflip-pending-row-value">{betPlaced.commitment.slice(0, 16)}...</span>
           </div>
+          <div className="coinflip-pending-note">
+            Outcome will be revealed on-chain when the house processes the bet.
+          </div>
+          <button
+            className="coinflip-flip-again-btn"
+            onClick={() => {
+              setBetPlaced(null);
+              setError(null);
+            }}
+          >
+            Place Another Bet
+          </button>
         </div>
       )}
     </div>
