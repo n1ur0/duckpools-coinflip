@@ -14,6 +14,7 @@ import type {
   SValue,
   TransactionBuilderOptions,
 } from '../types';
+import { serializeSValue } from '../serialization';
 
 export class TransactionBuilder {
   private fee: bigint;
@@ -194,7 +195,7 @@ export class TransactionBuilder {
           ? Object.fromEntries(
               Object.entries(output.additionalRegisters).map(([k, v]) => [
                 k,
-                { value: v.value.toString(), type: v.type },
+                { value: serializeSValue(v), type: v.type },
               ])
             )
           : undefined,
@@ -223,7 +224,7 @@ export class TransactionBuilder {
           ? Object.fromEntries(
               Object.entries(output.additionalRegisters).map(([k, v]) => [
                 k,
-                { value: v.value.toString(), type: v.type },
+                { value: serializeSValue(v), type: v.type },
               ])
             )
           : undefined,
