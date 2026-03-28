@@ -34,9 +34,6 @@ End-to-end tests for the dice game covering complete user flow.
 - DG-3: Payout - Correct payout calculation and display
 - DG-4: Wallet Balance - Balance updates after game outcomes
 - Security: RNG validation, input validation, modulo bias prevention
-
-## Prerequisites
-
 ### For Backend Tests
 - Backend server running on `http://localhost:8000`
 - Ergo node running on `http://localhost:9052`

@@ -127,19 +127,19 @@ const DiceGame: React.FC<DiceGameProps> = ({ className = '' }) => {
 
     try {
       // 1. Generate secret & commitment
-      const { secret, commitment } = await generateDiceCommit(rollTarget);
+      const { commitment } = await generateDiceCommit(rollTarget);
       const betId = generateBetId();
-      const secretHex = Array.from(secret)
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
 
       // 2. Build API request
+      // SECURITY (SEC-HIGH-2): NEVER send the secret to the backend.
+      // The commit-reveal scheme requires the secret to remain private
+      // until the on-chain reveal transaction. Only the commitment hash
+      // is needed for bet placement.
       const payload = {
         address: walletAddress,
         amount: amountNanoErg,
         rollTarget,
         commitment,
-        secret: secretHex,
         betId,
       };
 
