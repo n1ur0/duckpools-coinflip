@@ -27,3 +27,6 @@ export type { BadgeProps, BadgeVariant, BadgeSize } from './Badge';
 
 export { default as Toggle } from './Toggle';
 export type { ToggleProps } from './Toggle';
+
+export { default as Spinner } from './Spinner';
+export type { SpinnerProps, SpinnerVariant, SpinnerSize } from './Spinner';
