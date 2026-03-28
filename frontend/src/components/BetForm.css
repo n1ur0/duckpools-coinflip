@@ -25,6 +25,27 @@
   margin-bottom: 20px;
 }
 
+.bf-touch-area {
+  position: relative;
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bf-touch-area::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+  background: radial-gradient(circle at center, rgba(240, 180, 41, 0.1) 0%, transparent 70%);
+}
+
+.bf-touch-area:active::after {
+  opacity: 1;
+}
+
 .bf-amount-label {
   display: block;
   font-size: 0.85rem;
@@ -79,12 +100,17 @@
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
   border-radius: 8px;
-  padding: 6px 14px;
+  padding: 12px 16px; /* Increased padding for 44px touch target */
   color: var(--text-secondary, #8892b0);
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   font-size: 0.85rem;
   cursor: pointer;
   transition: all 0.2s;
+  min-height: 44px; /* Minimum touch target */
+  min-width: 44px; /* Minimum touch target */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .bf-quick-pick:hover {
@@ -132,7 +158,7 @@
 
 .bf-choice-btn {
   flex: 1;
-  padding: 20px 16px;
+  padding: 24px 16px; /* Increased for 44px touch target */
   border-radius: 12px;
   border: 2px solid transparent;
   font-family: var(--font-heading, 'Space Grotesk', sans-serif);
@@ -144,6 +170,10 @@
   letter-spacing: 1px;
   position: relative;
   overflow: hidden;
+  min-height: 48px; /* Minimum touch target */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .bf-choice-btn--heads {
@@ -190,7 +220,7 @@
 
 .bf-submit-btn {
   width: 100%;
-  padding: 16px;
+  padding: 20px; /* Increased for 44px touch target */
   border-radius: 12px;
   border: none;
   font-family: var(--font-heading, 'Space Grotesk', sans-serif);
@@ -202,6 +232,7 @@
   letter-spacing: 1.5px;
   position: relative;
   overflow: hidden;
+  min-height: 48px; /* Minimum touch target */
 }
 
 .bf-submit-btn:not(:disabled) {
@@ -375,20 +406,208 @@
   box-shadow: 0 0 16px rgba(240, 180, 41, 0.15);
 }
 
-/* ── Responsive ────────────────────────────────── */
+/* ── Responsive Breakpoints ───────────────────────────── */
 
-@media (max-width: 520px) {
+/* Large desktop (1440px+) */
+@media (min-width: 1440px) {
+  .bf-container {
+    max-width: 520px;
+    padding: 32px;
+  }
+
+  .bf-title {
+    font-size: 1.75rem;
+  }
+
+  .bf-choice-btn {
+    font-size: 1.25rem;
+  }
+}
+
+/* Desktop (1024px - 1439px) */
+@media (min-width: 1024px) and (max-width: 1439px) {
+  .bf-container {
+    max-width: 500px;
+    padding: 28px;
+  }
+}
+
+/* Tablet (768px - 1023px) */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .bf-container {
+    max-width: 480px;
+  }
+
+  .bf-quick-picks {
+    flex-wrap: nowrap;
+  }
+
+  .bf-quick-pick {
+    flex: 1;
+  }
+}
+
+/* Mobile large (576px - 767px) */
+@media (min-width: 576px) and (max-width: 767px) {
+  .bf-container {
+    padding: 20px;
+  }
+
+  .bf-quick-picks {
+    gap: 6px;
+  }
+}
+
+/* Mobile medium (425px - 575px) */
+@media (min-width: 425px) and (max-width: 575px) {
+  .bf-container {
+    padding: 18px;
+  }
+
+  .bf-title {
+    font-size: 1.4rem;
+    margin-bottom: 16px;
+  }
+
+  .bf-amount-section {
+    margin-bottom: 16px;
+  }
+
+  .bf-amount-input {
+    font-size: 1rem;
+    padding: 10px 14px;
+  }
+
+  .bf-choice-buttons {
+    gap: 8px;
+  }
+
+  .bf-choice-btn {
+    padding: 20px 12px;
+    font-size: 1rem;
+  }
+
+  .bf-quick-pick {
+    padding: 10px 12px;
+    font-size: 0.8rem;
+  }
+
+  .bf-submit-btn {
+    padding: 16px;
+    font-size: 1.05rem;
+  }
+}
+
+/* Mobile small (375px - 424px) */
+@media (min-width: 375px) and (max-width: 424px) {
   .bf-container {
     padding: 16px;
   }
 
+  .bf-title {
+    font-size: 1.3rem;
+    margin-bottom: 14px;
+  }
+
+  .bf-amount-section {
+    margin-bottom: 14px;
+  }
+
+  .bf-amount-input {
+    font-size: 0.95rem;
+    padding: 10px 12px;
+  }
+
+  .bf-choice-buttons {
+    flex-direction: column; /* Stack buttons on small mobile */
+    gap: 10px;
+  }
+
   .bf-choice-btn {
-    padding: 16px 12px;
+    width: 100%;
+    padding: 18px 12px;
     font-size: 1rem;
+  }
+
+  .bf-quick-picks {
+    grid-template-columns: repeat(2, 1fr); /* 2x2 grid */
+    display: grid;
+    gap: 6px;
+  }
+
+  .bf-quick-pick {
+    padding: 12px 8px;
+    font-size: 0.8rem;
+  }
+
+  .bf-submit-btn {
+    padding: 16px;
+    font-size: 1rem;
+  }
+
+  .bf-info {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
+/* Mobile extra small (320px - 374px) */
+@media (max-width: 374px) {
+  .bf-container {
+    padding: 14px;
+  }
+
+  .bf-title {
+    font-size: 1.2rem;
+    margin-bottom: 12px;
+  }
+
+  .bf-amount-section {
+    margin-bottom: 12px;
+  }
+
+  .bf-amount-input {
+    font-size: 0.9rem;
+    padding: 10px 10px;
+  }
+
+  .bf-amount-label {
+    font-size: 0.8rem;
+  }
+
+  .bf-choice-buttons {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .bf-choice-btn {
+    width: 100%;
+    padding: 16px 10px;
+    font-size: 0.95rem;
+  }
+
+  .bf-quick-picks {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .bf-quick-pick {
+    padding: 10px 6px;
+    font-size: 0.75rem;
   }
 
   .bf-submit-btn {
     padding: 14px;
-    font-size: 1.05rem;
+    font-size: 0.95rem;
+  }
+
+  .bf-info {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .bf-info-item {
+    font-size: 0.7rem;
   }
 }

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, TouchEvent } from 'react';
 import { useWallet } from '../contexts/WalletContext';
 import { generateSecret, bytesToHex, sha256 } from '../utils/crypto';
 import { ergToNanoErg, formatErg } from '../utils/ergo';
@@ -26,6 +26,10 @@ async function generateCommitment(
 const HOUSE_EDGE = 0.03;
 const PAYOUT_MULTIPLIER = 1 - HOUSE_EDGE; // 0.97
 
+// Touch gesture thresholds
+const SWIPE_THRESHOLD = 50; // Minimum pixels for swipe gesture
+const QUICK_PICK_VALUES = [0.1, 0.5, 1, 5];
+
 function calculatePayout(amountNanoErg: string): string {
   const nano = BigInt(amountNanoErg);
   return (nano * BigInt(Math.round(PAYOUT_MULTIPLIER * 1e9)) / BigInt(1e9)).toString();
@@ -50,6 +54,10 @@ export default function BetForm() {
     amount: string;
     choiceLabel: string;
   } | null>(null);
+
+  // Touch gesture state
+  const touchStartYRef = useRef<number>(0);
+  const touchStartTimeRef = useRef<number>(0);
 
   // ── Validation ──────────────────────────────────────────────────
 
@@ -84,6 +92,35 @@ export default function BetForm() {
     setAmount(value);
     setError(null);
   }, []);
+
+  // ── Touch Gesture Handlers ─────────────────────────────────────────
+
+  const handleTouchStart = useCallback((e: TouchEvent) => {
+    touchStartYRef.current = e.touches[0].clientY;
+    touchStartTimeRef.current = Date.now();
+  }, []);
+
+  const handleTouchEnd = useCallback((e: TouchEvent) => {
+    const touchEndY = e.changedTouches[0].clientY;
+    const deltaY = touchStartYRef.current - touchEndY;
+    const deltaTime = Date.now() - touchStartTimeRef.current;
+
+    // Only process if gesture was quick enough (< 300ms) and exceeded threshold
+    if (deltaTime < 300 && Math.abs(deltaY) > SWIPE_THRESHOLD) {
+      const currentAmount = parseFloat(amount) || 0;
+      
+      if (deltaY > 0) {
+        // Swipe up: increase bet
+        const newAmount = currentAmount > 0 ? currentAmount * 1.5 : QUICK_PICK_VALUES[0];
+        setAmount(newAmount.toFixed(2));
+      } else {
+        // Swipe down: decrease bet
+        const newAmount = Math.max(currentAmount * 0.667, QUICK_PICK_VALUES[0]);
+        setAmount(newAmount.toFixed(2));
+      }
+      setError(null);
+    }
+  }, [amount]);
 
   const handleSubmit = useCallback(async () => {
     if (!canSubmit || choice === null || !walletAddress) return;
@@ -163,7 +200,11 @@ export default function BetForm() {
       <h2 className="bf-title">Coin Flip</h2>
 
       {/* ── Amount Input ──────────────────────────────────────────── */}
-      <div className="bf-amount-section">
+      <div 
+        className="bf-amount-section bf-touch-area"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
         <label className="bf-amount-label">Bet Amount</label>
         <div className="bf-amount-input-row">
           <input
@@ -178,7 +219,7 @@ export default function BetForm() {
           <span className="bf-amount-suffix">ERG</span>
         </div>
         <div className="bf-quick-picks">
-          {[0.1, 0.5, 1, 5].map((val) => (
+          {QUICK_PICK_VALUES.map((val) => (
             <button
               key={val}
               className="bf-quick-pick"
