@@ -323,8 +323,12 @@ export function encodePlinkoSlot(slot: number): string {
 export function encodePlinkoSecret(secret: Uint8Array): string {
   // Convert 8 bytes to bigint
   const value = BigInt('0x' + bytesToHex(secret));
-  const zigzag = Number((value << 1n) ^ (value >> 63n));
-  const vlq = encodeVLQBigInt(BigInt.asUintN(64, BigInt(zigzag)));
+  // Zigzag encode for i64: ((v << 1) ^ (v >> 63))
+  // Must stay in BigInt — Number() loses precision above 2^53, but zigzag
+  // of a 64-bit value can reach 2^65-1. Precision loss here would silently
+  // corrupt the VLQ encoding and cause tx rejection or wrong register values.
+  const zigzag = (value << 1n) ^ (value >> 63n);
+  const vlq = encodeVLQBigInt(BigInt.asUintN(64, zigzag));
   return `04${vlq}`;
 }
 
