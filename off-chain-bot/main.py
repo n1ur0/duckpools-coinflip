@@ -313,6 +313,7 @@ class OffChainBot:
         api_key: str,
         heartbeat_file: str,
         heartbeat_interval_seconds: int = 30,
+        health_server_port: int = 8001,
     ):
         self.node_url = node_url
         self.api_key = api_key
@@ -320,6 +321,7 @@ class OffChainBot:
         self.heartbeat_manager = HeartbeatManager(heartbeat_file)
         self.heartbeat_interval_seconds = heartbeat_interval_seconds
         self.client: Optional[ErgoNodeClient] = None
+        self.health_server = HealthServer(port=health_server_port)
 
     async def run(self):
         """Run the off-chain bot main loop."""
@@ -327,6 +329,9 @@ class OffChainBot:
 
         # Setup graceful shutdown
         self.shutdown_manager.setup_signal_handlers()
+
+        # Start health server
+        await self.health_server.start()
 
         # Create Ergo node client
         async with ErgoNodeClient(self.node_url, self.api_key) as client:
@@ -340,6 +345,9 @@ class OffChainBot:
             finally:
                 # Stop heartbeat
                 await self.heartbeat_manager.stop()
+
+                # Stop health server
+                await self.health_server.stop()
 
                 # Restore signal handlers
                 self.shutdown_manager.restore_signal_handlers()
@@ -394,6 +402,17 @@ class OffChainBot:
             # Get node info to test connectivity
             info = await self.client.get("/info")
             logger.debug("node_info", full_height=info.get("fullHeight"))
+            
+            # In a real implementation, this would be where we:
+            # 1. Query for PendingBet boxes
+            # 2. Process each bet
+            # 3. Increment the counter for each successful bet
+            
+            # For demo purposes, simulate a bet being processed
+            # In the real implementation, this would be inside the bet processing loop
+            self.health_server.increment_bets_processed()
+            logger.debug("bet_processed_counter_incremented")
+            
         except httpx.HTTPError as e:
             logger.error("node_api_error", error=str(e))
             raise

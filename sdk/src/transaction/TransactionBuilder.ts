@@ -1,9 +1,9 @@
 /**
  * DuckPools SDK - Transaction Builder
- * Builds Ergo transactions using FleetSDK
+ * Builds Ergo transactions for the coinflip protocol.
  *
- * NOTE: This is a placeholder implementation that shows the interface.
- * In production, this would use @fleet-sdk/core for actual transaction building.
+ * Handles input/output balancing, fee deduction, and change box creation.
+ * Callers must provide resolved input box values (fetched from node).
  */
 
 import { Buffer } from 'buffer';
@@ -52,31 +52,64 @@ export class TransactionBuilder {
 
   /**
    * Build transaction from inputs and outputs
+   *
+   * Computes input/output balance, deducts fee, and creates a change
+   * box if there is leftover ERG after outputs + fee.
+   *
+   * @throws Error if output value + fee exceeds input value
    */
   build(
     inputs: TransactionInput[],
     outputs: TransactionOutput[]
   ): ErgoTransaction {
-    // Calculate total input value
-    const totalInputValue = inputs.reduce((sum, input) => {
-      // This would need actual box values from input boxes
-      // For now, just return a placeholder
-      return sum;
-    }, 0n);
+    if (inputs.length === 0) {
+      throw new Error('Transaction must have at least one input');
+    }
 
-    // Calculate total output value
-    const totalOutputValue = outputs.reduce((sum, output) => {
-      return sum + output.value;
-    }, 0n);
+    // Sum input values from resolved boxes
+    const totalInputValue = inputs.reduce((sum, input) => sum + input.value, 0n);
 
-    // Validate transaction
-    if (totalOutputValue > totalInputValue) {
-      throw new Error('Output value exceeds input value');
+    // Sum output values
+    const totalOutputValue = outputs.reduce((sum, output) => sum + output.value, 0n);
+
+    // Total cost = outputs + fee
+    const totalCost = totalOutputValue + this.fee;
+
+    // Validate: outputs + fee must not exceed inputs
+    if (totalCost > totalInputValue) {
+      throw new Error(
+        `Insufficient input value: inputs=${totalInputValue} nanoERG, ` +
+        `outputs=${totalOutputValue} nanoERG, fee=${this.fee} nanoERG, ` +
+        `shortfall=${totalCost - totalInputValue} nanoERG`
+      );
+    }
+
+    // Compute change amount
+    const changeValue = totalInputValue - totalCost;
+    const allOutputs = [...outputs];
+
+    if (changeValue > 0n) {
+      if (!this.changeAddress) {
+        throw new Error(
+          'Change address required: transaction has ' +
+          `${changeValue} nanoERG unspent. Call setChangeAddress() first.`
+        );
+      }
+
+      if (changeValue >= this.minBoxValue) {
+        allOutputs.push({
+          address: this.changeAddress,
+          value: changeValue,
+        });
+      } else {
+        // Dust change — absorb into fee to avoid creating a box below minBoxValue
+        this.fee += changeValue;
+      }
     }
 
     return {
       inputs,
-      outputs,
+      outputs: allOutputs,
       fee: this.fee,
     };
   }
@@ -84,6 +117,9 @@ export class TransactionBuilder {
   /**
    * Build bet placement transaction
    * Creates a PendingBetBox with commitment and other registers
+   *
+   * R7 stores the player's secret as Int (8-byte big-endian unsigned integer).
+   * This matches the security audit spec (Section 2.1).
    */
   buildPlaceBetTransaction(params: {
     playerAddress: string;
@@ -95,6 +131,7 @@ export class TransactionBuilder {
     betId: string;
     timeoutHeight?: number;
     inputBoxId: string;
+    inputBoxValue: bigint;
   }): ErgoTransaction {
     const output: TransactionOutput = {
       address: params.pendingBetAddress,
@@ -103,7 +140,7 @@ export class TransactionBuilder {
         R4: { type: 'Coll[Byte]' as const, value: '' }, // Player's ErgoTree - will be filled
         R5: { type: 'Coll[Byte]' as const, value: params.commitment },
         R6: { type: 'Int' as const, value: params.choice },
-        R7: { type: 'Coll[Byte]' as const, value: Buffer.from(params.secret, 'hex').toString('hex') },
+        R7: { type: 'Int' as const, value: Number(Buffer.from(params.secret, 'hex').readBigUInt64BE()) },
         R8: { type: 'Coll[Byte]' as const, value: params.betId },
         ...(params.timeoutHeight !== undefined ? {
           R9: { type: 'Int' as const, value: params.timeoutHeight },
@@ -112,7 +149,7 @@ export class TransactionBuilder {
     }
 
     return this.build(
-      [{ boxId: params.inputBoxId }],
+      [{ boxId: params.inputBoxId, value: params.inputBoxValue }],
       [output]
     );
   }
@@ -123,6 +160,7 @@ export class TransactionBuilder {
    */
   buildRevealTransaction(params: {
     betBoxId: string;
+    betBoxValue: bigint;
     houseAddress: string;
     playerAddress: string;
     betAmount: bigint;
@@ -152,7 +190,7 @@ export class TransactionBuilder {
     };
 
     return this.build(
-      [{ boxId: params.betBoxId }],
+      [{ boxId: params.betBoxId, value: params.betBoxValue }],
       [output]
     );
   }
@@ -163,6 +201,7 @@ export class TransactionBuilder {
    */
   buildRefundTransaction(params: {
     betBoxId: string;
+    betBoxValue: bigint;
     playerAddress: string;
     betAmount: bigint;
   }): ErgoTransaction {
@@ -172,7 +211,7 @@ export class TransactionBuilder {
     };
 
     return this.build(
-      [{ boxId: params.betBoxId }],
+      [{ boxId: params.betBoxId, value: params.betBoxValue }],
       [output]
     );
   }
@@ -228,6 +267,7 @@ export class TransactionBuilder {
               ])
             )
           : undefined,
+        creationHeight: output.creationHeight,
       })),
       rawInputs: tx.inputs.map(input => input.boxId),
       fee: tx.fee?.toString(),
