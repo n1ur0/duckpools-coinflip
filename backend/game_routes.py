@@ -25,10 +25,10 @@ COINFLIP_ERGO_TREE = "1006040004040402040005020564d804d601b2a5730000d602e4c6a705
 # Register layout (must match coinflip_v2.es)
 # R4: housePubKey (Coll[Byte])  — 33-byte compressed public key
 # R5: playerPubKey (Coll[Byte]) — 33-byte compressed public key
-# R6: commitmentHash (Coll[Byte]) — blake2b256(longToByteArray(secret) ++ longToByteArray(choice))
+# R6: commitmentHash (Coll[Byte]) — blake2b256(playerSecret ++ Coll(choiceByte))
 # R7: playerChoice (Int)        — 0=heads, 1=tails
-# R8: playerSecret (Int)        — player random secret
-# R9: timeoutHeight (Int)       — block height for refund
+# R8: timeoutHeight (Int)       — block height for refund
+# R9: playerSecret (Coll[Byte]) — player random secret (32 bytes)
 
 
 # ─── Response Models (match frontend types/Game.ts) ────────────────
