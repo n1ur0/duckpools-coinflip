@@ -1055,3 +1055,59 @@ def test_apy_input_validation():
             "BE-5: /apy endpoint does not validate avg_bet_size input. "
             "Add bounds checking and type validation."
         )
+
+
+# ─── 26. BigInt precision in Long encoding (PROTO-1) ─────────────────
+
+def test_long_encoding_no_number_intermediate():
+    """
+    PROTO-1: encodeLongConstant must NOT convert zigzag-encoded BigInt
+    to Number before VLQ encoding. Number loses precision above 2^53,
+    corrupting ~1 in 4096 random 8-byte secrets.
+
+    The fix: keep zigzag as BigInt and use a BigInt VLQ encoder.
+    """
+    import re
+
+    serializer_path = os.path.normpath(os.path.join(
+        os.path.dirname(__file__), "..", "..", "..",
+        "frontend", "src", "utils", "sigmaSerializer.ts"
+    ))
+
+    if not os.path.exists(serializer_path):
+        pytest.skip(f"{serializer_path} not found")
+
+    with open(serializer_path, "r") as f:
+        src = f.read()
+
+    # Find the region between 'export function encodeLongConstant' and the
+    # next 'export function' or end of file
+    func_match = re.search(
+        r'export\s+function\s+encodeLongConstant\b.*',
+        src, re.DOTALL
+    )
+    assert func_match, "encodeLongConstant not found in sigmaSerializer.ts"
+
+    # Extract the function region (up to next export or EOF)
+    func_region = src[func_match.start():]
+    next_export = re.search(r'\nexport\s+(?!function\s+encodeLongConstant)', func_region)
+    if next_export:
+        func_region = func_region[:next_export.start()]
+
+    # Must NOT have Number(...) wrapping a BigInt zigzag operation
+    # Pattern: Number( followed by ( — i.e., Number((bigValue << 1n) ...)
+    has_number_cast = bool(re.search(r'Number\s*\(\s*\(', func_region))
+    if has_number_cast:
+        pytest.fail(
+            "PROTO-1: encodeLongConstant converts BigInt zigzag to Number. "
+            "This causes precision loss for values > 2^53. "
+            "Use BigInt throughout and call a BigInt VLQ encoder instead."
+        )
+
+    # Must use encodeVLQBigInt (not encodeVLQ) for the VLQ step
+    uses_bigint_vlq = "encodeVLQBigInt" in func_region
+    if not uses_bigint_vlq and "encodeVLQ" in func_region:
+        pytest.fail(
+            "PROTO-1: encodeLongConstant uses encodeVLQ (Number-based) instead of "
+            "encodeVLQBigInt for Long encoding. Use the BigInt variant."
+        )
