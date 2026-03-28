@@ -351,8 +351,8 @@ async def contract_info():
             "R5": "playerPubKey (Coll[Byte])",
             "R6": "commitmentHash (Coll[Byte])",
             "R7": "playerChoice (Int)",
-            "R8": "playerSecret (Int)",
-            "R9": "timeoutHeight (Int)",
+            "R8": "timeoutHeight (Int)",
+            "R9": "playerSecret (Coll[Byte])",
         },
     }
 
