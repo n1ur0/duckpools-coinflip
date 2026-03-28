@@ -66,6 +66,9 @@ services:
     environment:
       # Frontend configuration
       - VITE_API_ENDPOINT=http://localhost:8000
+      # Contract config (compiled coinflip_v2.es, Lithos testnet)
+      - VITE_CONTRACT_P2S_ADDRESS=6d48wTUX3sXR9tw4vRvX9bKg8zKYhpM7bFwNYDFNEXeVvKSYapzFiHxENW6QUzzavmuDUKHmdooq9d6GkVddFwvutZ9thCJqySLxMrxbKBQ5gUQgHGmVxaJTd2G4d5LgKJYB2hV6mTsc3SgvvEUSuret9mYknpGwjQzekbJD4gShxwGsyxoWL9oxM4pkL3yEj2eYQDowTm8XZC9oDR7nonnvqg3wo3HQ1cwL
+      - VITE_HOUSE_PUB_KEY=03896beeb9e7b17a89978fadd83e783b410b4282618feb882dd2625cbf70c3b855
       - VITE_ERGO_NODE_URL=http://localhost:9052
       # Enable polling for hot-reload in Docker
       - CHOKIDAR_USEPOLLING=true
