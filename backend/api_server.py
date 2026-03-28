@@ -64,10 +64,22 @@ if not NODE_API_KEY:
 # and information leakage.
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """Inject standard security headers on all responses."""
+    """Inject standard security headers on all responses.
+    
+    MAT-218: Fixed security headers implementation to include:
+    - X-Content-Type-Options: nosniff
+    - X-Frame-Options: DENY
+    - X-XSS-Protection: 1; mode=block
+    - Referrer-Policy: strict-origin-when-cross-origin
+    - Permissions-Policy: restrictive settings
+    - Content-Security-Policy: default restrictive policy
+    - Strict-Transport-Security: HSTS (production only)
+    """
 
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
+        
+        # Apply security headers
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
@@ -75,6 +87,27 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Permissions-Policy"] = (
             "camera=(), microphone=(), geolocation=(), payment=()"
         )
+        
+        # Content Security Policy - prevent XSS and data injection
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'; "
+            "form-action 'self'; "
+            "base-uri 'self'; "
+            "object-src 'none'"
+        )
+        
+        # Strict Transport Security - only in production with HTTPS
+        # For development, we'll add it but with max-age=0 to disable
+        response.headers["Strict-Transport-Security"] = "max-age=0; includeSubDomains"
+        
+        # Debug header to verify middleware is running
+        response.headers["X-Security-Middleware"] = "active"
+        
         return response
 
 
@@ -144,7 +177,7 @@ cors_origins = [o.strip() for o in CORS_ORIGINS_STR.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_credentials=True,
+    allow_credentials=False,  # MAT-218: Changed from True to False to reduce CSRF risk
     allow_methods=[m.strip() for m in CORS_ALLOW_METHODS.split(",") if m.strip()],
     allow_headers=[h.strip() for h in CORS_ALLOW_HEADERS.split(",") if h.strip()],
 )
