@@ -1,20 +1,21 @@
 /**
  * DuckPools Coinflip Contract Configuration
  *
- * These values must match the compiled and deployed contract.
- * BLOCKED by MAT-344: coinflip_v1.es has NOT been compiled yet,
- * so P2S_ADDRESS is a placeholder.
+ * These values must match the compiled and deployed contract (coinflip_v2.es).
  *
- * Register layout (from coinflip_v1.es):
- *   R4:  housePubKey    (GroupElement) — house's compressed public key (33 bytes)
- *   R5:  playerPubKey   (Coll[Byte])   — player's compressed public key
- *   R6:  commitmentHash (Coll[Byte])   — blake2b256(secret || choice)
- *   R7:  playerChoice   (Int)          — 0=heads, 1=tails
- *   R8:  playerSecret   (Int)          — player's random secret
- *   R9:  betId          (Coll[Byte])   — unique bet identifier
- *   R10: timeoutHeight  (Int)          — block height for timeout/refund
+ * Register layout (from coinflip_v2.es, compiled 2026-03-28):
+ *   R4: Coll[Byte]   — house's compressed public key (33 bytes)
+ *   R5: Coll[Byte]   — player's compressed public key (33 bytes)
+ *   R6: Coll[Byte]   — blake2b256(secret || choice) — 32 bytes
+ *   R7: Int          — player's choice: 0=heads, 1=tails
+ *   R8: Int          — block height for timeout/refund
+ *   R9: Coll[Byte]   — player's secret (raw random bytes)
  *
  * The box MUST contain the Game NFT as its first token.
+ *
+ * SECURITY NOTE (SEC-CRITICAL): Previous version referenced v1 layout
+ * (R8=playerSecret, R9=betId, R10=timeoutHeight). This was wrong —
+ * R10 doesn't exist in Ergo. v2 fixed this. Updated 2026-03-28.
  */
 
 /** P2S address of the compiled coinflip contract (PLACEHOLDER — MAT-344) */
