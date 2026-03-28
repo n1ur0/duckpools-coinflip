@@ -25,6 +25,7 @@ from ws_manager import ConnectionManager
 from ws_routes import router as ws_router
 from oracle_service import OracleService, OracleConfig
 from oracle_routes import router as oracle_router
+from routes.bets import router as bets_router
 
 
 # ─── Environment ────────────────────────────────────────────────────
@@ -111,6 +112,7 @@ app.add_middleware(
 app.include_router(lp_router, prefix="/api")
 app.include_router(ws_router)
 app.include_router(oracle_router)
+app.include_router(bets_router)
 
 
 # ─── Root Endpoints ─────────────────────────────────────────────────
@@ -131,6 +133,8 @@ async def root():
             "request_withdraw": "POST /api/lp/request-withdraw",
             "execute_withdraw": "POST /api/lp/execute-withdraw",
             "cancel_withdraw": "POST /api/lp/cancel-withdraw",
+            "bets": "/api/bets/",
+            "bets_stats": "/api/bets/stats",
             "oracle_health": "/api/oracle/health",
             "oracle_status": "/api/oracle/status",
             "oracle_endpoints": "/api/oracle/endpoints",
