@@ -53,7 +53,7 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
   const [amount, setAmount] = useState('');
   const [choice, setChoice] = useState<0 | 1 | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isFlipping, _setIsFlipping] = useState(false);
+  const [isFlipping, setIsFlipping] = useState(false);
   const [result, setResult] = useState<'heads' | 'tails' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingBet, setPendingBet] = useState<{
@@ -167,7 +167,12 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
         throw new Error(data.error || `Server error ${res.status}`);
       }
 
-      // 4. Show pending state
+      // 4. Trigger coin flip animation for chosen side
+      const flipResult: 'heads' | 'tails' = choice === 0 ? 'heads' : 'tails';
+      setResult(flipResult);
+      setIsFlipping(true);
+
+      // 5. Show pending state
       setPendingBet({
         txId: data.txId,
         betId,
@@ -178,7 +183,6 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
       // Reset form
       setAmount('');
       setChoice(null);
-      setResult(null);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Failed to place bet';
@@ -216,8 +220,9 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
           <div className="coinflip-visual-area">
             <div className="coinflip-board">
               <CoinFlip 
-                result={choice !== null ? (choice === 0 ? 'heads' : 'tails') : null}
+                result={result ?? (choice === 0 ? 'heads' : choice === 1 ? 'tails' : null)}
                 isFlipping={isFlipping}
+                onFlipComplete={() => setIsFlipping(false)}
                 size={140}
               />
               {result && (
