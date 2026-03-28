@@ -251,7 +251,7 @@ def simulate_coinflip(num_bets: int, block_hashes: List[str] = None) -> RNGTestR
 
     for i in range(num_bets):
         block_hash = block_hashes[i % len(block_hashes)]
-        secret_bytes = random.getrandbits(64).to_bytes(8, 'big')
+        secret_bytes = os.urandom(8)
         outcome = compute_rng(block_hash, secret_bytes)
         counts[outcome] += 1
 

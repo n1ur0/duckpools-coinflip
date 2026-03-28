@@ -1,0 +1,180 @@
+/**
+ * NautilusWalletConnect Component Styles
+ */
+
+.nautilus-wallet-connect {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.wallet-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+}
+
+.status-text {
+  font-size: 14px;
+  color: #495057;
+  font-weight: 500;
+}
+
+.session-indicator {
+  font-size: 16px;
+  opacity: 0.7;
+  cursor: help;
+}
+
+.wallet-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.wallet-button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.wallet-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.wallet-button.disconnected {
+  background: #007bff;
+  color: white;
+}
+
+.wallet-button.disconnected:hover:not(:disabled) {
+  background: #0056b3;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
+}
+
+.wallet-button.connected {
+  background: #dc3545;
+  color: white;
+}
+
+.wallet-button.connected:hover:not(:disabled) {
+  background: #c82333;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
+}
+
+.clear-session-button {
+  padding: 8px 16px;
+  border: 1px solid #6c757d;
+  border-radius: 6px;
+  background: white;
+  color: #6c757d;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clear-session-button:hover {
+  background: #f8f9fa;
+  border-color: #5a6268;
+}
+
+.wallet-error {
+  padding: 12px;
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 6px;
+  color: #721c24;
+  font-size: 14px;
+}
+
+.error-message {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.error-suggestions {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+}
+
+.error-suggestions li {
+  margin-bottom: 4px;
+}
+
+.wallet-info {
+  padding: 8px 0;
+  border-top: 1px solid #e9ecef;
+  font-size: 12px;
+  color: #6c757d;
+  text-align: center;
+}
+
+/* Responsive design */
+@media (max-width: 480px) {
+  .nautilus-wallet-connect {
+    padding: 12px;
+  }
+  
+  .wallet-actions {
+    flex-direction: column;
+  }
+  
+  .wallet-button,
+  .clear-session-button {
+    width: 100%;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .nautilus-wallet-connect {
+    background: #2d3748;
+    border-color: #4a5568;
+    color: #e2e8f0;
+  }
+  
+  .wallet-status {
+    background: #1a202c;
+    border-color: #2d3748;
+    color: #e2e8f0;
+  }
+  
+  .status-text {
+    color: #e2e8f0;
+  }
+  
+  .clear-session-button {
+    background: #2d3748;
+    color: #cbd5e0;
+    border-color: #4a5568;
+  }
+  
+  .clear-session-button:hover {
+    background: #374151;
+    border-color: #6b7280;
+  }
+  
+  .wallet-info {
+    border-color: #4a5568;
+    color: #a0aec0;
+  }
+}
