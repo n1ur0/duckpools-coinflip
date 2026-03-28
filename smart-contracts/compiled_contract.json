@@ -13,5 +13,5 @@
     "R8": "playerSecret (Int)",
     "R9": "timeoutHeight (Int)"
   },
-  "commitmentFormula": "blake2b256(longToByteArray(R8) ++ longToByteArray(R7))"
+  "commitmentFormula": "blake2b256(R9 ++ Coll(R7.toByte))"
 }
