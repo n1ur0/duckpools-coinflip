@@ -12,6 +12,7 @@ import TestWallet from './components/TestWallet';
 import WalletConnector from './components/WalletConnector';
 import GameNav from './components/GameNav';
 import DiceGame from './components/games/DiceGame';
+import PlinkoGame from './components/games/PlinkoGame';
 import OnboardingWizard, {
   hasCompletedOnboarding,
   triggerOnboarding,
@@ -164,12 +165,7 @@ function App() {
                     {activeGame === 'dice' && (
                       <DiceGame />
                     )}
-                    {activeGame === 'plinko' && (
-                      <div className="coming-soon-game">
-                        <h3>Plinko Game</h3>
-                        <p>Coming soon!</p>
-                      </div>
-                    )}
+                    {activeGame === 'plinko' && <PlinkoGame />}
                   </motion.div>
                 </AnimatePresence>
               </div>
