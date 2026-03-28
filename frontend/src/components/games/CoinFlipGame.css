@@ -564,6 +564,16 @@
   text-decoration: underline;
 }
 
+.coinflip-pending-note {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(240, 180, 41, 0.1);
+  font-size: 0.78rem;
+  color: var(--text-muted, rgba(255, 255, 255, 0.4));
+  font-style: italic;
+  line-height: 1.4;
+}
+
 /* ── Result Actions ─────────────────────────────────────── */
 
 .coinflip-result-actions {
