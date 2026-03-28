@@ -118,17 +118,18 @@ export class TransactionBuilder {
    * Build bet placement transaction
    * Creates a PendingBetBox with commitment and other registers
    *
-   * Register layout MUST match smart contracts (coinflip_v1.es, dice_v1.es, plinko_v1.es):
-   *   R4:  housePubKey    (Coll[Byte]) — house's compressed public key (33 bytes)
-   *   R5:  playerPubKey   (Coll[Byte]) — player's compressed public key
-   *   R6:  commitmentHash (Coll[Byte]) — blake2b256(secret || choice)
-   *   R7:  playerChoice   (Int)        — 0=heads/1=tails for coinflip
-   *   R8:  playerSecret   (Int)        — player's random secret
-   *   R9:  betId          (Coll[Byte]) — unique bet identifier
-   *   R10: timeoutHeight  (Int)        — block height for timeout/refund
+   * Register layout MUST match coinflip_v2.es (compiled 2026-03-28):
+   *   R4: Coll[Byte] — house's compressed public key (33 bytes)
+   *   R5: Coll[Byte] — player's compressed public key (33 bytes)
+   *   R6: Coll[Byte] — blake2b256(secret || choice) — 32 bytes
+   *   R7: Int        — player's choice: 0=heads, 1=tails
+   *   R8: Int        — block height for timeout/refund
+   *   R9: Coll[Byte] — player's secret (raw random bytes)
    *
-   * CRITICAL (SEC-CRITICAL-6): This layout was fixed to match on-chain contracts.
-   * Previous SDK layout was completely different — see GitHub issue #211.
+   * SECURITY NOTE (SEC-CRITICAL): Previous version had R8=secret(Int),
+   * R9=betId(Coll[Byte]), R10=timeoutHeight(Int). Ergo only supports R4-R9.
+   * R10 was silently dropped. This caused every commit box to fail contract
+   * verification. Fixed 2026-03-28 by Security Auditor Sr.
    */
   buildPlaceBetTransaction(params: {
     playerAddress: string;
@@ -137,10 +138,9 @@ export class TransactionBuilder {
     housePubKey: string;       // House's compressed public key (hex, 33 bytes)
     playerPubKey: string;      // Player's compressed public key (hex)
     commitment: string;        // blake2b256 hash (hex)
-    choice: number;            // Player's choice (game-specific)
-    secret: number;            // Player's random secret as Int
-    betId: string;             // Unique bet identifier (hex)
-    timeoutHeight: number;     // Block height for timeout
+    choice: number;            // Player's choice: 0=heads, 1=tails
+    secret: string;            // Player's random secret (hex-encoded bytes)
+    timeoutHeight: number;     // Block height for timeout/refund
     inputBoxId: string;
     inputBoxValue: bigint;
   }): ErgoTransaction {
@@ -152,9 +152,8 @@ export class TransactionBuilder {
         R5: { type: 'Coll[Byte]' as const, value: params.playerPubKey },
         R6: { type: 'Coll[Byte]' as const, value: params.commitment },
         R7: { type: 'Int' as const, value: params.choice },
-        R8: { type: 'Int' as const, value: params.secret },
-        R9: { type: 'Coll[Byte]' as const, value: params.betId },
-        R10: { type: 'Int' as const, value: params.timeoutHeight },
+        R8: { type: 'Int' as const, value: params.timeoutHeight },
+        R9: { type: 'Coll[Byte]' as const, value: params.secret },
       } as Record<string, SValue>,
     }
 
