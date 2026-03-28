@@ -14,6 +14,8 @@ Tests enforce protocol invariants that MUST NOT regress:
   7. RNG uses cryptographic hash (RNG-SEC-1)
   8. Dice RNG uses rejection sampling, not naive modulo (RNG-SEC-2)
   9. Bet amount validation bounds
+ 10. WebSocket requires authentication token (SEC-A1)
+ 11. WebSocket enforces connection limits (SEC-A2)
 """
 
 import os
@@ -657,3 +659,264 @@ def test_oracle_switch_has_auth():
                         f"SEC-A3: Read-only endpoint {endpoint} should NOT require auth. "
                         "Only /switch needs protection."
                     )
+
+
+# ═══════════════════════════════════════════════════════════════
+# 10. SEC-A1: WEBSOCKET REQUIRES AUTHENTICATION TOKEN
+#    Prevents unauthorized subscription to any address's bet events.
+# ═══════════════════════════════════════════════════════════════
+
+def test_ws_requires_auth_token():
+    """
+    SEC-A1: The WebSocket endpoint MUST require a valid auth token.
+
+    Without this, any client can subscribe to any address's bet events,
+    leaking private transaction data and enabling front-running.
+    """
+    ws_routes_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..",
+        "backend", "ws_routes.py"
+    )
+    ws_routes_path = os.path.normpath(ws_routes_path)
+
+    if not os.path.exists(ws_routes_path):
+        pytest.skip(f"ws_routes.py not found at {ws_routes_path}")
+
+    with open(ws_routes_path, "r") as f:
+        source = f.read()
+
+    # Must have token verification logic
+    has_token_check = (
+        "token" in source and
+        ("verify" in source or "sign" in source) and
+        "query_params" in source
+    )
+    if not has_token_check:
+        pytest.fail(
+            "SEC-A1: WebSocket endpoint does not verify auth tokens. "
+            "Any client can subscribe to any address's bet events. "
+            "Implement token verification via ?token= query parameter."
+        )
+
+    # Must close connection with meaningful code when token is missing
+    has_auth_close = "4001" in source or "close" in source
+    if not has_auth_close:
+        pytest.fail(
+            "SEC-A1: WebSocket must close connection (code 4001) when token is missing."
+        )
+
+    # Must have an auth endpoint for issuing tokens
+    has_auth_endpoint = "/ws/auth" in source
+    if not has_auth_endpoint:
+        pytest.fail(
+            "SEC-A1: No POST /ws/auth endpoint found. "
+            "Clients need a way to obtain WebSocket session tokens."
+        )
+
+
+def test_ws_token_uses_hmac():
+    """
+    SEC-A1: Session tokens MUST be HMAC-signed, not plaintext.
+
+    Plaintext tokens can be forged, allowing impersonation of any address.
+    """
+    ws_routes_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..",
+        "backend", "ws_routes.py"
+    )
+    ws_routes_path = os.path.normpath(ws_routes_path)
+
+    if not os.path.exists(ws_routes_path):
+        pytest.skip(f"ws_routes.py not found at {ws_routes_path}")
+
+    with open(ws_routes_path, "r") as f:
+        source = f.read()
+
+    has_hmac = "hmac" in source.lower() and "sha256" in source.lower()
+    if not has_hmac:
+        pytest.fail(
+            "SEC-A1: Token signing does not use HMAC-SHA256. "
+            "Tokens must be cryptographically signed to prevent forgery."
+        )
+
+    has_compare_digest = "compare_digest" in source
+    if not has_compare_digest:
+        pytest.fail(
+            "SEC-A1: Token comparison does not use hmac.compare_digest(). "
+            "Direct string comparison is vulnerable to timing attacks."
+        )
+
+
+def test_ws_connection_locked_to_authenticated_address():
+    """
+    SEC-A1: Once authenticated, a connection MUST be locked to the
+    authenticated address. Subscribing to other addresses must be blocked.
+    """
+    ws_routes_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..",
+        "backend", "ws_routes.py"
+    )
+    ws_routes_path = os.path.normpath(ws_routes_path)
+
+    if not os.path.exists(ws_routes_path):
+        pytest.skip(f"ws_routes.py not found at {ws_routes_path}")
+
+    with open(ws_routes_path, "r") as f:
+        source = f.read()
+
+    # Must check that subscribe address matches authenticated address
+    has_address_lock = (
+        "locked" in source.lower() or
+        "mismatch" in source.lower() or
+        "cannot subscribe to other" in source.lower()
+    )
+    if not has_address_lock:
+        pytest.fail(
+            "SEC-A1: WebSocket does not lock connections to authenticated address. "
+            "An authenticated user could subscribe to any address's events."
+        )
+
+
+# ═══════════════════════════════════════════════════════════════
+# 11. SEC-A2: WEBSOCKET ENFORCES CONNECTION LIMITS
+#    Prevents DoS via unlimited connections or bulk monitoring.
+# ═══════════════════════════════════════════════════════════════
+
+def test_ws_has_connection_limit_class():
+    """
+    SEC-A2: ConnectionManager must define connection limits as class constants.
+
+    Without explicit limits, a single IP can open thousands of connections,
+    exhausting server resources.
+    """
+    ws_manager_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..",
+        "backend", "ws_manager.py"
+    )
+    ws_manager_path = os.path.normpath(ws_manager_path)
+
+    if not os.path.exists(ws_manager_path):
+        pytest.skip(f"ws_manager.py not found at {ws_manager_path}")
+
+    with open(ws_manager_path, "r") as f:
+        source = f.read()
+
+    # Must define limit constants
+    has_global_limit = "MAX_CONNECTIONS_GLOBAL" in source
+    has_ip_limit = "MAX_CONNECTIONS_PER_IP" in source
+
+    if not has_global_limit:
+        pytest.fail(
+            "SEC-A2: No MAX_CONNECTIONS_GLOBAL limit defined. "
+            "Server is vulnerable to connection exhaustion DoS."
+        )
+
+    if not has_ip_limit:
+        pytest.fail(
+            "SEC-A2: No MAX_CONNECTIONS_PER_IP limit defined. "
+            "A single attacker can open unlimited connections."
+        )
+
+    # Must track connections per IP
+    has_ip_tracking = "_ip_connections" in source
+    if not has_ip_tracking:
+        pytest.fail(
+            "SEC-A2: ConnectionManager does not track connections per IP. "
+            "Per-IP limits cannot be enforced without this."
+        )
+
+
+def test_ws_has_per_address_subscription_limit():
+    """
+    SEC-A2: Must limit how many connections can subscribe to a single address.
+
+    Without this, an attacker can open many connections to a whale's address
+    and monitor their betting patterns for front-running.
+    """
+    ws_manager_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..",
+        "backend", "ws_manager.py"
+    )
+    ws_manager_path = os.path.normpath(ws_manager_path)
+
+    if not os.path.exists(ws_manager_path):
+        pytest.skip(f"ws_manager.py not found at {ws_manager_path}")
+
+    with open(ws_manager_path, "r") as f:
+        source = f.read()
+
+    has_addr_limit = "MAX_SUBS_PER_ADDRESS" in source
+    if not has_addr_limit:
+        pytest.fail(
+            "SEC-A2: No MAX_SUBS_PER_ADDRESS limit defined. "
+            "Too many connections per address enables bulk monitoring."
+        )
+
+    # Must enforce the limit in subscribe()
+    has_limit_check = (
+        "ConnectionLimitExceeded" in source or
+        ("limit" in source.lower() and "subscribe" in source.lower())
+    )
+    if not has_limit_check:
+        pytest.fail(
+            "SEC-A2: Subscription limit defined but not enforced in subscribe()."
+        )
+
+
+def test_ws_limits_are_reasonable():
+    """
+    SEC-A2: Connection limits must be within reasonable bounds.
+
+    Too high = ineffective. Too low = breaks normal usage.
+    """
+    ws_manager_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..",
+        "backend", "ws_manager.py"
+    )
+    ws_manager_path = os.path.normpath(ws_manager_path)
+
+    if not os.path.exists(ws_manager_path):
+        pytest.skip(f"ws_manager.py not found at {ws_manager_path}")
+
+    with open(ws_manager_path, "r") as f:
+        source = f.read()
+
+    # Parse limit values
+    import re
+
+    global_match = re.search(r"MAX_CONNECTIONS_GLOBAL\s*=\s*(\d+)", source)
+    ip_match = re.search(r"MAX_CONNECTIONS_PER_IP\s*=\s*(\d+)", source)
+    addr_match = re.search(r"MAX_SUBS_PER_ADDRESS\s*=\s*(\d+)", source)
+
+    if global_match:
+        global_limit = int(global_match.group(1))
+        if global_limit > 1000:
+            pytest.fail(
+                f"SEC-A2: MAX_CONNECTIONS_GLOBAL={global_limit} is too high. "
+                "Set to 200-500 for production safety."
+            )
+        if global_limit < 10:
+            pytest.fail(
+                f"SEC-A2: MAX_CONNECTIONS_GLOBAL={global_limit} is too low. "
+                "Normal users need multiple connections for different tabs."
+            )
+
+    if ip_match:
+        ip_limit = int(ip_match.group(1))
+        if ip_limit > 20:
+            pytest.fail(
+                f"SEC-A2: MAX_CONNECTIONS_PER_IP={ip_limit} is too high. "
+                "Set to 3-5 per IP to prevent abuse."
+            )
+        if ip_limit < 1:
+            pytest.fail(
+                f"SEC-A2: MAX_CONNECTIONS_PER_IP={ip_limit} must be >= 1."
+            )
+
+    if addr_match:
+        addr_limit = int(addr_match.group(1))
+        if addr_limit > 50:
+            pytest.fail(
+                f"SEC-A2: MAX_SUBS_PER_ADDRESS={addr_limit} is too high. "
+                "More than 10 connections per address enables surveillance."
+            )
