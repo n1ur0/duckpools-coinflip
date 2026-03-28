@@ -141,8 +141,7 @@ export class TransactionBuilder {
     choice: number;            // Player's choice: 0=heads, 1=tails
     secret: string;            // Player's random secret as hex string (32 bytes, Coll[Byte])
     timeoutHeight: number;     // Block height for timeout/refund
-    inputBoxId: string;
-    inputBoxValue: bigint;
+    inputs: Array<{ boxId: string; value: bigint }>; // UTXO inputs to spend
   }): ErgoTransaction {
     const output: TransactionOutput = {
       address: params.pendingBetAddress,
@@ -158,7 +157,7 @@ export class TransactionBuilder {
     }
 
     return this.build(
-      [{ boxId: params.inputBoxId, value: params.inputBoxValue }],
+      params.inputs,
       [output]
     );
   }

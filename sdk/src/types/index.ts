@@ -208,6 +208,7 @@ export interface PlaceBetOptions {
   choice: BetChoice;
   secret?: string; // If not provided, one will be generated
   timeoutDelta?: number; // Blocks until timeout (e.g., 100)
+  inputs?: Array<{ boxId: string; value: bigint }>; // UTXO inputs to spend
 }
 
 /**

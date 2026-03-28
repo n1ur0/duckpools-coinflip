@@ -1,14 +1,17 @@
-import { useState, useCallback, useRef, TouchEvent } from 'react';
+import { useState, useCallback, useRef, TouchEvent, useEffect } from 'react';
 import { useWallet } from '../../contexts/WalletContext';
 import CoinFlip from '../../components/animations/CoinFlip';
+import FadeIn from '../../components/animations/FadeIn';
+import PulseGlow from '../../components/animations/PulseGlow';
 import { Button, Input } from '../../components/ui';
 import { bytesToHex, blake2b256, generateSecret } from '../../utils/crypto';
 import { ergToNanoErg, formatErg } from '../../utils/ergo';
 import { buildApiUrl } from '../../utils/network';
 import { isOnChainEnabled } from '../../config/contract';
-import { buildPlaceBetTx, verifyCommitment } from '../../services/coinflipService';
+import { selectUtxos } from '../../utils/utxoSelector';
+import { TransactionBuilder, BetManager, NodeClient } from '../../../sdk/src';
+import type { PlaceBetResult } from '../../../sdk/src/types';
 import './CoinFlipGame.css';
-
 // ─── Helpers ──────────────────────────────────────────────────────
 
 function generateBetId(): string {
@@ -28,12 +31,23 @@ function generateCommitment(
   return bytesToHex(hash);
 }
 
+// Helper function to format time
+function formatTime(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${minutes}:${secs.toString().padStart(2, '0')}`;
+}
+
 const HOUSE_EDGE = 0.03;
 const PAYOUT_MULTIPLIER = 1 - HOUSE_EDGE; // 0.97
+const BET_TIMEOUT_BLOCKS = 10; // 10 blocks until timeout (~20 minutes)
 
 // Touch gesture thresholds
 const SWIPE_THRESHOLD = 50; // Minimum pixels for swipe gesture
 const QUICK_PICK_VALUES = [0.1, 0.5, 1, 5];
+
+// Countdown timer interval (milliseconds)
+const COUNTDOWN_INTERVAL = 1000;
 
 function calculatePayout(amountNanoErg: string): string {
   const nano = BigInt(amountNanoErg);
@@ -62,11 +76,48 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
     choiceLabel: string;
     commitment: string;
     txId?: string;
+    timeoutHeight?: number;
   } | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
 
   // Touch gesture state
   const touchStartYRef = useRef<number>(0);
   const touchStartTimeRef = useRef<number>(0);
+
+  // Countdown timer effect
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+
+    if (betPlaced && betPlaced.timeoutHeight) {
+      const startCountdown = () => {
+        intervalId = setInterval(() => {
+          setCountdown(prev => {
+            if (prev === null) return BET_TIMEOUT_BLOCKS * 2 * 60; // 20 minutes in seconds
+            if (prev <= 1) {
+              if (intervalId) clearInterval(intervalId);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, COUNTDOWN_INTERVAL);
+      };
+
+      startCountdown();
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [betPlaced]);
+
+  // Reset countdown when bet is resolved
+  useEffect(() => {
+    if (result && countdown !== null) {
+      setCountdown(null);
+    }
+  }, [result, countdown]);
 
   // ── Validation ──────────────────────────────────────────────────
 
@@ -144,11 +195,14 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
       const betId = generateBetId();
 
       // Sanity-check commitment (should always pass)
-      if (!verifyCommitment(secret, choice, commitment)) {
+      const secretHex = Array.from(secret).map(b => b.toString(16).padStart(2, '0')).join('');
+      const testCommitment = blake2b256(new Uint8Array([...secret, choice]));
+      if (bytesToHex(testCommitment) !== commitment) {
         throw new Error('Commitment verification failed — internal error');
       }
 
       let txId = '';
+      let timeoutHeight: number | undefined = undefined;
 
       if (isOnChainEnabled()) {
         // ── ON-CHAIN FLOW ──────────────────────────────────────
@@ -183,16 +237,47 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
           );
         }
 
-        const { unsignedTx, timeoutHeight } = await buildPlaceBetTx({
+        // Select UTXOs to cover bet amount + fee
+        const fee = 1000000n; // 0.001 ERG fee
+        const { inputBoxIds, totalValue } = selectUtxos(utxos, BigInt(amountNanoErg), fee);
+
+        console.log(`[CoinFlip] Selected ${inputBoxIds.length} UTXO(s) with total value: ${totalValue} nanoERG`);
+
+        // Use SDK TransactionBuilder to build place bet transaction
+        const txBuilder = new TransactionBuilder({
           changeAddress,
-          amountNanoErg: BigInt(amountNanoErg),
+          fee,
+        });
+
+        // Import contract configuration
+        const { P2S_ADDRESS, HOUSE_PUB_KEY, NODE_URL } = await import('../../config/contract');
+
+        if (!P2S_ADDRESS || !HOUSE_PUB_KEY) {
+          throw new Error('Contract not configured. Please configure VITE_CONTRACT_P2S_ADDRESS and VITE_HOUSE_PUB_KEY.');
+        }
+
+        const timeoutHeight = currentHeight + 100;
+
+        // Build the unsigned transaction using SDK with proper UTXO inputs
+        const inputs = inputBoxIds.map(boxId => {
+          const utxo = utxos.find(u => u.boxId === boxId);
+          return {
+            boxId,
+            value: utxo ? BigInt(utxo.value) : 0n,
+          };
+        });
+
+        const unsignedTx = txBuilder.buildPlaceBetTransaction({
+          playerAddress: changeAddress,
+          pendingBetAddress: P2S_ADDRESS,
+          amount: BigInt(amountNanoErg),
+          housePubKey: HOUSE_PUB_KEY,
           playerPubKey,
           commitment,
           choice,
-          secret,
-          betId,
-          currentHeight,
-          utxos: utxos as any, // Fleet SDK Box type compat
+          secret: secretHex,
+          timeoutHeight,
+          inputs, // All selected UTXOs
         });
 
         // 2. Sign via Nautilus — THIS triggers the wallet popup
@@ -248,6 +333,7 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
         choiceLabel: choice === 0 ? 'Heads' : 'Tails',
         commitment,
         txId: txId || undefined,
+        timeoutHeight,
       });
 
       // Reset form
@@ -307,33 +393,57 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
                 size={140}
               />
               {!isFlipping && result && (
-                <div className="coinflip-result-section">
-                  {/* Enhanced result display with icon */}
-                  <div className={`coinflip-result-wrapper ${result}`}>
-                    <div className={`coinflip-result-icon ${result}`}>
-                      {result === 'heads' ? '◉' : '◎'}
-                    </div>
-                    <div className={`coinflip-result-text ${result}`}>
-                      {result === 'heads' ? 'HEADS' : 'TAILS'}
-                    </div>
-                  </div>
-                  
-                  {/* Enhanced win/loss outcome with bet amount */}
-                  {winOutcome && (
-                    <div className={`coinflip-outcome ${winOutcome}`}>
-                      <div className="coinflip-outcome-icon">
-                        {winOutcome === 'win' ? '✦' : '✕'}
-                      </div>
-                      <div className="coinflip-outcome-text">
-                        {winOutcome === 'win' ? 'YOU WIN!' : 'YOU LOSE'}
-                      </div>
-                      {betPlaced && (
-                        <div className="coinflip-bet-amount">
-                          Bet: {betPlaced.amount} ERG
+                <FadeIn delay={200} direction="up">
+                  <div className="coinflip-result-section">
+                    {/* Enhanced result display with icon */}
+                    <PulseGlow color={result === 'heads' ? 'gold' : 'blue'} intensity="medium">
+                      <div className={`coinflip-result-wrapper ${result}`}>
+                        <div className={`coinflip-result-icon ${result}`}>
+                          {result === 'heads' ? '◉' : '◎'}
                         </div>
-                      )}
-                    </div>
-                  )}
+                        <div className={`coinflip-result-text ${result}`}>
+                          {result === 'heads' ? 'HEADS' : 'TAILS'}
+                        </div>
+                      </div>
+                    </PulseGlow>
+                    
+                    {/* Enhanced win/loss outcome with bet amount */}
+                    {winOutcome && (
+                      <FadeIn delay={400} direction="up">
+                        <div className={`coinflip-outcome ${winOutcome}`}>
+                          <div className="coinflip-outcome-icon">
+                            {winOutcome === 'win' ? '✦' : '✕'}
+                          </div>
+                          <div className="coinflip-outcome-text">
+                            {winOutcome === 'win' ? 'YOU WIN!' : 'YOU LOSE'}
+                          </div>
+                          {betPlaced && (
+                            <div className="coinflip-bet-amount">
+                              Bet: {betPlaced.amount} ERG
+                            </div>
+                          )}
+                        </div>
+                      </FadeIn>
+                    )}
+                  </div>
+                </FadeIn>
+              )}
+              
+              {/* Loading overlay for wallet connection */}
+              {!isConnected && (
+                <div className="coinflip-loading-overlay">
+                  <div className="coinflip-loading-spinner" />
+                  <div className="coinflip-loading-text">Connecting to wallet...</div>
+                </div>
+              )}
+              
+              {/* Loading overlay for transaction signing */}
+              {isSubmitting && (
+                <div className="coinflip-loading-overlay">
+                  <div className="coinflip-loading-spinner" />
+                  <div className="coinflip-loading-text">
+                    {isOnChainEnabled() ? 'Signing transaction...' : 'Processing bet...'}
+                  </div>
                 </div>
               )}
             </div>
@@ -471,59 +581,122 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
         </div>
       )}
 
-      {/* ── Bet Placed — Pending On-Chain Reveal ─────────────── */}
+// ── Pending Bet ─────────────────────────────────────────────── */
       {betPlaced && !result && (
-        <div className="coinflip-pending">
-          <div className="coinflip-pending-title">
-            <span className="coinflip-pending-spinner" />
-            Bet Placed — Awaiting On-Chain Reveal
-          </div>
-          <div className="coinflip-pending-row">
-            <span className="coinflip-pending-row-label">Bet ID</span>
-            <span className="coinflip-pending-row-value">{betPlaced.betId.slice(0, 16)}...</span>
-          </div>
-          <div className="coinflip-pending-row">
-            <span className="coinflip-pending-row-label">Amount</span>
-            <span className="coinflip-pending-row-value">{betPlaced.amount} ERG</span>
-          </div>
-          <div className="coinflip-pending-row">
-            <span className="coinflip-pending-row-label">Choice</span>
-            <span className="coinflip-pending-row-value">{betPlaced.choiceLabel}</span>
-          </div>
-          <div className="coinflip-pending-row">
-            <span className="coinflip-pending-row-label">Commitment</span>
-            <span className="coinflip-pending-row-value">{betPlaced.commitment.slice(0, 16)}...</span>
-          </div>
-          {betPlaced.txId && (
-            <div className="coinflip-pending-row">
-              <span className="coinflip-pending-row-label">Transaction</span>
-              <span className="coinflip-pending-row-value">
-                <a
-                  href={`https://explorer.ergoplatform.com/en/transactions/${betPlaced.txId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="coinflip-tx-link"
-                >
-                  {betPlaced.txId.slice(0, 16)}...
-                </a>
-              </span>
+        <FadeIn>
+          <div className="coinflip-pending">
+            <PulseGlow intensity="strong">
+              <div className="coinflip-pending-header">
+                <div className="coinflip-pending-title">
+                  <div className="coinflip-pending-icon">
+                    <div className="coinflip-pending-spinner" />
+                  </div>
+                  <div>
+                    <div className="coinflip-pending-main-text">Bet Placed</div>
+                    <div className="coinflip-pending-sub-text">Awaiting Reveal</div>
+                  </div>
+                </div>
+                {countdown !== null && (
+                  <div className="coinflip-countdown">
+                    <span className="coinflip-countdown-icon">⏱️</span>
+                    <div className="coinflip-countdown-content">
+                      <span className="coinflip-countdown-label">Timeout in</span>
+                      <span className={`coinflip-countdown-text ${countdown <= 60 ? 'coinflip-countdown-warning' : ''}`}>
+                        {countdown > 0 ? formatTime(countdown) : 'Expired'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </PulseGlow>
+            
+            <div className="coinflip-pending-content">
+              <div className="coinflip-pending-grid">
+                <div className="coinflip-pending-card">
+                  <div className="coinflip-pending-card-header">
+                    <div className="coinflip-pending-card-icon">📋</div>
+                    <div className="coinflip-pending-card-title">Bet Details</div>
+                  </div>
+                  <div className="coinflip-pending-card-body">
+                    <div className="coinflip-pending-row">
+                      <span className="coinflip-pending-row-label">Bet ID</span>
+                      <span className="coinflip-pending-row-value" title={betPlaced.betId}>
+                        {betPlaced.betId.slice(0, 16)}...
+                      </span>
+                    </div>
+                    <div className="coinflip-pending-row">
+                      <span className="coinflip-pending-row-label">Amount</span>
+                      <span className="coinflip-pending-row-value coinflip-amount-highlight">
+                        {betPlaced.amount} ERG
+                      </span>
+                    </div>
+                    <div className="coinflip-pending-row">
+                      <span className="coinflip-pending-row-label">Choice</span>
+                      <span className={`coinflip-pending-row-value coinflip-choice-badge ${betPlaced.choiceLabel.toLowerCase()}`}>
+                        {betPlaced.choiceLabel}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="coinflip-pending-card">
+                  <div className="coinflip-pending-card-header">
+                    <div className="coinflip-pending-card-icon">🔗</div>
+                    <div className="coinflip-pending-card-title">On-Chain Info</div>
+                  </div>
+                  <div className="coinflip-pending-card-body">
+                    <div className="coinflip-pending-row">
+                      <span className="coinflip-pending-row-label">Commitment</span>
+                      <span className="coinflip-pending-row-value" title={betPlaced.commitment}>
+                        {betPlaced.commitment.slice(0, 16)}...
+                      </span>
+                    </div>
+                    {betPlaced.txId && (
+                      <div className="coinflip-pending-row">
+                        <span className="coinflip-pending-row-label">Transaction</span>
+                        <span className="coinflip-pending-row-value">
+                          <a
+                            href={`https://explorer.ergoplatform.com/en/transactions/${betPlaced.txId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="coinflip-tx-link"
+                          >
+                            {betPlaced.txId.slice(0, 16)}...
+                          </a>
+                        </span>
+                      </div>
+                    )}
+                    {betPlaced.timeoutHeight && (
+                      <div className="coinflip-pending-row">
+                        <span className="coinflip-pending-row-label">Timeout Block</span>
+                        <span className="coinflip-pending-row-value coinflip-block-height">
+                          {betPlaced.timeoutHeight}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
-          <div className="coinflip-pending-note">
-            {isOnChainEnabled()
-              ? 'Outcome will be revealed on-chain when the house processes the bet.'
-              : '⚠️ Off-chain mode — no real transaction was broadcast (MAT-344).'}
+            
+            <div className="coinflip-pending-note">
+              {isOnChainEnabled()
+                ? 'Outcome will be revealed on-chain when the house processes the bet.'
+                : '⚠️ Off-chain mode — no real transaction was broadcast (MAT-344).'}
+            </div>
+            
+            <button
+              className="coinflip-flip-again-btn"
+              onClick={() => {
+                setBetPlaced(null);
+                setError(null);
+                setCountdown(null);
+              }}
+            >
+              Place Another Bet
+            </button>
           </div>
-          <button
-            className="coinflip-flip-again-btn"
-            onClick={() => {
-              setBetPlaced(null);
-              setError(null);
-            }}
-          >
-            Place Another Bet
-          </button>
-        </div>
+        </FadeIn>
       )}
     </div>
   );
