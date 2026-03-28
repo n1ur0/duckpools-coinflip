@@ -1,5 +1,25 @@
 {
+  "name": "duckpools",
+  "private": true,
+  "version": "1.0.0",
+  "description": "DuckPools - Provably-fair gambling protocol on Ergo",
+  "scripts": {
+    "accessibility:audit": "node scripts/accessibility/wcag-21-audit.mjs",
+    "accessibility:report": "open accessibility-report.html"
+  },
   "devDependencies": {
-    "pm2": "^6.0.14"
-  }
+    "pm2": "^6.0.14",
+    "chalk": "^5.3.0",
+    "commander": "^11.0.0"
+  },
+  "keywords": [
+    "ergo",
+    "blockchain",
+    "gambling",
+    "provably-fair",
+    "accessibility",
+    "wcag"
+  ],
+  "author": "DuckPools Team",
+  "license": "MIT"
 }

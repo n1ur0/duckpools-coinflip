@@ -1,0 +1,603 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WCAG 2.1 Accessibility Audit Report</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+        }
+        .summary {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+        .issues {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .issue-item {
+            border-left: 4px solid #e74c3c;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #fdf2f2;
+            border-radius: 0 4px 4px 0;
+        }
+        .issue-item.medium {
+            border-left-color: #f39c12;
+            background: #fef9f2;
+        }
+        .issue-item.low {
+            border-left-color: #3498db;
+            background: #f2f8fd;
+        }
+        .issue-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .issue-type {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .severity-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .severity-high {
+            background: #e74c3c;
+            color: white;
+        }
+        .severity-medium {
+            background: #f39c12;
+            color: white;
+        }
+        .severity-low {
+            background: #3498db;
+            color: white;
+        }
+        .issue-description {
+            margin-bottom: 10px;
+        }
+        .issue-suggestion {
+            font-style: italic;
+            color: #666;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .wcag-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .wcag-section h2 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+        .wcag-criteria {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 10px;
+        }
+        .wcag-item {
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 3px solid #3498db;
+        }
+        .wcag-item h4 {
+            margin: 0 0 5px 0;
+            color: #2c3e50;
+        }
+        .wcag-item p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: #666;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>WCAG 2.1 Accessibility Audit Report</h1>
+        <p>Generated on 2026-03-28T08:04:45.656Z</p>
+        <p>DuckPools Frontend Components</p>
+    </div>
+    
+    <div class="summary">
+        <h2>Executive Summary</h2>
+        <p>This report details the accessibility audit findings for all UI components in the DuckPools frontend application, checked against WCAG 2.1 guidelines.</p>
+        
+        <div class="summary-stats">
+            <div class="stat-card">
+                <div class="stat-value">15</div>
+                <div class="stat-label">Total Issues Found</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">12</div>
+                <div class="stat-label">High Priority</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">3</div>
+                <div class="stat-label">Medium Priority</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">0</div>
+                <div class="stat-label">Low Priority</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="issues">
+        <h2>Detailed Issues</h2>
+        
+                <div class="issue-item high">
+                    <div class="issue-header">
+                        <span class="issue-type">formLabelsMissing</span>
+                        <span class="severity-badge severity-high">high</span>
+                    </div>
+                    <div class="issue-description">Form input missing associated label</div>
+                    <div class="issue-suggestion">💡 Add a label element with htmlFor attribute or use aria-label/aria-labelledby</div>
+                </div>
+            
+                <div class="issue-item high">
+                    <div class="issue-header">
+                        <span class="issue-type">formLabelsMissing</span>
+                        <span class="severity-badge severity-high">high</span>
+                    </div>
+                    <div class="issue-description">Form input missing associated label</div>
+                    <div class="issue-suggestion">💡 Add a label element with htmlFor attribute or use aria-label/aria-labelledby</div>
+                </div>
+            
+                <div class="issue-item high">
+                    <div class="issue-header">
+                        <span class="issue-type">formLabelsMissing</span>
+                        <span class="severity-badge severity-high">high</span>
+                    </div>
+                    <div class="issue-description">Form input missing associated label</div>
+                    <div class="issue-suggestion">💡 Add a label element with htmlFor attribute or use aria-label/aria-labelledby</div>
+                </div>
+            
+                <div class="issue-item high">
+                    <div class="issue-header">
+                        <span class="issue-type">formLabelsMissing</span>
+                        <span class="severity-badge severity-high">high</span>
+                    </div>
+                    <div class="issue-description">Form input missing associated label</div>
+                    <div class="issue-suggestion">💡 Add a label element with htmlFor attribute or use aria-label/aria-labelledby</div>
+                </div>
+            
+                <div class="issue-item high">
+                    <div class="issue-header">
+                        <span class="issue-type">formLabelsMissing</span>
+                        <span class="severity-badge severity-high">high</span>
+                    </div>
+                    <div class="issue-description">Form input missing associated label</div>
+                    <div class="issue-suggestion">💡 Add a label element with htmlFor attribute or use aria-label/aria-labelledby</div>
+                </div>
+            
+                <div class="issue-item medium">
+                    <div class="issue-header">
+                        <span class="issue-type">colorOnlyIndicators</span>
+                        <span class="severity-badge severity-medium">medium</span>
+                    </div>
+                    <div class="issue-description">Potential color-only indicator found</div>
+                    <div class="issue-suggestion">💡 Ensure color is not the only means of conveying information</div>
+                </div>
+            
+                <div class="issue-item medium">
+                    <div class="issue-header">
+                        <span class="issue-type">colorOnlyIndicators</span>
+                        <span class="severity-badge severity-medium">medium</span>
+                    </div>
+                    <div class="issue-description">Potential color-only indicator found</div>
+                    <div class="issue-suggestion">💡 Ensure color is not the only means of conveying information</div>
+                </div>
+            
+                <div class="issue-item high">
+                    <div class="issue-header">
+                        <span class="issue-type">formLabelsMissing</span>
+                        <span class="severity-badge severity-high">high</span>
+                    </div>
+                    <div class="issue-description">Form input missing associated label</div>
+                    <div class="issue-suggestion">💡 Add a label element with htmlFor attribute or use aria-label/aria-labelledby</div>
+                </div>
+            
+                <div class="issue-item medium">
+                    <div class="issue-header">
+                        <span class="issue-type">colorOnlyIndicators</span>
+                        <span class="severity-badge severity-medium">medium</span>
+                    </div>
+                    <div class="issue-description">Potential color-only indicator found</div>
+                    <div class="issue-suggestion">💡 Ensure color is not the only means of conveying information</div>
+                </div>
+            
+                <div class="issue-item high">
+                    <div class="issue-header">
+                        <span class="issue-type">formLabelsMissing</span>
+                        <span class="severity-badge severity-high">high</span>
+                    </div>
+                    <div class="issue-description">Form input missing associated label</div>
+                    <div class="issue-suggestion">💡 Add a label element with htmlFor attribute or use aria-label/aria-labelledby</div>
+                </div>
+            
+                <div class="issue-item high">
+                    <div class="issue-header">
+                        <span class="issue-type">formLabelsMissing</span>
+                        <span class="severity-badge severity-high">high</span>
+                    </div>
+                    <div class="issue-description">Form input missing associated label</div>
+                    <div class="issue-suggestion">💡 Add a label element with htmlFor attribute or use aria-label/aria-labelledby</div>
+                </div>
+            
+                <div class="issue-item high">
+                    <div class="issue-header">
+                        <span class="issue-type">formLabelsMissing</span>
+                        <span class="severity-badge severity-high">high</span>
+                    </div>
+                    <div class="issue-description">Form input missing associated label</div>
+                    <div class="issue-suggestion">💡 Add a label element with htmlFor attribute or use aria-label/aria-labelledby</div>
+                </div>
+            
+                <div class="issue-item high">
+                    <div class="issue-header">
+                        <span class="issue-type">formLabelsMissing</span>
+                        <span class="severity-badge severity-high">high</span>
+                    </div>
+                    <div class="issue-description">Form input missing associated label</div>
+                    <div class="issue-suggestion">💡 Add a label element with htmlFor attribute or use aria-label/aria-labelledby</div>
+                </div>
+            
+                <div class="issue-item high">
+                    <div class="issue-header">
+                        <span class="issue-type">formLabelsMissing</span>
+                        <span class="severity-badge severity-high">high</span>
+                    </div>
+                    <div class="issue-description">Form input missing associated label</div>
+                    <div class="issue-suggestion">💡 Add a label element with htmlFor attribute or use aria-label/aria-labelledby</div>
+                </div>
+            
+                <div class="issue-item high">
+                    <div class="issue-header">
+                        <span class="issue-type">formLabelsMissing</span>
+                        <span class="severity-badge severity-high">high</span>
+                    </div>
+                    <div class="issue-description">Form input missing associated label</div>
+                    <div class="issue-suggestion">💡 Add a label element with htmlFor attribute or use aria-label/aria-labelledby</div>
+                </div>
+            
+    </div>
+    
+    <div class="wcag-section">
+        <h2>WCAG 2.1 Success Criteria</h2>
+        <p>The audit was performed against the following WCAG 2.1 success criteria:</p>
+        <div class="wcag-criteria">
+            
+                <div class="wcag-item">
+                    <h4>1.1.1</h4>
+                    <p>Non-text Content</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>1.2.1</h4>
+                    <p>Audio-only and Video-only (Prerecorded)</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>1.2.2</h4>
+                    <p>Captions (Prerecorded)</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>1.2.3</h4>
+                    <p>Audio Description or Media Alternative (Prerecorded)</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>1.2.4</h4>
+                    <p>Captions (Live)</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>1.2.5</h4>
+                    <p>Audio Description (Prerecorded)</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>1.3.1</h4>
+                    <p>Info and Relationships</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>1.3.2</h4>
+                    <p>Meaningful Sequence</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>1.3.3</h4>
+                    <p>Sensory Characteristics</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>1.3.4</h4>
+                    <p>Orientation</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>1.3.5</h4>
+                    <p>Identify Input Purpose</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>1.3.6</h4>
+                    <p>Identify Purpose</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>1.4.1</h4>
+                    <p>Use of Color</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>1.4.2</h4>
+                    <p>Audio Control</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>1.4.3</h4>
+                    <p>Contrast (Minimum)</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>1.4.4</h4>
+                    <p>Resize Text</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>1.4.5</h4>
+                    <p>Text Spacing</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>1.4.10</h4>
+                    <p>Reflow</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>1.4.11</h4>
+                    <p>Non-text Contrast</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>1.4.12</h4>
+                    <p>Text Spacing</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>1.4.13</h4>
+                    <p>Content on Hover or Focus</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>2.1.1</h4>
+                    <p>Keyboard</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>2.1.2</h4>
+                    <p>No Keyboard Trap</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>2.1.4</h4>
+                    <p>Character Key Shortcuts</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>2.2.1</h4>
+                    <p>Timing Adjustable</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>2.2.2</h4>
+                    <p>Pause, Stop, Hide</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>2.3.1</h4>
+                    <p>Three Flashes or Below Threshold</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>2.4.1</h4>
+                    <p>Bypass Blocks</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>2.4.2</h4>
+                    <p>Page Titled</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>2.4.3</h4>
+                    <p>Focus Order</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>2.4.4</h4>
+                    <p>Link Purpose (In Context)</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>2.4.5</h4>
+                    <p>Multiple Ways</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>2.4.6</h4>
+                    <p>Headings and Labels</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>2.4.7</h4>
+                    <p>Focus Visible</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>2.5.1</h4>
+                    <p>Pointer Gestures</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>2.5.2</h4>
+                    <p>Pointer Cancellation</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>2.5.3</h4>
+                    <p>Label in Name</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>2.5.4</h4>
+                    <p>Motion Actuation</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>2.5.5</h4>
+                    <p>Target Size</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>3.1.1</h4>
+                    <p>Language of Page</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>3.1.2</h4>
+                    <p>Language of Parts</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>3.2.1</h4>
+                    <p>On Focus</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>3.2.2</h4>
+                    <p>On Input</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>3.2.3</h4>
+                    <p>Consistent Navigation</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>3.2.4</h4>
+                    <p>Consistent Identification</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>3.3.1</h4>
+                    <p>Error Identification</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>3.3.2</h4>
+                    <p>Labels or Instructions</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>3.3.3</h4>
+                    <p>Error Suggestion</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>3.3.4</h4>
+                    <p>Error Prevention (Legal, Financial, Data)</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>4.1.1</h4>
+                    <p>Parsing</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>4.1.2</h4>
+                    <p>Name, Role, Value</p>
+                </div>
+            
+                <div class="wcag-item">
+                    <h4>4.1.3</h4>
+                    <p>Status Messages</p>
+                </div>
+            
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>This report was generated automatically by the WCAG 2.1 Accessibility Audit Script.</p>
+        <p>For questions about accessibility implementation, please contact the development team.</p>
+    </div>
+</body>
+</html>
+  
