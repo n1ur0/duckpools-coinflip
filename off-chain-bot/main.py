@@ -13,12 +13,17 @@ import time
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Optional
 
 import httpx
 from dotenv import load_dotenv
+from tenacity import (
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 # Import local logger
 from logger import configure_structured_logging, get_logger
@@ -50,177 +55,62 @@ class BotConfig:
     heartbeat_interval: int = 30  # seconds
 
 
-# Type variable for decorator
-F = TypeVar("F", bound=Callable[..., Any])
-
-
-def retry_with_backoff(
-    max_retries: int = 3,
-    base_delay: float = 1.0,
-    retry_exceptions: tuple = (
-        httpx.ConnectError,
-        httpx.TimeoutException,
-        httpx.HTTPStatusError,
-    ),
-    retry_status_codes: tuple = (500, 502, 503),
-) -> Callable[[F], F]:
+def is_retryable_error(exception: Exception) -> bool:
     """
-    Decorator for retrying HTTP calls with exponential backoff.
+    Check if an exception is retryable.
+
+    Args:
+        exception: The exception to check
+
+    Returns:
+        True if retryable, False otherwise
+    """
+    # Connection errors
+    if isinstance(exception, (httpx.ConnectError, httpx.ConnectTimeout)):
+        return True
+
+    # Timeout errors
+    if isinstance(exception, httpx.TimeoutException):
+        return True
+
+    # HTTP status errors (500, 502, 503)
+    if isinstance(exception, httpx.HTTPStatusError):
+        return exception.response.status_code in (500, 502, 503)
+
+    return False
+
+
+def get_retry_decorator(max_retries: int = 3, base_delay: float = 1.0):
+    """
+    Get a tenacity retry decorator with exponential backoff.
 
     Args:
         max_retries: Maximum number of retry attempts
-        base_delay: Base delay in seconds (doubled after each retry)
-        retry_exceptions: Exception types to retry on
-        retry_status_codes: HTTP status codes to retry on
+        base_delay: Base delay in seconds
 
     Returns:
-        Decorator function
+        Configured retry decorator
     """
+    
+    def log_retry_attempt(retry_state):
+        """Log retry attempt using structlog."""
+        logger.warning(
+            "api_retry_attempt",
+            attempt_number=retry_state.attempt_number,
+            exception=str(retry_state.outcome.exception()),
+            seconds_since_start=retry_state.seconds_since_start,
+        )
 
-    def decorator(func: F) -> F:
-        @wraps(func)
-        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
-            last_exception = None
-
-            for attempt in range(1, max_retries + 1):
-                try:
-                    return await func(*args, **kwargs)
-                except httpx.HTTPStatusError as e:
-                    last_exception = e
-                    if e.response.status_code in retry_status_codes:
-                        if attempt < max_retries:
-                            delay = base_delay * (2 ** (attempt - 1))
-                            logger.warning(
-                                "http_retry",
-                                function=func.__name__,
-                                attempt=attempt,
-                                max_retries=max_retries,
-                                status_code=e.response.status_code,
-                                delay_seconds=delay,
-                            )
-                            await asyncio.sleep(delay)
-                        else:
-                            logger.error(
-                                "http_retry_exhausted",
-                                function=func.__name__,
-                                attempts=max_retries,
-                                last_status_code=e.response.status_code,
-                            )
-                    else:
-                        # Don't retry on non-retryable status codes
-                        raise
-                except retry_exceptions as e:
-                    last_exception = e
-                    if attempt < max_retries:
-                        delay = base_delay * (2 ** (attempt - 1))
-                        logger.warning(
-                            "http_retry",
-                            function=func.__name__,
-                            attempt=attempt,
-                            max_retries=max_retries,
-                            exception_type=type(e).__name__,
-                            exception_msg=str(e),
-                            delay_seconds=delay,
-                        )
-                        await asyncio.sleep(delay)
-                    else:
-                        logger.error(
-                            "http_retry_exhausted",
-                            function=func.__name__,
-                            attempts=max_retries,
-                            last_exception_type=type(e).__name__,
-                            last_exception_msg=str(e),
-                        )
-                except Exception as e:
-                    # Don't retry on unexpected exceptions
-                    logger.error(
-                        "unexpected_error",
-                        function=func.__name__,
-                        exception_type=type(e).__name__,
-                        exception_msg=str(e),
-                    )
-                    raise
-
-            # All retries exhausted, raise the last exception
-            if last_exception:
-                raise last_exception
-
-            # Should never reach here, but just in case
-            raise RuntimeError(f"Function {func.__name__} failed after {max_retries} retries")
-
-        @wraps(func)
-        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
-            last_exception = None
-
-            for attempt in range(1, max_retries + 1):
-                try:
-                    return func(*args, **kwargs)
-                except httpx.HTTPStatusError as e:
-                    last_exception = e
-                    if e.response.status_code in retry_status_codes:
-                        if attempt < max_retries:
-                            delay = base_delay * (2 ** (attempt - 1))
-                            logger.warning(
-                                "http_retry",
-                                function=func.__name__,
-                                attempt=attempt,
-                                max_retries=max_retries,
-                                status_code=e.response.status_code,
-                                delay_seconds=delay,
-                            )
-                            time.sleep(delay)
-                        else:
-                            logger.error(
-                                "http_retry_exhausted",
-                                function=func.__name__,
-                                attempts=max_retries,
-                                last_status_code=e.response.status_code,
-                            )
-                    else:
-                        raise
-                except retry_exceptions as e:
-                    last_exception = e
-                    if attempt < max_retries:
-                        delay = base_delay * (2 ** (attempt - 1))
-                        logger.warning(
-                            "http_retry",
-                            function=func.__name__,
-                            attempt=attempt,
-                            max_retries=max_retries,
-                            exception_type=type(e).__name__,
-                            exception_msg=str(e),
-                            delay_seconds=delay,
-                        )
-                        time.sleep(delay)
-                    else:
-                        logger.error(
-                            "http_retry_exhausted",
-                            function=func.__name__,
-                            attempts=max_retries,
-                            last_exception_type=type(e).__name__,
-                            last_exception_msg=str(e),
-                        )
-                except Exception as e:
-                    logger.error(
-                        "unexpected_error",
-                        function=func.__name__,
-                        exception_type=type(e).__name__,
-                        exception_msg=str(e),
-                    )
-                    raise
-
-            if last_exception:
-                raise last_exception
-
-            raise RuntimeError(f"Function {func.__name__} failed after {max_retries} retries")
-
-        # Check if the function is async to return the appropriate wrapper
-        if asyncio.iscoroutinefunction(func):
-            return async_wrapper  # type: ignore[return-value]
-        else:
-            return sync_wrapper  # type: ignore[return-value]
-
-    return decorator
+    return retry(
+        stop=stop_after_attempt(max_retries),
+        wait=wait_exponential(
+            multiplier=base_delay,
+            max=base_delay * (2 ** (max_retries - 1)),  # Max delay
+        ),
+        retry=retry_if_exception(is_retryable_error),
+        before_sleep=log_retry_attempt,
+        reraise=True,
+    )
 
 
 class ErgoNodeClient:
@@ -240,7 +130,7 @@ class ErgoNodeClient:
         """Initialize async HTTP session."""
         self.async_session = httpx.AsyncClient(timeout=30.0)
 
-    @retry_with_backoff(max_retries=3, base_delay=1.0)
+    @get_retry_decorator(max_retries=3, base_delay=1.0)
     def get_node_info(self) -> dict:
         """
         Get node information with retry logic.
@@ -257,7 +147,7 @@ class ErgoNodeClient:
         response.raise_for_status()
         return response.json()
 
-    @retry_with_backoff(max_retries=3, base_delay=1.0)
+    @get_retry_decorator(max_retries=3, base_delay=1.0)
     async def get_node_info_async(self) -> dict:
         """
         Get node information asynchronously with retry logic.
@@ -277,7 +167,7 @@ class ErgoNodeClient:
         response.raise_for_status()
         return response.json()
 
-    @retry_with_backoff(max_retries=3, base_delay=1.0)
+    @get_retry_decorator(max_retries=3, base_delay=1.0)
     def get_unspent_boxes(self, address: str) -> dict:
         """
         Get unspent boxes for an address with retry logic.
