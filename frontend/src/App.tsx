@@ -17,6 +17,7 @@ import OnboardingWizard, {
   triggerOnboarding,
 } from './components/OnboardingWizard';
 import './App.css';
+import './components/GameTransition.css';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -152,7 +153,7 @@ function App() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.15, ease: "easeInOut" }}
+                    transition={{ duration: 0.175, ease: "easeInOut" }}
                     className="game-transition-wrapper"
                   >
                     {activeGame === 'coinflip' && (
