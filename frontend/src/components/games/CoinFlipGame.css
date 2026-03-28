@@ -193,6 +193,15 @@
   animation: coinflip-bet-amount-appear 0.5s ease-out 0.5s both;
 }
 
+.coinflip-payout-amount {
+  font-size: 0.85rem;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  color: var(--accent-green, #00ff88);
+  margin-top: 4px;
+  animation: coinflip-bet-amount-appear 0.5s ease-out 0.6s both;
+  font-weight: 600;
+}
+
 @keyframes coinflip-result-appear {
   from {
     opacity: 0;

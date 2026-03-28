@@ -89,10 +89,13 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
 
   const handleAmountChange = useCallback(
     (value: string) => {
-      // Allow only valid decimal numbers
+      // Allow only valid decimal numbers with proper decimal places
       if (value === '' || /^\d*\.?\d*$/.test(value)) {
-        setAmount(value);
-        setError(null);
+        // Limit to 4 decimal places for ERG
+        if (value === '' || (value.includes('.') && value.split('.')[1].length <= 4)) {
+          setAmount(value);
+          setError(null);
+        }
       }
     },
     []
@@ -258,7 +261,12 @@ try {
                       </div>
                       {pendingBet && (
                         <div className="coinflip-bet-amount">
-                          Bet: {pendingBet.amount} ERG
+                          Bet: {parseFloat(pendingBet.amount).toFixed(4)} ERG
+                        </div>
+                      )}
+                      {winOutcome === 'win' && (
+                        <div className="coinflip-payout-amount">
+                          Payout: {(parseFloat(pendingBet.amount) * PAYOUT_MULTIPLIER).toFixed(4)} ERG
                         </div>
                       )}
                     </div>
@@ -387,9 +395,11 @@ try {
           <button
             className="coinflip-flip-again-btn"
             onClick={() => {
+              // Reset all game states to start fresh
               setResult(null);
               setWinOutcome(null);
               setError(null);
+              setPendingBet(null);
             }}
           >
             Flip Again
