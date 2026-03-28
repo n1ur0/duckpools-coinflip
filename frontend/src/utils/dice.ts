@@ -128,12 +128,15 @@ export async function verifyDiceCommit(
 
 /**
  * Compute dice RNG outcome from block hash and player secret.
- * outcome = SHA256(blockHash_as_utf8 || secret_bytes)[0] % 100
+ * outcome = rejection sampling from SHA256(blockHash_as_utf8 || secret_bytes)
  *
  * Returns a value 0-99. Player wins if outcome < rollTarget.
  *
  * Note: Uses the SAME block hash encoding as coinflip (UTF-8 string)
  * for consistency and shared RNG infrastructure.
+ * 
+ * IMPORTANT: Uses rejection sampling to avoid modulo bias. Since 256 is not
+ * divisible by 100, we reject values >= 200 and retry with more entropy.
  */
 export async function computeDiceRng(
   blockHash: string,
@@ -141,13 +144,36 @@ export async function computeDiceRng(
 ): Promise<number> {
   const blockHashBuffer = new TextEncoder().encode(blockHash);
 
-  const rngInput = new Uint8Array(blockHashBuffer.length + secretBytes.length);
+  // Initial RNG input
+  let rngInput = new Uint8Array(blockHashBuffer.length + secretBytes.length);
   rngInput.set(blockHashBuffer, 0);
   rngInput.set(secretBytes, blockHashBuffer.length);
 
-  const rngHash = await sha256(rngInput);
-
-  // Use first byte modulo 100 for 0-99 range
+  let rngHash = await sha256(rngInput);
+  
+  // Rejection sampling to avoid modulo bias
+  // We can only use values 0-199 (200 values) to get uniform distribution
+  // For each byte, if it's < 200, we use byte % 100
+  // If it's >= 200, we reject and continue to next byte
+  for (let i = 0; i < rngHash.length; i++) {
+    const byte = rngHash[i];
+    if (byte < 200) {
+      return byte % 100; // Uniform distribution 0-99
+    }
+  }
+  
+  // Extremely unlikely: all 32 bytes were >= 200
+  // Hash the hash to get more entropy and try again
+  let secondHash = await sha256(rngHash);
+  for (let i = 0; i < secondHash.length; i++) {
+    const byte = secondHash[i];
+    if (byte < 200) {
+      return byte % 100;
+    }
+  }
+  
+  // If we still haven't found a valid byte (probability ~1e-78), 
+  // fall back to the first byte mod 100 (this should never happen)
   return rngHash[0] % 100;
 }
 

@@ -1,0 +1,85 @@
+/* ErrorWithRetry styles */
+
+.ewr-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  border-radius: 10px;
+  margin-top: 0.5rem;
+}
+
+.ewr-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.ewr-icon {
+  color: var(--color-loss, #ef4444);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.ewr-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ewr-label {
+  font-size: 0.7rem;
+  color: var(--text-secondary, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.ewr-message {
+  font-size: 0.82rem;
+  color: var(--text-primary, #e2e8f0);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.ewr-retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s, color 0.2s;
+  white-space: nowrap;
+}
+
+.ewr-retry-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary, #e2e8f0);
+}
+
+.ewr-retry-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ewr-spinning {
+  animation: ewr-spin 1s linear infinite;
+}
+
+@keyframes ewr-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

@@ -1,3 +1,5 @@
+export type GameType = 'coinflip' | 'dice' | 'plinko' | 'crash';
+
 export interface BetChoice {
   value: number;    // 0 = Heads, 1 = Tails
   label: string;    // "Heads" or "Tails"
@@ -57,9 +59,8 @@ export interface LeaderboardEntry {
 }
 
 export interface LeaderboardResponse {
-  players: LeaderboardEntry[];
-  totalPlayers: number;
-  sortBy: string;
+  leaderboard: LeaderboardEntry[];
+  total: number;
 }
 
 export interface CompPoints {

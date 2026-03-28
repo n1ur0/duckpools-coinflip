@@ -45,7 +45,22 @@ export default function GameHistory() {
       const res = await fetch(buildApiUrl(`/history/${walletAddress}`));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      const data: BetRecord[] = await res.json();
+      const raw: { address: string; bets: unknown[]; total: number } = await res.json();
+      // Backend returns { address, bets, total }; map bets to frontend BetRecord shape
+      const data: BetRecord[] = (raw.bets ?? []).map((b: Record<string, unknown>) => ({
+        betId: String(b.bet_id ?? ''),
+        txId: String(b.tx_id ?? ''),
+        boxId: String(b.box_id ?? ''),
+        playerAddress: String(b.player_address ?? ''),
+        choice: { value: Number(b.choice ?? 0), label: Number(b.choice) === 0 ? 'Heads' : 'Tails' },
+        betAmount: String(b.bet_amount_nanoerg ?? '0'),
+        outcome: b.outcome ?? 'pending',
+        actualOutcome: b.actual_outcome ?? null,
+        payout: String(b.payout_nanoerg ?? '0'),
+        timestamp: String(b.timestamp ?? new Date().toISOString()),
+        blockHeight: Number(b.block_height ?? 0),
+        resolvedAtHeight: b.resolved_at_height ?? null,
+      }));
       setBets(data);
     } catch (err) {
       setError(

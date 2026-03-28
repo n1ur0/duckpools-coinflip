@@ -28,7 +28,16 @@ export default function PoolManager() {
     try {
       const res = await fetch(buildApiUrl('/pool/state'));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: PoolState = await res.json();
+      const raw: Record<string, unknown> = await res.json();
+      // Backend returns snake_case fields; map to frontend PoolState type
+      const data: PoolState = {
+        liquidity: String(raw.liquidity_nanoerg ?? '0'),
+        totalBets: Number(raw.total_games ?? 0),
+        playerWins: 0,
+        houseWins: 0,
+        totalFees: '0',
+        houseEdge: Number(raw.house_edge_bps ?? 300) / 10000,
+      };
       setPoolState(data);
     } catch (err) {
       setError(

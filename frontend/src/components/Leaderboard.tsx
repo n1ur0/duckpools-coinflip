@@ -30,8 +30,8 @@ export default function Leaderboard() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const json: LeaderboardResponse = await res.json();
-      setData(json.players);
-      setTotalPlayers(json.totalPlayers);
+      setData(json.leaderboard);
+      setTotalPlayers(json.total);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Failed to load leaderboard'

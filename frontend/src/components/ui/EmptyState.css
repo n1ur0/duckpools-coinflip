@@ -1,0 +1,85 @@
+/* ─── EmptyState ─────────────────────────────────────────────── */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.empty-state--sm {
+  padding: var(--space-6, 1.5rem) var(--space-4, 1rem);
+}
+
+.empty-state--md {
+  padding: var(--space-10, 2.5rem) var(--space-6, 1.5rem);
+}
+
+/* ─── Icon ───────────────────────────────────────────────────── */
+
+.empty-state-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-3, 0.75rem);
+  font-size: 2rem;
+  line-height: 1;
+  opacity: 0.35;
+  color: var(--text-secondary, #8892b0);
+}
+
+.empty-state--sm .empty-state-icon {
+  font-size: 1.5rem;
+  margin-bottom: var(--space-2, 0.5rem);
+}
+
+/* ─── Message ────────────────────────────────────────────────── */
+
+.empty-state-message {
+  margin: 0;
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: var(--font-medium, 500);
+  color: var(--text-secondary, #8892b0);
+  line-height: var(--leading-normal, 1.5);
+}
+
+.empty-state--sm .empty-state-message {
+  font-size: var(--text-xs, 0.75rem);
+}
+
+/* ─── Description ────────────────────────────────────────────── */
+
+.empty-state-description {
+  margin: var(--space-1, 0.25rem) 0 0;
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--text-tertiary, #5a6380);
+  line-height: var(--leading-relaxed, 1.625);
+}
+
+/* ─── CTA Button ─────────────────────────────────────────────── */
+
+.empty-state-action {
+  margin-top: var(--space-4, 1rem);
+  padding: 0.45rem 1.2rem;
+  background: var(--accent-gold-subtle, rgba(240, 180, 41, 0.15));
+  border: 1px solid rgba(240, 180, 41, 0.25);
+  border-radius: var(--radius-md, 0.5rem);
+  color: var(--accent-gold, #f0b429);
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: var(--font-semibold, 600);
+  cursor: pointer;
+  transition: all var(--transition-fast, 150ms ease);
+}
+
+.empty-state-action:hover {
+  background: rgba(240, 180, 41, 0.25);
+  border-color: rgba(240, 180, 41, 0.4);
+}
+
+.empty-state-action:focus-visible {
+  outline: 2px solid var(--accent-gold, #f0b429);
+  outline-offset: 2px;
+}

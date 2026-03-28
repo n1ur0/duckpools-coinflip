@@ -20,6 +20,8 @@ from fastapi.middleware.cors import CORSMiddleware
 sys.path.insert(0, str(Path(__file__).parent))
 
 from pool_manager import PoolConfig, PoolStateManager
+from bet_routes import router as bet_router
+from game_history import GameHistoryService
 from lp_routes import router as lp_router
 from ws_manager import ConnectionManager
 from ws_routes import router as ws_router
@@ -44,6 +46,9 @@ async def lifespan(app: FastAPI):
     """Initialize pool manager and WebSocket manager on startup."""
     # WebSocket connection manager
     app.state.ws_manager = ConnectionManager()
+
+    # Game history service
+    app.state.game_history = GameHistoryService()
 
     # Pool manager
     config = PoolConfig(
@@ -85,6 +90,7 @@ app.add_middleware(
 )
 
 # Register routers
+app.include_router(bet_router)
 app.include_router(lp_router, prefix="/api")
 app.include_router(ws_router)
 
