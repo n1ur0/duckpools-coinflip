@@ -1,236 +1,220 @@
 /**
- * DuckPools Plinko Game Utilities
- *
- * Plinko is a game where a ball drops through rows of pegs and lands
- * in slots with different payouts. The probability distribution follows
- * a binomial distribution based on the number of rows.
- *
- * - Player selects number of rows (more rows = more risk = higher potential payouts)
- * - Ball drops through rows, going left or right at each peg
- * - Final slot determines payout multiplier
- * - House edge is embedded in the payout structure
- */
-
-// ─── Constants ─────────────────────────────────────────────────
-
-/** Minimum number of rows (lowest risk, lowest payout) */
-export const PLINKO_MIN_ROWS = 8;
-
-/** Maximum number of rows (highest risk, highest payout) */
-export const PLINKO_MAX_ROWS = 16;
-
-/** Default number of rows */
-export const PLINKO_DEFAULT_ROWS = 12;
-
-/** Base house edge (3%) */
-export const PLINKO_BASE_HOUSE_EDGE = 0.03;
-
-// ─── Payout Structure ────────────────────────────────────────────
-
-/**
- * Payout multipliers for each slot position.
- * Indexed by slot number (0 to rows), where 0 is the leftmost slot.
+ * Plinko game utilities with symmetric multiplier calculations.
  * 
- * These multipliers are structured to provide:
- * - Higher payouts for edge slots (lower probability)
- * - Lower payouts for center slots (higher probability)
- * - Consistent house edge across all row counts
+ * Implements the same power-law formula as the backend:
+ * multiplier(k) = A * (1/P(k))^alpha
+ * where:
+ * - P(k) = C(n, k) / 2^n (binomial probability)
+ * - A = (1 - house_edge) / sum(P(j)^(1-alpha)) (normalization constant)
+ * - alpha = 0.5 (risk parameter)
  */
-const PLINKO_PAYOUTS: Record<number, number[]> = {
-  8:  [3.0, 1.5, 1.2, 0.5, 0.5, 1.2, 1.5, 3.0, 3.0],  // 9 slots (0-8)
-  9:  [5.0, 2.0, 1.5, 0.8, 0.5, 0.8, 1.5, 2.0, 5.0, 10.0], // 10 slots (0-9)
-  10: [8.0, 3.0, 2.0, 1.2, 0.8, 0.8, 1.2, 2.0, 3.0, 8.0, 16.0], // 11 slots (0-10)
-  11: [12.0, 5.0, 3.0, 2.0, 1.2, 1.0, 1.2, 2.0, 3.0, 5.0, 12.0, 24.0], // 12 slots (0-11)
-  12: [20.0, 8.0, 5.0, 3.0, 2.0, 1.5, 2.0, 3.0, 5.0, 8.0, 20.0, 40.0, 40.0], // 13 slots (0-12) - Fixed symmetry
-  13: [30.0, 12.0, 8.0, 5.0, 3.0, 2.0, 2.0, 3.0, 5.0, 8.0, 12.0, 30.0, 60.0], // 13 slots (0-12)
-  14: [50.0, 20.0, 12.0, 8.0, 5.0, 3.0, 3.0, 5.0, 8.0, 12.0, 20.0, 50.0, 100.0], // 13 slots (0-12)
-  15: [80.0, 30.0, 20.0, 12.0, 8.0, 5.0, 5.0, 8.0, 12.0, 20.0, 30.0, 80.0, 160.0], // 13 slots (0-12)
-  16: [130.0, 50.0, 30.0, 20.0, 12.0, 8.0, 6.0, 5.0, 6.0, 8.0, 12.0, 20.0, 30.0, 50.0, 130.0, 260.0, 520.0], // 17 slots (0-16) - Fixed symmetry and slot count
-};
 
-/**
- * Get payout multipliers for a given number of rows.
- */
-export function getPlinkoPayouts(rows: number): number[] {
-  if (rows < PLINKO_MIN_ROWS || rows > PLINKO_MAX_ROWS) {
-    throw new Error(`Invalid number of rows: ${rows}. Must be between ${PLINKO_MIN_ROWS} and ${PLINKO_MAX_ROWS}`);
-  }
-  
-  // For unsupported row counts, use the closest supported one
-  let supportedRows = rows;
-  while (!PLINKO_PAYOUTS[supportedRows] && supportedRows > PLINKO_MIN_ROWS) {
-    supportedRows--;
-  }
-  while (!PLINKO_PAYOUTS[supportedRows] && supportedRows < PLINKO_MAX_ROWS) {
-    supportedRows++;
-  }
-  
-  return PLINKO_PAYOUTS[supportedRows] || PLINKO_PAYOUTS[PLINKO_DEFAULT_ROWS];
+export interface PlinkoMultiplierTable {
+  [key: string]: number[];
 }
 
-// ─── Probability Calculations ────────────────────────────────────
+export interface PlinkoConfig {
+  houseEdge: number;
+  alpha: number;
+  multiplierTables: PlinkoMultiplierTable;
+}
 
 /**
- * Calculate binomial coefficient C(n, k).
- * Used to compute the probability of a ball landing in each slot.
+ * Calculate binomial coefficient C(n, k)
  */
 function binomialCoefficient(n: number, k: number): number {
   if (k < 0 || k > n) return 0;
   if (k === 0 || k === n) return 1;
   
-  // Use multiplicative formula to avoid large intermediate values
   let result = 1;
-  for (let i = 1; i <= k; i++) {
-    result = result * (n - k + i) / i;
+  for (let i = 1; i <= Math.min(k, n - k); i++) {
+    result = (result * (n - i + 1)) / i;
   }
+  
   return result;
 }
 
 /**
- * Calculate probability of landing in each slot for a given number of rows.
- * 
- * With n rows, there are n+1 slots (0 to n).
- * The probability follows a binomial distribution: P(slot=k) = C(n, k) * (0.5)^n
- * 
- * Returns an array where index i is the probability of landing in slot i.
+ * Calculate binomial probability P(k) = C(n, k) / 2^n
  */
-export function calculateSlotProbabilities(rows: number): number[] {
-  if (rows < PLINKO_MIN_ROWS || rows > PLINKO_MAX_ROWS) {
-    throw new Error(`Invalid number of rows: ${rows}. Must be between ${PLINKO_MIN_ROWS} and ${PLINKO_MAX_ROWS}`);
+function binomialProbability(n: number, k: number): number {
+  return binomialCoefficient(n, k) / Math.pow(2, n);
+}
+
+/**
+ * Calculate symmetric multipliers for Plinko game
+ */
+function calculateMultipliers(rows: number, houseEdge: number = 0.03, alpha: number = 0.5): number[] {
+  if (rows !== 8 && rows !== 12 && rows !== 16) {
+    throw new Error(`Invalid number of rows: ${rows}. Must be 8, 12, or 16.`);
   }
   
-  const numSlots = rows + 1;
-  const probabilities: number[] = [];
-  const totalOutcomes = Math.pow(2, rows);
+  const n = rows;
+  const slots = n + 1; // Number of landing slots
   
-  for (let slot = 0; slot < numSlots; slot++) {
-    const ways = binomialCoefficient(rows, slot);
-    const probability = ways / totalOutcomes;
-    probabilities.push(probability);
+  // Calculate probabilities for each slot
+  const probabilities: number[] = [];
+  for (let k = 0; k < slots; k++) {
+    probabilities.push(binomialProbability(n, k));
+  }
+  
+  // Calculate normalization constant A
+  const numerator = 1.0 - houseEdge;
+  let denominator = 0.0;
+  
+  for (const prob of probabilities) {
+    denominator += Math.pow(prob, 1.0 - alpha);
+  }
+  
+  const A = numerator / denominator;
+  
+  // Calculate multipliers using power-law formula
+  const multipliers: number[] = [];
+  for (let k = 0; k < slots; k++) {
+    const prob = probabilities[k];
+    if (prob > 0) {
+      const multiplier = A * Math.pow(1.0 / prob, alpha);
+      multipliers.push(multiplier);
+    } else {
+      multipliers.push(0.0);
+    }
+  }
+  
+  // Verify symmetry: multiplier[i] should equal multiplier[rows-i]
+  for (let i = 0; i < slots / 2; i++) {
+    if (Math.abs(multipliers[i] - multipliers[n - i]) > 1e-10) {
+      throw new Error(`Symmetry violation at slot ${i}: ${multipliers[i]} !== ${multipliers[n - i]}`);
+    }
+  }
+  
+  return multipliers;
+}
+
+/**
+ * Get Plinko game configuration with multiplier tables
+ */
+export function getPlinkoConfig(): PlinkoConfig {
+  return {
+    houseEdge: 0.03,
+    alpha: 0.5,
+    multiplierTables: {
+      '8': calculateMultipliers(8),
+      '12': calculateMultipliers(12),
+      '16': calculateMultipliers(16),
+    },
+  };
+}
+
+/**
+ * Get multipliers for a specific row count
+ */
+export function getMultipliersForRows(rows: number): number[] {
+  const config = getPlinkoConfig();
+  const multipliers = config.multiplierTables[rows.toString()];
+  
+  if (!multipliers) {
+    throw new Error(`No multiplier table found for ${rows} rows`);
+  }
+  
+  return multipliers;
+}
+
+/**
+ * Calculate potential payout for a bet
+ */
+export function calculatePayout(betAmount: number, slot: number, rows: number): number {
+  const multipliers = getMultipliersForRows(rows);
+  
+  if (slot < 0 || slot >= multipliers.length) {
+    throw new Error(`Invalid slot ${slot} for ${rows} rows (0-${multipliers.length - 1})`);
+  }
+  
+  const multiplier = multipliers[slot];
+  return betAmount * multiplier;
+}
+
+/**
+ * Calculate expected value for a multiplier table
+ */
+export function calculateExpectedValue(multipliers: number[], houseEdge: number = 0.03): number {
+  const n = multipliers.length - 1; // Number of rows
+  let expectedValue = 0.0;
+  
+  for (let k = 0; k < multipliers.length; k++) {
+    const prob = binomialProbability(n, k);
+    expectedValue += prob * multipliers[k];
+  }
+  
+  return expectedValue;
+}
+
+/**
+ * Format multiplier for display
+ */
+export function formatMultiplier(multiplier: number): string {
+  if (multiplier >= 100) {
+    return `${multiplier.toFixed(0)}x`;
+  } else if (multiplier >= 10) {
+    return `${multiplier.toFixed(1)}x`;
+  } else {
+    return `${multiplier.toFixed(2)}x`;
+  }
+}
+
+/**
+ * Get slot probabilities for display
+ */
+export function getSlotProbabilities(rows: number): number[] {
+  const slots = rows + 1;
+  const probabilities: number[] = [];
+  
+  for (let k = 0; k < slots; k++) {
+    probabilities.push(binomialProbability(rows, k));
   }
   
   return probabilities;
 }
 
-// ─── Expected Value Calculation ───────────────────────────────────
-
 /**
- * Compute the expected return for Plinko using probability-weighted values.
- * 
- * This is the CORRECT implementation that uses:
- * E[X] = sum(probability_i * payout_i)
- * 
- * NOT the arithmetic mean which would be incorrect.
- * 
- * Returns the expected return as a percentage (e.g., 0.97 for 97% RTP).
+ * Validate that multiplier tables are symmetric
  */
-export function compute_expected_return(rows: number): number {
-  if (rows < PLINKO_MIN_ROWS || rows > PLINKO_MAX_ROWS) {
-    throw new Error(`Invalid number of rows: ${rows}. Must be between ${PLINKO_MIN_ROWS} and ${PLINKO_MAX_ROWS}`);
-  }
-  
-  const payouts = getPlinkoPayouts(rows);
-  const probabilities = calculateSlotProbabilities(rows);
-  
-  if (payouts.length !== probabilities.length) {
-    throw new Error('Payouts and probabilities arrays must have the same length');
-  }
-  
-  let expectedValue = 0;
-  
-  // Calculate expected value: sum(probability * payout)
-  for (let i = 0; i < payouts.length; i++) {
-    expectedValue += probabilities[i] * payouts[i];
-  }
-  
-  // Return expected return (payout percentage)
-  return expectedValue;
-}
-
-/**
- * Calculate the Return to Player (RTP) percentage.
- * RTP = expected_return * 100
- */
-export function calculateRTP(rows: number): number {
-  return compute_expected_return(rows) * 100;
-}
-
-/**
- * Calculate the house edge percentage.
- * House edge = 1 - expected_return
- */
-export function calculateHouseEdge(rows: number): number {
-  return 1.0 - compute_expected_return(rows);
-}
-
-// ─── Payout Calculation ────────────────────────────────────────────
-
-/**
- * Calculate the payout amount for a winning bet.
- */
-export function calculatePayout(betAmount: number, rows: number): number {
-  // For simplicity, we'll use the average expected return
-  // In a real implementation, this would be determined by the actual slot
-  const expectedReturn = compute_expected_return(rows);
-  return betAmount * expectedReturn;
-}
-
-// ─── Utility Functions ────────────────────────────────────────────
-
-/**
- * Validate that the RTP is within acceptable bounds.
- * Should be close to 97% (3% house edge).
- */
-export function validateRTP(rows: number): { isValid: boolean; rtp: number; expected: number } {
-  const rtp = calculateRTP(rows);
-  const expectedRtp = 100 * (1 - PLINKO_BASE_HOUSE_EDGE); // 97%
-  const tolerance = 0.5; // ±0.5% tolerance
-  
-  const isValid = Math.abs(rtp - expectedRtp) <= tolerance;
-  
-  return {
-    isValid,
-    rtp,
-    expected: expectedRtp
-  };
-}
-
-/**
- * Get theoretical statistics for a given number of rows.
- */
-export function getTheoreticalStats(rows: number) {
-  const payouts = getPlinkoPayouts(rows);
-  const probabilities = calculateSlotProbabilities(rows);
-  const expectedReturn = compute_expected_return(rows);
-  const rtp = calculateRTP(rows);
-  const houseEdge = calculateHouseEdge(rows);
-  
-  // Find highest and lowest possible payouts
-  const minPayout = Math.min(...payouts);
-  const maxPayout = Math.max(...payouts);
-  
-  // Find most likely outcome (highest probability)
-  let maxProbIndex = 0;
-  let maxProb = probabilities[0];
-  for (let i = 1; i < probabilities.length; i++) {
-    if (probabilities[i] > maxProb) {
-      maxProb = probabilities[i];
-      maxProbIndex = i;
+export function validateSymmetry(multipliers: number[]): boolean {
+  for (let i = 0; i < multipliers.length / 2; i++) {
+    const j = multipliers.length - 1 - i;
+    if (Math.abs(multipliers[i] - multipliers[j]) > 1e-10) {
+      return false;
     }
   }
+  return true;
+}
+
+/**
+ * Get risk level description based on row count
+ */
+export function getRiskLevel(rows: number): string {
+  switch (rows) {
+    case 8:
+      return 'Low Risk';
+    case 12:
+      return 'Medium Risk';
+    case 16:
+      return 'High Risk';
+    default:
+      return 'Unknown';
+  }
+}
+
+/**
+ * Get color class for a slot based on its multiplier
+ */
+export function getSlotColorClass(slot: number, rows: number): string {
+  const multipliers = getMultipliersForRows(rows);
+  const multiplier = multipliers[slot];
   
-  return {
-    rows,
-    numSlots: payouts.length,
-    minPayout,
-    maxPayout,
-    mostLikelySlot: maxProbIndex,
-    mostLikelyPayout: payouts[maxProbIndex],
-    mostLikelyProbability: maxProb,
-    expectedReturn,
-    rtp,
-    houseEdge,
-    payouts,
-    probabilities
-  };
+  // Higher multipliers get "hotter" colors
+  if (multiplier >= 50) return 'slot-red';
+  if (multiplier >= 20) return 'slot-orange';
+  if (multiplier >= 10) return 'slot-yellow';
+  if (multiplier >= 5) return 'slot-green';
+  return 'slot-blue';
 }

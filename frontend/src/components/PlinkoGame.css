@@ -1,0 +1,315 @@
+/* Plinko Game Styles */
+
+.plinko-game {
+  background: #1a1a1a;
+  border-radius: 12px;
+  padding: 24px;
+  color: #ffffff;
+  min-height: 600px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.plinko-game__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.plinko-game__title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.plinko-game__risk-badge {
+  background: #3b82f6;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.plinko-game__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: flex-end;
+}
+
+.plinko-game__bet-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.plinko-game__bet-input label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #9ca3af;
+}
+
+.plinko-game__bet-input input {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #374151;
+  border-radius: 8px;
+  background: #111827;
+  color: #ffffff;
+  font-size: 16px;
+  transition: border-color 0.2s;
+}
+
+.plinko-game__bet-input input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.plinko-game__bet-input input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.plinko-game__rows-selector {
+  flex: 1;
+  min-width: 200px;
+}
+
+.plinko-game__rows-selector label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #9ca3af;
+}
+
+.plinko-game__rows-options {
+  display: flex;
+  gap: 8px;
+}
+
+.plinko-game__rows-option {
+  flex: 1;
+  padding: 12px;
+  border: 2px solid #374151;
+  border-radius: 8px;
+  background: #111827;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.plinko-game__rows-option:hover:not(:disabled) {
+  background: #1f2937;
+  border-color: #4b5563;
+}
+
+.plinko-game__rows-option--active {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: white;
+}
+
+.plinko-game__rows-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.plinko-game__bet-button {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  background: #3b82f6;
+  color: white;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.plinko-game__bet-button:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.plinko-game__bet-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.plinko-game__bet-button:disabled {
+  background: #4b5563;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.plinko-game__board {
+  flex: 1;
+  position: relative;
+  background: #0f172a;
+  border-radius: 12px;
+  padding: 20px;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+}
+
+.plinko-game__pegs {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 16px;
+  padding-bottom: 60px;
+}
+
+.plinko-game__peg-row {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+}
+
+.plinko-game__peg {
+  width: 12px;
+  height: 12px;
+  background: #6b7280;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.plinko-game__slots {
+  display: flex;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  border-top: 2px solid #374151;
+}
+
+.plinko-game__slot {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.plinko-game__slot:last-child {
+  border-right: none;
+}
+
+.plinko-game__slot:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+}
+
+.plinko-game__slot-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+}
+
+.plinko-game__slot-number {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.plinko-game__slot-multiplier {
+  font-size: 12px;
+  font-weight: 700;
+  color: white;
+}
+
+.plinko-game__slot-probability {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.plinko-game__info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 16px;
+  border-top: 1px solid #374151;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.plinko-game__house-edge {
+  font-weight: 600;
+}
+
+.plinko-game__formula {
+  font-family: 'Courier New', monospace;
+  background: rgba(59, 130, 246, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .plinko-game {
+    padding: 16px;
+  }
+
+  .plinko-game__controls {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .plinko-game__bet-input,
+  .plinko-game__rows-selector {
+    min-width: 100%;
+  }
+
+  .plinko-game__board {
+    min-height: 250px;
+  }
+
+  .plinko-game__peg-row {
+    gap: 20px;
+  }
+
+  .plinko-game__peg {
+    width: 8px;
+    height: 8px;
+  }
+
+  .plinko-game__slots {
+    height: 50px;
+  }
+
+  .plinko-game__slot-info {
+    gap: 1px;
+    padding: 2px;
+  }
+
+  .plinko-game__slot-number {
+    font-size: 8px;
+  }
+
+  .plinko-game__slot-multiplier {
+    font-size: 10px;
+  }
+
+  .plinko-game__slot-probability {
+    font-size: 8px;
+  }
+}

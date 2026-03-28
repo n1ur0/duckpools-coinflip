@@ -15,7 +15,7 @@ interface GameTab {
 const GAME_TABS: GameTab[] = [
   { id: 'coinflip', label: 'Coinflip', icon: <CircleDot size={18} /> },
   { id: 'dice', label: 'Dice', icon: <Dice5 size={18} /> },
-  { id: 'plinko', label: 'Plinko', icon: <Triangle size={18} />, comingSoon: true },
+  { id: 'plinko', label: 'Plinko', icon: <Triangle size={18} /> },
   { id: 'crash', label: 'Crash', icon: <TrendingUp size={18} />, comingSoon: true },
 ];
 
