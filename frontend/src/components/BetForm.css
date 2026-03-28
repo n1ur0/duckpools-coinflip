@@ -189,15 +189,15 @@
 }
 
 .bf-choice-btn--tails {
-  background: linear-gradient(135deg, var(--accent-tails-subtle), rgba(99, 179, 237, 0.05));
-  color: var(--accent-tails);
-  border-color: var(--accent-tails-subtle);
+  background: linear-gradient(135deg, var(--accent-blue), var(--accent-blue)dd);
+  color: var(--accent-blue);
+  border-color: var(--accent-blue);
 }
 
 .bf-choice-btn--tails:hover {
-  background: linear-gradient(135deg, rgba(99, 179, 237, 0.25), rgba(99, 179, 237, 0.1));
-  border-color: var(--accent-tails);
-  box-shadow: 0 0 20px var(--accent-tails-subtle);
+  background: rgba(59, 130, 246, 0.1);
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 20px var(--accent-blue);
 }
 
 .bf-choice-btn--selected {
@@ -211,9 +211,8 @@
 }
 
 .bf-choice-btn--tails.bf-choice-btn--selected {
-  border-color: var(--accent-tails);
-  box-shadow: 0 0 24px rgba(99, 179, 237, 0.2);
-  background: linear-gradient(135deg, rgba(99, 179, 237, 0.3), rgba(99, 179, 237, 0.15));
+  border-color: var(--accent-blue);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(59, 130, 246, 0.15));
 }
 
 /* ── Submit Button ─────────────────────────────── */

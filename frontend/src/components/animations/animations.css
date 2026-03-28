@@ -106,7 +106,7 @@
 }
 
 .coin--tails {
-  background: linear-gradient(135deg, var(--accent-tails), var(--accent-tails)dd);
+  background: linear-gradient(135deg, var(--accent-blue), var(--accent-blue)dd);
 }
 
 .coin--heads-flipping {

@@ -138,8 +138,8 @@
 }
 
 .gh-choice-badge--tails {
-  background: var(--accent-tails-subtle);
-  color: var(--accent-tails);
+  background: var(--accent-blue);
+  color: var(--accent-blue);
 }
 
 /* ── Outcome colors ─────────────────────────────── */
