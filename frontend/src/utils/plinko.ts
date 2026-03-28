@@ -18,7 +18,7 @@
  * - This ensures the house edge is exactly the stated edge regardless of rows
  */
 
-import { sha256, bytesToHex, generateSecret } from './crypto';
+import { blake2b256, bytesToHex, generateSecret } from './crypto';
 
 // ─── Constants ─────────────────────────────────────────────────
 
@@ -199,7 +199,7 @@ export function getPlinkoProbabilityTable(rows: number): number[] {
 
 /**
  * Generate a commitment for a Plinko bet.
- * commitment = SHA256(secret_8_bytes || rows_byte || target_slot_byte)
+ * commitment = blake2b256(secret_8_bytes || rows_byte || target_slot_byte)
  *
  * @param rows - Number of rows (8-16)
  * @param targetSlot - Optional target slot (for future betting on specific slots)
@@ -221,13 +221,13 @@ export async function generatePlinkoCommit(
   const targetByte = new Uint8Array(1);
   targetByte[0] = (targetSlot ?? 0) & 0xff;
 
-  // Commitment = SHA256(secret || rows_byte || target_slot_byte)
+  // Commitment = blake2b256(secret || rows_byte || target_slot_byte)
   const commitInput = new Uint8Array(actualSecret.length + 2);
   commitInput.set(actualSecret, 0);
   commitInput.set(rowsByte, actualSecret.length);
   commitInput.set(targetByte, actualSecret.length + 1);
 
-  const commitHash = await sha256(commitInput);
+  const commitHash = blake2b256(commitInput);
   return {
     secret: actualSecret,
     commitment: bytesToHex(commitHash),
@@ -255,7 +255,7 @@ export async function verifyPlinkoCommit(
  *
  * Algorithm:
  * - For each row, determine if ball goes left (0) or right (1)
- * - Use successive bytes from SHA256(blockHash || secret)
+ * - Use successive bytes from blake2b256(blockHash || secret)
  * - The slot is determined by counting right turns (1s)
  *
  * outcome = count of 1s in first 'rows' bytes
@@ -280,7 +280,7 @@ export async function computePlinkoRng(
   rngInput.set(blockHashBuffer, 0);
   rngInput.set(secretBytes, blockHashBuffer.length);
 
-  const rngHash = await sha256(rngInput);
+  const rngHash = blake2b256(rngInput);
 
   // Count 1s in the first 'rows' bytes
   // Each byte's LSB determines left (0) or right (1)

@@ -1,6 +1,12 @@
 /**
  * DuckPools SDK - Crypto Utilities
- * SHA256 hashing, commitment generation, and RNG computation
+ * blake2b256 hashing, commitment generation, and RNG computation
+ *
+ * CRITICAL (SEC-CRITICAL-1): All commitment generation and RNG computation
+ * MUST use blake2b256 to match on-chain smart contract verification.
+ * The Ergo blockchain's native hash opcode is blake2b256. Using SHA-256
+ * would cause every single reveal to fail verification, making the protocol
+ * completely unusable.
  */
 
 import { Buffer } from 'buffer';
@@ -27,7 +33,34 @@ if (typeof globalThis !== 'undefined' && globalThis.crypto?.subtle) {
 }
 
 /**
- * SHA256 hash of data
+ * blake2b256 hash of data — the native hash function on Ergo.
+ *
+ * CRITICAL: Use this for ALL commitment generation and RNG computation.
+ * The on-chain smart contracts use the blake2b256 opcode.
+ * Using SHA-256 would cause every reveal to fail on-chain (SEC-CRITICAL-1).
+ */
+export async function blake2b256(data: Uint8Array | Buffer | string): Promise<Buffer> {
+  let buffer: Buffer;
+
+  if (typeof data === 'string') {
+    buffer = Buffer.from(data, 'utf8');
+  } else if (Buffer.isBuffer(data)) {
+    buffer = data;
+  } else {
+    buffer = Buffer.from(data);
+  }
+
+  // Node.js crypto.blake2b is available since Node.js 15.x
+  // digest_size=32 matches Ergo's blake2b256
+  return createHash('blake2b512')
+    .update(buffer)
+    .digest()
+    .subarray(0, 32);
+}
+
+/**
+ * SHA-256 hash — retained for legacy compatibility only.
+ * DO NOT use for commitment/reveal or RNG (SEC-CRITICAL-1).
  */
 export async function sha256(data: Uint8Array | Buffer | string): Promise<Buffer> {
   let buffer: Buffer;
@@ -73,7 +106,11 @@ export function generateSecret(): string {
 
 /**
  * Generate commitment hash for bet
- * Format: SHA256(secret_8_bytes || choice_byte)
+ * Format: blake2b256(secret_8_bytes || choice_byte)
+ *
+ * CRITICAL: This MUST match on-chain contract verification.
+ * The ErgoScript `blake2b256(secretBytes ++ choiceBytes)` opcode
+ * produces the same output as this function.
  *
  * @param secret - 8-byte secret as hex string (or random if not provided)
  * @param choice - Bet choice (0=heads, 1=tails)
@@ -103,9 +140,10 @@ export async function generateCommit(
   const choiceByte = Buffer.alloc(1);
   choiceByte.writeUInt8(choice & 0xff, 0);
 
-  // Compute commitment: SHA256(secret || choice)
+  // Compute commitment: blake2b256(secret || choice)
+  // MUST match on-chain: blake2b256(secretBytes ++ choiceBytes)
   const commitBuffer = Buffer.concat([secretBytes, choiceByte]);
-  const commitHash = await sha256(commitBuffer);
+  const commitHash = await blake2b256(commitBuffer);
 
   return {
     secret: secretBytes.toString('hex'),
@@ -128,8 +166,10 @@ export async function verifyCommit(
 
 /**
  * Compute RNG hash for bet outcome
- * Format: SHA256(blockHash_hex_string_utf8 || secret_bytes)
+ * Format: blake2b256(blockHash_hex_string_utf8 || secret_bytes)
  * Outcome: first_byte % 2 (0=heads, 1=tails)
+ *
+ * CRITICAL: This MUST use blake2b256 to match on-chain verification.
  *
  * @param blockHash - Block hash as hex string (NOT converted to bytes)
  * @param secretHex - 8-byte secret as hex string
@@ -142,9 +182,9 @@ export async function computeRng(blockHash: string, secretHex: string): Promise<
   // Secret is 8 bytes
   const secretBytes = Buffer.from(secretHex, 'hex');
 
-  // Compute RNG hash
+  // Compute RNG hash — MUST be blake2b256 to match on-chain
   const rngBuffer = Buffer.concat([blockHashBuffer, secretBytes]);
-  const rngHash = await sha256(rngBuffer);
+  const rngHash = await blake2b256(rngBuffer);
 
   // Outcome is first byte % 2
   return rngHash[0] % 2;

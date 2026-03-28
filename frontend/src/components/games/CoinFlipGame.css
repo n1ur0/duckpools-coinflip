@@ -1,0 +1,598 @@
+/* CoinFlipGame - coinflip- prefix to avoid collisions */
+
+.coinflip-game-container {
+  background: var(--bg-card, rgba(15, 20, 35, 0.8));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 16px;
+  padding: 24px;
+  backdrop-filter: blur(12px);
+  max-width: 100%;
+}
+
+.coinflip-title {
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-primary, #f0f0f0);
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+/* ── Game Layout ───────────────────────────────────────── */
+
+.coinflip-game-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.coinflip-main-area {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.coinflip-bet-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── Visual Area ───────────────────────────────────────── */
+
+.coinflip-visual-area {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 160px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 16px;
+  position: relative;
+}
+
+.coinflip-board {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+}
+
+.coinflip-result {
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: 1.2rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  animation: coinflip-result-appear 0.5s ease-out;
+}
+
+.coinflip-result.heads {
+  color: var(--accent-gold, #f0b429);
+}
+
+.coinflip-result.tails {
+  color: var(--accent-blue, #3b82f6);
+}
+
+@keyframes coinflip-result-appear {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Connect Prompt ────────────────────────────────────── */
+
+.coinflip-connect-prompt {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-secondary, #8892b0);
+}
+
+.coinflip-connect-prompt p {
+  margin-bottom: 16px;
+  font-size: 0.95rem;
+}
+
+.coinflip-connect-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 28px;
+  border-radius: 10px;
+  border: 1px solid var(--accent-gold, #f0b429);
+  background: rgba(240, 180, 41, 0.08);
+  color: var(--accent-gold, #f0b429);
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.coinflip-connect-btn:hover {
+  background: rgba(240, 180, 41, 0.15);
+  box-shadow: 0 0 16px rgba(240, 180, 41, 0.15);
+}
+
+/* ── Amount Input ──────────────────────────────────────── */
+
+.coinflip-amount-section {
+  margin-bottom: 0;
+}
+
+.coinflip-amount-label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #8892b0);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.coinflip-amount-hint {
+  display: block;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.3);
+  margin-top: 2px;
+}
+
+.coinflip-amount-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.coinflip-amount-input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 10px;
+  padding: 12px 16px;
+  color: var(--text-primary, #f0f0f0);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.coinflip-amount-input:focus {
+  border-color: var(--accent-gold, #f0b429);
+  box-shadow: 0 0 0 2px rgba(240, 180, 41, 0.15);
+}
+
+.coinflip-amount-input::placeholder {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.coinflip-amount-suffix {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.95rem;
+  color: var(--text-secondary, #8892b0);
+  font-weight: 600;
+}
+
+.coinflip-quick-picks {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.coinflip-quick-pick {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: var(--text-secondary, #8892b0);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 44px;
+  min-width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.coinflip-quick-pick:hover {
+  background: rgba(240, 180, 41, 0.1);
+  border-color: var(--accent-gold, #f0b429);
+  color: var(--accent-gold, #f0b429);
+}
+
+.coinflip-quick-pick:active {
+  transform: scale(0.96);
+}
+
+.coinflip-payout-preview {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: var(--text-secondary, #8892b0);
+  text-align: right;
+}
+
+.coinflip-payout-preview span {
+  color: var(--accent-green, #00ff88);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-weight: 600;
+}
+
+/* ── Choice Buttons ───────────────────────────────────── */
+
+.coinflip-choice-section {
+  margin-bottom: 0;
+}
+
+.coinflip-choice-label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #8892b0);
+  margin-bottom: 12px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.coinflip-choice-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.coinflip-choice-btn {
+  flex: 1;
+  max-width: 140px;
+  padding: 16px 24px;
+  border: 2px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary, #8892b0);
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 44px;
+}
+
+.coinflip-choice-btn--heads {
+  border-color: rgba(240, 180, 41, 0.3);
+}
+
+.coinflip-choice-btn--heads:hover,
+.coinflip-choice-btn--heads.coinflip-choice-btn--selected {
+  background: rgba(240, 180, 41, 0.1);
+  border-color: var(--accent-gold, #f0b429);
+  color: var(--accent-gold, #f0b429);
+}
+
+.coinflip-choice-btn--tails {
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.coinflip-choice-btn--tails:hover,
+.coinflip-choice-btn--tails.coinflip-choice-btn--selected {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: var(--accent-blue, #3b82f6);
+  color: var(--accent-blue, #3b82f6);
+}
+
+.coinflip-choice-btn:active {
+  transform: scale(0.96);
+}
+
+.coinflip-choice-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Submit Button ─────────────────────────────────────── */
+
+.coinflip-submit-btn {
+  width: 100%;
+  padding: 16px;
+  border-radius: 12px;
+  border: none;
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  position: relative;
+  overflow: hidden;
+  min-height: 48px;
+}
+
+.coinflip-submit-btn:not(:disabled) {
+  background: linear-gradient(135deg, var(--accent-gold, #f0b429), #e09800);
+  color: #080b14;
+  box-shadow: 0 4px 16px rgba(240, 180, 41, 0.3);
+}
+
+.coinflip-submit-btn:not(:disabled):hover {
+  box-shadow: 0 6px 24px rgba(240, 180, 41, 0.4);
+  transform: translateY(-1px);
+}
+
+.coinflip-submit-btn:not(:disabled):active {
+  transform: translateY(0);
+}
+
+.coinflip-submit-btn:disabled {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.25);
+  cursor: not-allowed;
+}
+
+.coinflip-submit-btn--loading {
+  pointer-events: none;
+}
+
+/* ── Info Section ─────────────────────────────────────── */
+
+.coinflip-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+}
+
+.coinflip-info-item {
+  font-size: 0.78rem;
+  color: var(--text-secondary, #8892b0);
+}
+
+.coinflip-info-item strong {
+  color: var(--text-primary, #f0f0f0);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+
+/* ── Spinner ───────────────────────────────────────────── */
+
+.coinflip-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: coinflip-spin 0.6s linear infinite;
+}
+
+@keyframes coinflip-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Error ─────────────────────────────────────────────── */
+
+.coinflip-error {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: var(--accent-red, #ef4444);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+/* ── Pending Bet ───────────────────────────────────────── */
+
+.coinflip-pending {
+  margin-top: 20px;
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(240, 180, 41, 0.06);
+  border: 1px solid rgba(240, 180, 41, 0.15);
+}
+
+.coinflip-pending-title {
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--accent-gold, #f0b429);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.coinflip-pending-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid transparent;
+  border-top-color: var(--accent-gold, #f0b429);
+  border-radius: 50%;
+  animation: coinflip-spin 0.8s linear infinite;
+}
+
+.coinflip-pending-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 0.82rem;
+}
+
+.coinflip-pending-row-label {
+  color: var(--text-secondary, #8892b0);
+}
+
+.coinflip-pending-row-value {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  color: var(--text-primary, #f0f0f0);
+  font-size: 0.78rem;
+}
+
+.coinflip-pending-link {
+  color: var(--accent-gold, #f0b429);
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.coinflip-pending-link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+/* ── Touch Area ───────────────────────────────────────── */
+
+.coinflip-touch-area {
+  position: relative;
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.coinflip-touch-area::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+  background: radial-gradient(circle at center, rgba(240, 180, 41, 0.1) 0%, transparent 70%);
+}
+
+.coinflip-touch-area:active::after {
+  opacity: 1;
+}
+
+/* ── Responsive Breakpoints ───────────────────────────── */
+
+/* Small tablets (768px-1023px) */
+@media (min-width: 768px) {
+  .coinflip-game-container {
+    max-width: 480px;
+    padding: 20px;
+    margin: 0 auto;
+  }
+
+  .coinflip-quick-picks {
+    flex-wrap: nowrap;
+  }
+
+  .coinflip-quick-pick {
+    flex: 1;
+  }
+
+  .coinflip-visual-area {
+    min-height: 180px;
+  }
+
+  .coinflip-choice-btn {
+    max-width: 160px;
+    padding: 18px 28px;
+  }
+}
+
+/* Medium tablets (1024px-1439px) */
+@media (min-width: 1024px) {
+  .coinflip-game-container {
+    max-width: 600px;
+    padding: 24px;
+  }
+
+  .coinflip-game-layout {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .coinflip-main-area {
+    flex: 1;
+    gap: 24px;
+  }
+
+  .coinflip-bet-sidebar {
+    flex: 0 0 200px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border-radius: 16px;
+    padding: 20px;
+  }
+
+  .coinflip-visual-area {
+    min-height: 200px;
+  }
+
+  .coinflip-title {
+    font-size: 1.6rem;
+    margin-bottom: 24px;
+  }
+}
+
+/* Desktop (1440px+) */
+@media (min-width: 1440px) {
+  .coinflip-game-container {
+    max-width: 800px;
+    padding: 32px;
+  }
+
+  .coinflip-game-layout {
+    gap: 32px;
+  }
+
+  .coinflip-main-area {
+    gap: 32px;
+  }
+
+  .coinflip-bet-sidebar {
+    flex: 0 0 240px;
+    padding: 24px;
+  }
+
+  .coinflip-visual-area {
+    min-height: 240px;
+  }
+
+  .coinflip-title {
+    font-size: 1.75rem;
+    margin-bottom: 28px;
+  }
+
+  .coinflip-amount-input {
+    font-size: 1.1rem;
+    padding: 12px 16px;
+  }
+
+  .coinflip-quick-pick {
+    padding: 12px 16px;
+    font-size: 0.9rem;
+  }
+
+  .coinflip-submit-btn {
+    padding: 20px;
+    font-size: 1.15rem;
+    min-height: 52px;
+  }
+}
+
+/* Touch-specific improvements */
+@media (hover: none) {
+  .coinflip-choice-btn:active {
+    transform: scale(0.95);
+  }
+
+  .coinflip-submit-btn:active {
+    transform: scale(0.98);
+  }
+
+  .coinflip-quick-pick:active {
+    transform: scale(0.95);
+  }
+}

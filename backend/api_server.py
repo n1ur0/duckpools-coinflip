@@ -26,6 +26,7 @@ from ws_manager import ConnectionManager
 from ws_routes import router as ws_router
 from oracle_service import OracleService, OracleConfig
 from oracle_routes import router as oracle_router
+from bankroll_routes import router as bankroll_router
 
 
 # ─── Environment ────────────────────────────────────────────────────
@@ -189,6 +190,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.include_router(lp_router, prefix="/api")
 app.include_router(ws_router)
 app.include_router(oracle_router)
+app.include_router(bankroll_router)
 
 
 # ─── Root Endpoints ─────────────────────────────────────────────────
