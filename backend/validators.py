@@ -11,12 +11,15 @@ import re
 
 
 # Ergo addresses are Base58Check encoded.
-# Mainnet P2PK: starts with '3'
-# Testnet P2PK: starts with '9'
-# Length: typically 30-40 characters.
+# Mainnet: starts with '3', Testnet: starts with '9'
+# Length varies by address type:
+#   - P2PK (33-byte compressed pubkey): ~51 chars  (1+33+4 = 38 bytes)
+#   - P2PKH / P2SH (20-byte hash):     ~34 chars  (1+20+4 = 25 bytes)
+#   - Custom scripts: variable, up to ~60 chars
+# We accept 26-60 chars to cover all valid Ergo address types.
 # Base58 alphabet excludes: 0, O, I, l (ambiguous characters).
 ERGO_ADDRESS_RE = re.compile(
-    r"^[39][1-9A-HJ-NP-Za-km-z]{29,39}$"
+    r"^[39][1-9A-HJ-NP-Za-km-z]{25,59}$"
 )
 
 
@@ -32,7 +35,7 @@ def validate_ergo_address(address: str) -> str:
     Checks:
     1. Starts with '3' (mainnet) or '9' (testnet)
     2. Contains only Base58 characters (no 0, O, I, l)
-    3. Length is in valid range (30-40 chars total)
+    3. Length is in valid range (26-60 chars total)
 
     Does NOT verify the Base58Check checksum (would require a base58 library).
     The Ergo node will reject malformed addresses at transaction build time.
@@ -51,8 +54,10 @@ def validate_ergo_address(address: str) -> str:
 
     address = address.strip()
 
-    if len(address) < 30:
-        raise ValidationError(f"Address too short ({len(address)} chars, expected 30-40)")
+    if len(address) < 26:
+        raise ValidationError(
+            f"Address too short ({len(address)} chars, expected 26-60)"
+        )
 
     if not ERGO_ADDRESS_RE.match(address):
         if not address.startswith(("3", "9")):
@@ -62,7 +67,7 @@ def validate_ergo_address(address: str) -> str:
             )
         raise ValidationError(
             f"Address contains invalid characters or has wrong length "
-            f"({len(address)} chars, expected 30-40)"
+            f"({len(address)} chars, expected 26-60)"
         )
 
     return address
