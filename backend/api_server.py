@@ -68,10 +68,10 @@ ORACLE_BACKUP_URLS = [u.strip() for u in os.getenv("ORACLE_BACKUP_URLS", "").spl
 ORACLE_STALE_THRESHOLD_SECONDS = int(os.getenv("ORACLE_STALE_THRESHOLD_SECONDS", "300"))
 ORACLE_HEALTH_CHECK_INTERVAL_SECONDS = int(os.getenv("ORACLE_HEALTH_CHECK_INTERVAL_SECONDS", "30"))
 
-# ─── BE-8: NODE_API_KEY is required for on-chain operations.
-# For PoC with in-memory game_routes, warn but don't crash.
+# ─── BE-8: NODE_API_KEY is required — fail-fast if missing.
 if not NODE_API_KEY:
-    print("WARN: NODE_API_KEY not set. On-chain endpoints will be degraded.", file=sys.stderr)
+    print("FATAL: NODE_API_KEY environment variable is required.", file=sys.stderr)
+    sys.exit(1)
 
 
 # ─── Security Headers Middleware ────────────────────────────────
