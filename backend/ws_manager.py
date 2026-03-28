@@ -219,20 +219,46 @@ class ConnectionManager:
         """
         Broadcast an event to ALL connected clients regardless of subscription.
         Useful for system-wide events (pool state changes, maintenance notices).
+
+        BE-7: Snapshot subscribers under lock, send OUTSIDE lock to avoid
+        blocking all other WebSocket operations during broadcast. A slow
+        or dead client must not stall connect/disconnect/subscribe.
         """
         sent = 0
         seen: set = set()
+        dead: list = []
 
+        # Snapshot all unique (ws, conn_id) pairs under the lock
         async with self._lock:
             for addr, subscribers in self._subscriptions.items():
                 for ws, conn_id in subscribers:
                     if conn_id not in seen:
                         seen.add(conn_id)
-                        try:
-                            await ws.send_json(event)
-                            sent += 1
-                        except Exception:
-                            pass
+                        dead.append((ws, conn_id, addr))  # track addr for cleanup
+            all_connections = [(ws, cid) for ws, cid, _ in dead]
+            dead.clear()
+
+        # Send outside the lock — I/O must not hold the mutex
+        for ws, conn_id in all_connections:
+            try:
+                await ws.send_json(event)
+                sent += 1
+            except Exception:
+                dead.append((ws, conn_id))
+
+        # Clean up dead connections under the lock
+        if dead:
+            async with self._lock:
+                for ws, conn_id in dead:
+                    for addr in list(self._subscriptions.keys()):
+                        self._subscriptions[addr].discard((ws, conn_id))
+                        if conn_id in self._conn_addresses:
+                            self._conn_addresses[conn_id].discard(addr)
+                        if not self._subscriptions[addr]:
+                            del self._subscriptions[addr]
+            logger.warning(
+                "WS broadcast_global cleaned up %d dead connections", len(dead)
+            )
 
         return sent
 
