@@ -1,4 +1,6 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import './Modal.css';
 
 /** Size presets for the Modal component. */
@@ -23,8 +25,8 @@ export interface ModalProps {
 }
 
 /**
- * Reusable Modal component with backdrop, entrance/exit animations, escape key handling,
- * focus trapping, and body scroll lock.
+ * Reusable Modal component with backdrop, entrance/exit animations (framer-motion),
+ * escape key handling, focus trapping, body scroll lock, and Portal rendering.
  *
  * @example
  * ```tsx
@@ -44,18 +46,7 @@ const Modal: React.FC<ModalProps> = ({
   className = '',
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
-  const [closing, setClosing] = React.useState(false);
   const prevFocusRef = useRef<HTMLElement | null>(null);
-
-  /** Close with exit animation. */
-  const handleClose = useCallback(() => {
-    setClosing(true);
-    // Wait for animation before actually unmounting
-    setTimeout(() => {
-      setClosing(false);
-      onClose();
-    }, 120);
-  }, [onClose]);
 
   /** Close on Escape key. */
   useEffect(() => {
@@ -64,13 +55,13 @@ const Modal: React.FC<ModalProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        handleClose();
+        onClose();
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, handleClose]);
+  }, [isOpen, onClose]);
 
   /** Body scroll lock + focus management. */
   useEffect(() => {
@@ -128,59 +119,71 @@ const Modal: React.FC<ModalProps> = ({
     return () => panel.removeEventListener('keydown', handleTabKey);
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   const panelClasses = [
     'ui-modal',
     `ui-modal--${size}`,
-    closing && 'ui-modal--closing',
     className,
   ].filter(Boolean).join(' ');
 
-  return (
-    <div
-      className={`ui-modal-backdrop ${closing ? 'ui-modal-backdrop--closing' : ''}`}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) handleClose();
-      }}
-    >
-      <div
-        ref={panelRef}
-        className={panelClasses}
-        role="dialog"
-        aria-modal="true"
-        aria-label={typeof title === 'string' ? title : 'Dialog'}
-        tabIndex={-1}
-      >
-        {title !== undefined && (
-          <div className="ui-modal__header">
-            <h2 className="ui-modal__title">{title}</h2>
-            <button
-              className="ui-modal__close"
-              onClick={handleClose}
-              aria-label="Close dialog"
-              type="button"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-        {title === undefined && (
-          <button
-            className="ui-modal__close"
-            onClick={handleClose}
-            aria-label="Close dialog"
-            type="button"
-            style={{ position: 'absolute', top: 16, right: 16 }}
+  const modalContent = (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          className="ui-modal-backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) onClose();
+          }}
+        >
+          <motion.div
+            ref={panelRef}
+            className={panelClasses}
+            role="dialog"
+            aria-modal="true"
+            aria-label={typeof title === 'string' ? title : 'Dialog'}
+            tabIndex={-1}
+            initial={{ opacity: 0, scale: 0.95, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 8 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
           >
-            ✕
-          </button>
-        )}
-        <div className="ui-modal__body">{children}</div>
-        {footer && <div className="ui-modal__footer">{footer}</div>}
-      </div>
-    </div>
+            {title !== undefined && (
+              <div className="ui-modal__header">
+                <h2 className="ui-modal__title">{title}</h2>
+                <button
+                  className="ui-modal__close"
+                  onClick={onClose}
+                  aria-label="Close dialog"
+                  type="button"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+            {title === undefined && (
+              <button
+                className="ui-modal__close"
+                onClick={onClose}
+                aria-label="Close dialog"
+                type="button"
+                style={{ position: 'absolute', top: 16, right: 16 }}
+              >
+                ✕
+              </button>
+            )}
+            <div className="ui-modal__body">{children}</div>
+            {footer && <div className="ui-modal__footer">{footer}</div>}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
+
+  // Render to portal (document.body) for proper z-index and layering
+  return createPortal(modalContent, document.body);
 };
 
 export default Modal;
