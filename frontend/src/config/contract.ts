@@ -11,14 +11,17 @@
  *   R8: Int          — block height for timeout/refund
  *   R9: Coll[Byte]   — player's secret (raw random bytes)
  *
- * The box MUST contain the Game NFT as its first token.
+ * NOTE: coinflip_v2.es does NOT check for tokens/NFTs. The contract guard
+ * is purely based on SigmaProp proofs and register values. An NFT can be
+ * optionally included in the PendingBetBox for easier off-chain indexing,
+ * but it is NOT required for the contract to function.
  *
  * SECURITY NOTE (SEC-CRITICAL): Previous version referenced v1 layout
  * (R8=playerSecret, R9=betId, R10=timeoutHeight). This was wrong —
  * R10 doesn't exist in Ergo. v2 fixed this. Updated 2026-03-28.
  */
 
-/** P2S address of the compiled coinflip contract (PLACEHOLDER — MAT-344) */
+/** P2S address of the compiled coinflip contract */
 export const P2S_ADDRESS = import.meta.env.VITE_CONTRACT_P2S_ADDRESS || '';
 
 /** ErgoTree hex of the compiled contract */
@@ -27,7 +30,7 @@ export const CONTRACT_ERGO_TREE = import.meta.env.VITE_CONTRACT_ERGO_TREE || '';
 /** House compressed public key (33 bytes, hex) */
 export const HOUSE_PUB_KEY = import.meta.env.VITE_HOUSE_PUB_KEY || '';
 
-/** Game NFT token ID (hex) — required in the PendingBetBox */
+/** Game NFT token ID (hex) — optional, for off-chain box indexing only */
 export const GAME_NFT_ID = import.meta.env.VITE_GAME_NFT_ID || '';
 
 /** Timeout delta (blocks until player can refund) */
@@ -39,7 +42,8 @@ export const HOUSE_EDGE_BPS = 300;
 /**
  * Whether the on-chain flow is enabled.
  * Requires a compiled contract (P2S_ADDRESS) and house public key.
+ * NFT is optional — coinflip_v2.es does not check for tokens.
  */
 export function isOnChainEnabled(): boolean {
-  return !!(P2S_ADDRESS && HOUSE_PUB_KEY && GAME_NFT_ID);
+  return !!(P2S_ADDRESS && HOUSE_PUB_KEY);
 }
