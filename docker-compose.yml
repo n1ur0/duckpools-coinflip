@@ -19,7 +19,7 @@
 #   docker build -t duckpools-frontend --target production frontend/
 # =============================================================================
 
-version: '3.8'
+
 
 services:
   # Backend API Service (FastAPI)

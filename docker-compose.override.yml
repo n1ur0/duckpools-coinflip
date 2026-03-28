@@ -12,7 +12,7 @@
 # - Development-specific environment variables
 # =============================================================================#
 
-version: '3.8'
+
 
 services:
   # Backend Development Override
@@ -181,5 +181,4 @@ volumes:
 # Use the existing network
 networks:
   default:
-    external:
-      name: duckpools-network
+    name: duckpools-network
