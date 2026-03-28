@@ -42,6 +42,7 @@ services:
     volumes:
       # Mount backend code for hot-reload
       - ./backend:/app
+      - ./.env:/app/.env:ro  # Mount .env file (read-only) for environment variables
       - /app/__pycache__  # Exclude cache
       - /app/logs  # Exclude logs (will be created in container)
     networks:

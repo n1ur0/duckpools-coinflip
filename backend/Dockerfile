@@ -44,6 +44,10 @@ RUN pip install --upgrade pip && \
 # Copy application code
 COPY . .
 
+# Support environment variables via .env file (mounted from docker-compose)
+# Note: .env file should be mounted as volume in docker-compose.yml
+# The .env file is excluded by .dockerignore to prevent secrets in image
+
 # Create logs directory
 RUN mkdir -p /app/logs
 
