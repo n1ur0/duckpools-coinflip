@@ -12,6 +12,7 @@ from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
+import hmac
 
 # Create router
 router = APIRouter(prefix="/api/oracle", tags=["oracle"])
@@ -43,7 +44,7 @@ async def verify_admin_api_key(request: Request):
             status_code=503,
             detail="Admin API key not configured on server. Set ADMIN_API_KEY env var."
         )
-    if not api_key or api_key != expected:
+    if not api_key or not hmac.compare_digest(api_key, expected):
         raise HTTPException(status_code=401, detail="Unauthorized: invalid or missing admin API key")
     return True
 
