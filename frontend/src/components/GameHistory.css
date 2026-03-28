@@ -138,8 +138,8 @@
 }
 
 .gh-choice-badge--tails {
-  background: rgba(99, 179, 237, 0.12);
-  color: #63b3ed;
+  background: var(--accent-tails-subtle);
+  color: var(--accent-tails);
 }
 
 /* ── Outcome colors ─────────────────────────────── */

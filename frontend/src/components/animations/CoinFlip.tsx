@@ -45,7 +45,7 @@ const CoinFlip: React.FC<CoinFlipProps> = ({
   const getCoinColor = () => {
     if (isFlipping) return 'var(--accent-gold)';
     if (result === 'heads') return 'var(--accent-gold)';
-    if (result === 'tails') return 'var(--accent-blue, #3b82f6)';
+    if (result === 'tails') return 'var(--accent-tails)';
     return 'var(--accent-gold)';
   };
 
