@@ -78,7 +78,32 @@ services:
     depends_on:
       - backend-api  # Start backend first
 
-  
+  # Off-chain Bot Service
+  off-chain-bot:
+    build:
+      context: ./off-chain-bot
+      target: development  # Use development stage
+    container_name: duckpools-offchain-bot-dev
+    environment:
+      # Bot configuration (can be overridden in docker-compose.override.yml)
+      - NODE_ENV=development
+      - LOG_LEVEL=DEBUG
+      # Ergo node configuration (external)
+      - ERGO_NODE_URL=http://host.docker.internal:9052
+      - ERGO_API_KEY=blake2b256("hello")
+    volumes:
+      # Default volumes (can be extended in docker-compose.override.yml)
+      - ./off-chain-bot:/app
+    networks:
+      - coinflip-net
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "main.py"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    depends_on:
+      - backend-api  # Start backend first
 
 # Network configuration (can be overridden in docker-compose.override.yml)
 networks:

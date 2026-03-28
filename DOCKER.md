@@ -72,6 +72,16 @@ The Docker Compose setup includes:
 | frontend | 3000 | React Vite dev server |
 | off-chain-bot | - | Bot for bet resolution (no port exposure) |
 
+## Development Environment
+
+The Docker Compose setup includes all three services for development:
+
+- **backend-api**: FastAPI backend with hot-reload on port 8000
+- **frontend**: React Vite dev server with hot-reload on port 3000
+- **off-chain-bot**: Background bot for bet resolution (no port exposure)
+
+All services include health checks and hot-reload support for development.
+
 ## Accessing Services
 
 - **Frontend**: http://localhost:3000

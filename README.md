@@ -136,6 +136,17 @@ docker compose down -v
   - `VITE_ERGO_NODE_URL`: Ergo node URL
   - `CHOKIDAR_USEPOLLING`: Enable file polling in Docker
 
+#### Off-chain Bot Service
+
+- **No Port Exposed**: Runs in background (no external access needed)
+- **Health Check**: Process monitoring
+- **Hot-Reload**: Enabled (code changes trigger restart)
+- **Environment Variables**:
+  - `NODE_ENV`: development
+  - `LOG_LEVEL`: DEBUG
+  - `ERGO_NODE_URL`: External Ergo node URL
+  - `ERGO_API_KEY`: Ergo node API key
+
 ### Production Builds
 
 To create optimized production builds:
