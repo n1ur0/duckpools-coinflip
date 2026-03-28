@@ -3,12 +3,14 @@ DuckPools - Oracle Routes
 
 API endpoints for oracle health monitoring and status.
 
-MAT-31: Oracle health monitoring and failover
+MAT-31: Oracle health monitoring with stale feed detection, failover logic, and alerting
+SEC-A3: /switch endpoint requires admin API key authentication
 """
 
+import os
 from typing import Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 # Create router
@@ -17,8 +19,6 @@ router = APIRouter(prefix="/api/oracle", tags=["oracle"])
 
 async def get_oracle_service():
     """Dependency to get the oracle service from app state."""
-    from fastapi import Request
-
     async def _get_oracle_service(request: Request):
         service = getattr(request.app.state, "oracle_service", None)
         if not service:
@@ -26,6 +26,26 @@ async def get_oracle_service():
         return service
 
     return _get_oracle_service
+
+
+async def verify_admin_api_key(request: Request):
+    """
+    SEC-A3: Require admin API key for destructive operations.
+
+    The /switch endpoint can redirect oracle traffic to a malicious endpoint.
+    This dependency ensures only operators can trigger failover.
+    """
+    api_key = request.headers.get("X-Admin-API-Key", "")
+    expected = os.getenv("ADMIN_API_KEY", "")
+    if not expected:
+        # Fail-closed: if ADMIN_API_KEY is not configured, block the endpoint
+        raise HTTPException(
+            status_code=503,
+            detail="Admin API key not configured on server. Set ADMIN_API_KEY env var."
+        )
+    if not api_key or api_key != expected:
+        raise HTTPException(status_code=401, detail="Unauthorized: invalid or missing admin API key")
+    return True
 
 
 @router.get("/health")
@@ -110,7 +130,7 @@ async def get_oracle_data(
     return {"data": data}
 
 
-@router.post("/switch")
+@router.post("/switch", dependencies=[Depends(verify_admin_api_key)])
 async def switch_oracle_endpoint(
     target_endpoint_name: str,
     oracle_service=Depends(get_oracle_service())

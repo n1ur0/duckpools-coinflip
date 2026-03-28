@@ -465,3 +465,60 @@ def test_no_default_hello_api_key():
                     f"SEC-1: API_KEY uses 'hello' as default at line {i+1}. "
                     "This must be replaced with a strong random default."
                 )
+
+
+# ═══════════════════════════════════════════════════════════════
+# 9. ORACLE SWITCH AUTHENTICATION (SEC-A3)
+#    POST /api/oracle/switch must require admin API key.
+# ═══════════════════════════════════════════════════════════════
+
+def test_oracle_switch_has_auth():
+    """
+    SEC-A3: POST /api/oracle/switch must require authentication.
+
+    Without auth, any attacker can force oracle failover to a malicious
+    endpoint, feeding stale/manipulated price data into the protocol.
+    This could enable economic attacks on LP solvency.
+    """
+    oracle_routes_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..",
+        "backend", "oracle_routes.py"
+    )
+    oracle_routes_path = os.path.normpath(oracle_routes_path)
+
+    if not os.path.exists(oracle_routes_path):
+        pytest.skip(f"oracle_routes.py not found at {oracle_routes_path}")
+
+    with open(oracle_routes_path, "r") as f:
+        source = f.read()
+
+    # Check that /switch endpoint has an auth dependency
+    has_auth_dependency = (
+        "verify_admin" in source or
+        "admin" in source.lower() and "Depends" in source
+    )
+    has_switch_route = "@router.post" in source and "/switch" in source
+
+    if has_switch_route and not has_auth_dependency:
+        pytest.fail(
+            "SEC-A3: POST /api/oracle/switch has no authentication. "
+            "Any unauthenticated user can force oracle failover. "
+            "Add a dependency that validates an admin API key."
+        )
+
+    # Verify read-only endpoints remain public
+    public_endpoints = ["/health", "/status", "/endpoints"]
+    for endpoint in public_endpoints:
+        # These should NOT have the auth dependency
+        route_block = source.split(endpoint)[0] if endpoint in source else ""
+        # Find the @router decorator for this endpoint
+        lines = source.split("\n")
+        for i, line in enumerate(lines):
+            if endpoint in line and "@router" in lines[max(0, i-3):i]:
+                # Check next ~5 lines for auth dependency
+                route_context = "\n".join(lines[i:i+5])
+                if "verify_admin" in route_context or "admin_api_key" in route_context.lower():
+                    pytest.fail(
+                        f"SEC-A3: Read-only endpoint {endpoint} should NOT require auth. "
+                        "Only /switch needs protection."
+                    )
