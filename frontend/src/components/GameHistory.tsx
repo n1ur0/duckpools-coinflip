@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Coins } from 'lucide-react';
 import { useWallet } from '../contexts/WalletContext';
 import { buildApiUrl } from '../utils/network';
 import { formatErg } from '../utils/ergo';
 import type { BetRecord } from '../types/Game';
 import { formatChoiceLabel } from '../types/Game';
+import { EmptyState } from './ui/EmptyState';
 import './GameHistory.css';
 
 const REFRESH_INTERVAL = 30_000;
@@ -112,7 +113,11 @@ export default function GameHistory() {
           ))}
         </div>
       ) : bets.length === 0 ? (
-        <div className="gh-empty">No bets yet. Place your first flip!</div>
+        <EmptyState
+          icon={<Coins size={48} />}
+          title="No bets yet"
+          description="Place your first bet to get started"
+        />
       ) : (
         <div className="gh-table-wrap">
           <table className="gh-table">

@@ -1,0 +1,88 @@
+/* PoolManager - pm- prefix */
+
+.pm-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.pm-title {
+  margin: 0 0 24px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary, #ffffff);
+}
+
+.pm-connect {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--text-muted, rgba(255, 255, 255, 0.6));
+  background: var(--bg-card, rgba(255, 255, 255, 0.03));
+  border-radius: 16px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+}
+
+.pm-error {
+  padding: 16px;
+  margin-bottom: 16px;
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(248, 113, 113, 0.2);
+}
+
+/* ── Loading Skeleton ───────────────────────────────────── */
+
+.pm-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pm-skeleton-card,
+.pm-skeleton-row {
+  background: var(--bg-card, rgba(255, 255, 255, 0.03));
+  border-radius: 8px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  animation: pm-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pm-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+
+/* ── Stats Grid ─────────────────────────────────────────── */
+
+.pm-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.pm-stat-card {
+  padding: 20px;
+  background: var(--bg-card, rgba(255, 255, 255, 0.03));
+  border-radius: 16px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+}
+
+.pm-stat-label {
+  font-size: 14px;
+  color: var(--text-muted, rgba(255, 255, 255, 0.6));
+  margin-bottom: 8px;
+}
+
+.pm-stat-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary, #ffffff);
+}
+
+/* ── Actions ───────────────────────────────────────────── */
+
+.pm-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}

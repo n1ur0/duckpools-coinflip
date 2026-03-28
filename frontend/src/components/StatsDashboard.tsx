@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
+import { BarChart3 } from 'lucide-react';
 import { useWallet } from '../contexts/WalletContext';
 import { buildApiUrl } from '../utils/network';
 import { formatErg } from '../utils/ergo';
 import type { PlayerStats } from '../types/Game';
+import { EmptyState } from './ui/EmptyState';
 import './StatsDashboard.css';
 
 export default function StatsDashboard() {
@@ -71,7 +73,18 @@ export default function StatsDashboard() {
     );
   }
 
-  if (!stats) return null;
+  if (!stats) {
+    return (
+      <div className="sd-container">
+        <h3 className="sd-title">Your Stats</h3>
+        <EmptyState
+          icon={<BarChart3 size={48} />}
+          title="No stats yet"
+          description="Place some bets to see your statistics"
+        />
+      </div>
+    );
+  }
 
   const netPnL = parseFloat(stats.netPnL);
 

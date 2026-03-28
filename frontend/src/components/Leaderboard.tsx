@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Trophy } from 'lucide-react';
 import { buildApiUrl } from '../utils/network';
 import { formatErg, formatAddress } from '../utils/ergo';
 import type { LeaderboardEntry, LeaderboardResponse } from '../types/Game';
+import { EmptyState } from './ui/EmptyState';
 import './Leaderboard.css';
 
 function getExplorerAddressUrl(address: string): string {
@@ -58,7 +60,11 @@ export default function Leaderboard() {
           ))}
         </div>
       ) : data.length === 0 ? (
-        <div className="lb-empty">No players yet. Be the first to flip!</div>
+        <EmptyState
+          icon={<Trophy size={48} />}
+          title="No players yet"
+          description="Be the first to climb the leaderboard"
+        />
       ) : (
         <div className="lb-table-wrap">
           <table className="lb-table">

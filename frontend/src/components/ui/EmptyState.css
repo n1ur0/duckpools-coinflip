@@ -1,0 +1,43 @@
+/* EmptyState - ui-empty-state prefix */
+
+.ui-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 24px;
+  min-height: 200px;
+}
+
+/* ── Icon ───────────────────────────────────────────── */
+
+.ui-empty-state__icon {
+  margin-bottom: 16px;
+  opacity: 0.3;
+  font-size: 48px;
+  line-height: 1;
+}
+
+/* ── Text ──────────────────────────────────────────── */
+
+.ui-empty-state__title {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary, #ffffff);
+}
+
+.ui-empty-state__description {
+  margin: 0 0 24px 0;
+  font-size: 14px;
+  color: var(--text-muted, rgba(255, 255, 255, 0.6));
+  max-width: 320px;
+  line-height: 1.5;
+}
+
+/* ── Action Button ──────────────────────────────────── */
+
+.ui-empty-state__action {
+  margin-top: 8px;
+}
