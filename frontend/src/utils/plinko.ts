@@ -211,7 +211,7 @@ export async function generatePlinkoCommit(
   targetSlot?: number,
   secret?: Uint8Array,
 ): Promise<{ secret: Uint8Array; commitment: string }> {
-  const actualSecret = secret ?? generateSecret();
+const actualSecret = secret ?? generateSecret();
 
   // Encode rows as a single byte (fits 8-16)
   const rowsByte = new Uint8Array(1);
