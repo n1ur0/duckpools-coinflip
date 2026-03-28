@@ -17,9 +17,13 @@ import './PlinkoGame.css';
 const QUICK_PICK_VALUES = [0.1, 0.5, 1, 5];
 
 // Physics constants
-const GRAVITY = 0.5;
+const GRAVITY = 0.3;
 const BALL_RADIUS = 8;
 const PEG_RADIUS = 4;
+const BOUNCE_DAMPING = 0.7; // Energy loss on bounce
+const FRICTION = 0.99; // Air resistance
+const MIN_VELOCITY = 0.1; // Minimum velocity threshold
+const MAX_BOUNCE_ANGLE = Math.PI / 3; // Maximum bounce angle in radians
 
 function generateBetId(): string {
   return crypto.randomUUID();
@@ -205,33 +209,125 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ className = '' }) => {
     setIsAnimating(true);
     setResult(null);
     
-    // Initialize ball position at top center
+    // Initialize ball position at top center with slight random horizontal velocity
     let currentPos: BallPosition = {
-      x: boardWidth / 2,
+      x: boardWidth / 2 + (Math.random() - 0.5) * 10,
       y: 20,
-      vx: 0,
+      vx: (Math.random() - 0.5) * 0.5,
       vy: 0,
     };
     
-    // Generate random path to the final slot
-    let targetX = ((finalSlot + 0.5) / (rows + 1)) * boardWidth;
+    // Store the target slot for final guidance
+    const targetX = ((finalSlot + 0.5) / (rows + 1)) * boardWidth;
+    
+    // Physics helper functions
+    const checkPegCollision = (ballPos: BallPosition, peg: PegPosition): boolean => {
+      const dx = ballPos.x - peg.x;
+      const dy = ballPos.y - peg.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      return distance < (BALL_RADIUS + PEG_RADIUS);
+    };
+    
+    const handlePegBounce = (ballPos: BallPosition, peg: PegPosition): BallPosition => {
+      // Calculate collision normal
+      const dx = ballPos.x - peg.x;
+      const dy = ballPos.y - peg.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // Normalize collision vector
+      const nx = dx / distance;
+      const ny = dy / distance;
+      
+      // Calculate relative velocity along collision normal
+      const relativeVelocity = ballPos.vx * nx + ballPos.vy * ny;
+      
+      // Don't bounce if velocities are separating
+      if (relativeVelocity > 0) {
+        return ballPos;
+      }
+      
+      // Calculate new velocity with bounce damping
+      const bounceFactor = -BOUNCE_DAMPING;
+      const newVx = ballPos.vx + bounceFactor * relativeVelocity * nx;
+      const newVy = ballPos.vy + bounceFactor * relativeVelocity * ny;
+      
+      // Limit bounce angle to prevent unrealistic bouncing
+      const velocity = Math.sqrt(newVx * newVx + newVy * newVy);
+      let angle = Math.atan2(newVy, newVx);
+      
+      // Constrain angle to reasonable range
+      if (Math.abs(angle) > MAX_BOUNCE_ANGLE) {
+        angle = Math.sign(angle) * MAX_BOUNCE_ANGLE;
+      }
+      
+      // Apply angle constraint
+      const constrainedVx = velocity * Math.cos(angle);
+      const constrainedVy = velocity * Math.sin(angle);
+      
+      // Move ball outside of peg to prevent sticking
+      const overlap = (BALL_RADIUS + PEG_RADIUS) - distance;
+      const separateX = nx * overlap * 1.1;
+      const separateY = ny * overlap * 1.1;
+      
+      return {
+        x: ballPos.x + separateX,
+        y: ballPos.y + separateY,
+        vx: constrainedVx,
+        vy: constrainedVy
+      };
+    };
+    
+    const applyBoundaryConstraints = (ballPos: BallPosition): BallPosition => {
+      let { x, y, vx, vy } = ballPos;
+      
+      // Left and right wall collisions
+      if (x - BALL_RADIUS < 0) {
+        x = BALL_RADIUS;
+        vx = Math.abs(vx) * BOUNCE_DAMPING;
+      } else if (x + BALL_RADIUS > boardWidth) {
+        x = boardWidth - BALL_RADIUS;
+        vx = -Math.abs(vx) * BOUNCE_DAMPING;
+      }
+      
+      // Apply gentle guidance toward target slot when near the bottom
+      if (y > boardHeight * 0.7) {
+        const guidanceForce = 0.002;
+        const diffX = targetX - x;
+        vx += diffX * guidanceForce;
+      }
+      
+      return { x, y, vx, vy };
+    };
     
     const animate = () => {
       // Apply gravity
       currentPos.vy += GRAVITY;
       
+      // Apply friction
+      currentPos.vx *= FRICTION;
+      currentPos.vy *= FRICTION;
+      
       // Update position
       currentPos.x += currentPos.vx;
       currentPos.y += currentPos.vy;
       
-      // Simple path adjustment to reach target slot
-      const diffX = targetX - currentPos.x;
-      if (Math.abs(diffX) > 5) {
-        currentPos.vx += diffX * 0.02;
+      // Apply boundary constraints
+      currentPos = applyBoundaryConstraints(currentPos);
+      
+      // Check for peg collisions
+      for (const peg of pegPositions) {
+        if (checkPegCollision(currentPos, peg)) {
+          currentPos = handlePegBounce(currentPos, peg);
+        }
       }
       
-      // Damping
-      currentPos.vx *= 0.98;
+      // Minimum velocity threshold to stop tiny movements
+      if (Math.abs(currentPos.vx) < MIN_VELOCITY) {
+        currentPos.vx = 0;
+      }
+      if (Math.abs(currentPos.vy) < MIN_VELOCITY && currentPos.y > boardHeight * 0.8) {
+        currentPos.vy = 0;
+      }
       
       // Check if ball reached bottom
       if (currentPos.y >= boardHeight - 30) {
@@ -255,7 +351,7 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ className = '' }) => {
     };
     
     animationFrameRef.current = requestAnimationFrame(animate);
-  }, [boardWidth, boardHeight, rows]);
+  }, [boardWidth, boardHeight, rows, pegPositions]);
 
   // ── Bet Submission ───────────────────────────────────────────────
 
