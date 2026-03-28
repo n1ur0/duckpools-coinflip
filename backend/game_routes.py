@@ -8,10 +8,14 @@ MAT-309: Rebuild backend API to match frontend contract.
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Literal
+import re
+import uuid as uuid_module
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from validators import validate_ergo_address, ValidationError
 
 router = APIRouter(tags=["game"])
 
@@ -52,11 +56,65 @@ class BetRecord(BaseModel):
 
 
 class PlaceBetRequest(BaseModel):
-    address: str
-    amount: str
-    choice: int  # 0 = Heads, 1 = Tails
-    commitment: str
-    betId: str
+    address: str = Field(..., min_length=1, description="Player Ergo address (P2PK or P2S)")
+    amount: str = Field(..., min_length=1, description="Bet amount in nanoERG (must be positive)")
+    choice: Literal[0, 1] = Field(..., description="0 = Heads, 1 = Tails")
+    commitment: str = Field(..., min_length=64, max_length=64, description="64-char hex hash (blake2b256(secret||choice))")
+    betId: str = Field(..., min_length=36, max_length=36, description="UUID v4 format")
+
+    @field_validator("address")
+    @classmethod
+    def validate_address(cls, v: str) -> str:
+        """Validate Ergo address format using validators.py."""
+        try:
+            return validate_ergo_address(v)
+        except ValidationError as e:
+            raise ValueError(f"Invalid Ergo address: {e}")
+
+    @field_validator("amount")
+    @classmethod
+    def validate_amount(cls, v: str) -> str:
+        """Validate amount is a positive integer within pool limits."""
+        # Must be numeric
+        if not v.isdigit():
+            raise ValueError("Amount must be a positive integer (nanoERG)")
+
+        amount_int = int(v)
+
+        # Must be > 0
+        if amount_int <= 0:
+            raise ValueError("Amount must be greater than 0")
+
+        # Must be >= minimum box value (0.001 ERG = 1,000,000 nanoERG)
+        MIN_BOX_VALUE = 1_000_000
+        if amount_int < MIN_BOX_VALUE:
+            raise ValueError(f"Amount must be at least {MIN_BOX_VALUE:,} nanoERG (0.001 ERG)")
+
+        # Check against pool liquidity (50,000 ERG = 50,000,000,000,000 nanoERG)
+        MAX_POOL_LIQUIDITY = 50_000_000_000_000
+        if amount_int > MAX_POOL_LIQUIDITY:
+            raise ValueError(f"Amount exceeds pool liquidity ({MAX_POOL_LIQUIDITY:,} nanoERG)")
+
+        return v
+
+    @field_validator("commitment")
+    @classmethod
+    def validate_commitment(cls, v: str) -> str:
+        """Validate commitment is a 64-character hex string (256-bit hash)."""
+        v = v.strip().lower()
+        if not re.match(r"^[0-9a-f]{64}$", v):
+            raise ValueError("Commitment must be a 64-character hex string (256-bit hash)")
+        return v
+
+    @field_validator("betId")
+    @classmethod
+    def validate_bet_id(cls, v: str) -> str:
+        """Validate betId is a valid UUID v4 format."""
+        try:
+            uuid_module.UUID(v, version=4)
+        except ValueError:
+            raise ValueError("betId must be a valid UUID v4 format")
+        return v
 
 
 class PlaceBetResponse(BaseModel):
