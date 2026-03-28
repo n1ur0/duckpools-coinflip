@@ -6,7 +6,7 @@
  *
  * @example
  * ```tsx
- * import { Button, Card, Input, Modal, Badge, Toggle } from '@/components/ui';
+ * import { Button, Card, Input, Modal, Badge, Toggle, Tooltip } from '@/components/ui';
  * ```
  */
 
@@ -30,3 +30,6 @@ export type { ToggleProps } from './Toggle';
 
 export { default as Spinner } from './Spinner';
 export type { SpinnerProps, SpinnerVariant, SpinnerSize } from './Spinner';
+
+export { default as Tooltip } from './Tooltip';
+export type { TooltipProps, TooltipPosition } from './Tooltip';
