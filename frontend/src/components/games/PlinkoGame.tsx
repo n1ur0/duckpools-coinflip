@@ -267,7 +267,7 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ className = '' }) => {
 
     try {
       // 1. Generate secret & commitment
-      const { secret, commitment } = await generatePlinkoCommit(rows);
+      const { commitment } = await generatePlinkoCommit(rows);
       const betId = generateBetId();
 
       // 2. Build API request

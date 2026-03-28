@@ -1,3 +1,4 @@
+import React from 'react';
 import { useState, useCallback, useRef, TouchEvent } from 'react';
 import { useWallet } from '../../contexts/WalletContext';
 import { generateDiceCommit, getDiceMultiplier, DICE_MIN_TARGET, DICE_MAX_TARGET, DICE_DEFAULT_TARGET } from '../../utils/dice';

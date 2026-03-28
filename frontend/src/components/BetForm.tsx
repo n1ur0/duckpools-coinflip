@@ -131,7 +131,7 @@ export default function BetForm() {
 
     try {
       // 1. Generate secret & commitment
-      const secret=***
+      const secret = generateSecret()
       const commitment = generateCommitment(secret, choice);
       const betId = generateBetId();
 
