@@ -4,6 +4,29 @@ This guide explains how to run DuckPools Coinflip using Docker Compose.
 
 ## Quick Start
 
+### Using the Management Script (Recommended)
+
+```bash
+# 1. Navigate to project root
+cd duckpools-coinflip
+
+# 2. Copy environment template
+cp .env.example .env
+
+# 3. Edit .env with your configuration
+nano .env
+
+# 4. Start development environment using the management script
+./docker-manage.sh dev up
+
+# 5. Access the application
+#   Frontend: http://localhost:3000
+#   Backend API: http://localhost:8000
+#   Health check: curl http://localhost:8000/health
+```
+
+### Using Docker Compose Directly
+
 ```bash
 # 1. Navigate to project root
 cd duckpools-coinflip
@@ -78,6 +101,39 @@ API_KEY=hello
 See `.env.example` for all available configuration options.
 
 ## Common Commands
+
+### Using the Management Script
+
+```bash
+# Start development environment
+./docker-manage.sh dev up
+
+# Stop development environment
+./docker-manage.sh dev down
+
+# View all logs
+./docker-manage.sh dev logs
+
+# View specific service logs
+./docker-manage.sh dev logs backend
+
+# Rebuild development images
+./docker-manage.sh dev build
+
+# Start production environment
+./docker-manage.sh prod up
+
+# Stop production environment
+./docker-manage.sh prod down
+
+# Clean all Docker resources
+./docker-manage.sh clean all
+
+# Check status of all containers
+./docker-manage.sh status
+```
+
+### Using Docker Compose Directly
 
 ```bash
 # Start all services
@@ -154,6 +210,85 @@ docker compose config
 docker compose restart backend-api
 ```
 
+### Port conflicts
+
+**Symptom**: "Port is already allocated" error when starting services
+
+**Solution**: Check what's using the ports:
+
+```bash
+# Check what's using port 3000
+lsof -i :3000
+
+# Check what's using port 8000
+lsof -i :8000
+
+# Kill the process if needed
+kill -9 <PID>
+```
+
+### Memory issues
+
+**Symptom**: Containers crash with "out of memory" errors
+
+**Solution**: Increase Docker memory allocation:
+
+1. Open Docker Desktop settings
+2. Go to "Resources" > "Advanced"
+3. Increase memory allocation (at least 4GB recommended)
+4. Click "Apply & Restart"
+
+### Network connectivity issues
+
+**Symptom**: Services cannot communicate with each other
+
+**Solution**: Check network configuration:
+
+```bash
+# List networks
+docker network ls
+
+# Inspect duckpools network
+docker network inspect duckpools-coinflip_duckpools-network
+
+# Test connectivity between containers
+docker exec -it duckpools-backend-dev ping duckpools-frontend-dev
+```
+
+### Build errors
+
+**Symptom**: Docker build fails with various errors
+
+**Solution**: Try these steps:
+
+```bash
+# Clean build cache
+docker builder prune
+
+# Remove all unused images
+docker image prune
+
+# Try building again
+docker compose build
+```
+
+### Performance issues in production
+
+**Symptom**: Slow response times in production
+
+**Solution**: Check resource usage and optimize:
+
+```bash
+# Monitor container resource usage
+docker stats
+
+# Check container logs for errors
+docker-compose -f docker-compose.prod.yml logs
+
+# Consider increasing resources or scaling services
+docker-compose -f docker-compose.prod.yml up -d --scale backend=3
+```
+
 ## Development Workflow
 
 1. Make code changes in `backend/`, `frontend/`, or `off-chain-bot/`
@@ -163,17 +298,84 @@ docker compose restart backend-api
 
 ## Production Deployment
 
-The Dockerfiles include a `production` target for optimized builds:
+### Using the Management Script (Recommended)
 
 ```bash
-# Build production images
-docker compose build --target production
+# 1. Create production environment file
+cp .env.example .env.prod
 
-# Start production services
-docker compose up -d
+# 2. Edit .env.prod with production settings
+nano .env.prod
+
+# 3. Build and start production environment
+./docker-manage.sh prod up
+
+# 4. View production logs
+./docker-manage.sh prod logs
 ```
 
+### Using Docker Compose Directly
+
+The project includes a separate `docker-compose.prod.yml` file for production deployment:
+
+```bash
+# 1. Create production environment file
+cp .env.example .env.prod
+
+# 2. Edit .env.prod with production settings
+nano .env.prod
+
+# 3. Build production images
+docker-compose -f docker-compose.prod.yml build
+
+# 4. Start production services
+docker-compose -f docker-compose.prod.yml --env-file .env.prod up -d
+
+# 5. View production logs
+docker-compose -f docker-compose.prod.yml logs -f
+```
+
+### Production Environment Differences
+
 Production mode:
-- Runs with multiple workers (backend)
-- Uses optimized static files (frontend)
-- Runs as non-root user (security)
+- **Backend**: Runs with multiple workers, INFO log level, no hot-reload
+- **Frontend**: Served by nginx with optimized static files, no hot-reload
+- **Off-chain Bot**: Runs with INFO log level, no hot-reload
+- **Security**: All services run as non-root users
+- **Performance**: Optimized builds with smaller image sizes
+- **Reliability**: Automatic restart on failure, longer health check intervals
+
+### Production Requirements
+
+1. **Domain Name**: You'll need a domain name for your production deployment
+2. **SSL Certificate**: Recommended for HTTPS (can be obtained via Let's Encrypt)
+3. **Reverse Proxy**: Consider using nginx or Apache as a reverse proxy
+4. **Database**: Production database (PostgreSQL recommended)
+5. **Ergo Node**: Production Ergo node (not testnet)
+
+### Environment Variables for Production
+
+```bash
+# Required production variables in .env.prod
+NODE_ENV=production
+LOG_LEVEL=INFO
+FRONTEND_URL=https://your-domain.com
+VITE_API_ENDPOINT=https://your-domain.com/api
+VITE_ERGO_NODE_URL=https://your-ergo-node.com
+ERGO_API_KEY=your-production-api-key
+HOUSE_ADDRESS=your-production-house-address
+WALLET_PASS=your-production-wallet-password
+COINFLIP_NFT_ID=your-production-nft-id
+```
+
+### Scaling Services
+
+To scale services for production:
+
+```bash
+# Scale backend to 3 instances
+docker-compose -f docker-compose.prod.yml up -d --scale backend=3
+
+# Scale backend with restart
+docker-compose -f docker-compose.prod.yml up -d --force-recreate --scale backend=3
+```

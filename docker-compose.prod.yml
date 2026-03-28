@@ -1,0 +1,109 @@
+# =============================================================================
+# DuckPools Coinflip - Production Docker Compose
+# =============================================================================
+#
+# This file defines the production deployment stack:
+# - Backend API (FastAPI) with multiple workers
+# - Frontend (React) served with nginx
+# - Off-chain Bot for bet resolution
+# - External Ergo node (not included in this compose)
+#
+# Usage:
+#   docker-compose -f docker-compose.prod.yml up -d
+#   docker-compose -f docker-compose.prod.yml down
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # Backend API Service (FastAPI)
+  backend:
+    build:
+      context: ./backend
+      target: production  # Use production target
+    container_name: duckpools-backend-prod
+    restart: unless-stopped
+    ports:
+      - "8000:8000"  # API port
+    environment:
+      # Backend configuration
+      - NODE_ENV=production
+      - LOG_LEVEL=INFO
+      # Ergo node configuration (external)
+      - ERGO_NODE_URL=http://host.docker.internal:9052
+      - ERGO_API_KEY=${ERGO_API_KEY}
+      # Frontend URL for CORS
+      - FRONTEND_URL=https://your-domain.com
+    volumes:
+      # Mount logs directory (only)
+      - ./logs/backend:/app/logs
+    networks:
+      - duckpools-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 60s
+      timeout: 10s
+      start_period: 60s
+      retries: 5
+    depends_on: []  # No internal dependencies, ergo node is external
+
+  # Frontend Service (React + Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      target: production  # Use production target
+    container_name: duckpools-frontend-prod
+    restart: unless-stopped
+    ports:
+      - "80:80"  # HTTP
+      - "443:443"  # HTTPS (when using SSL)
+    environment:
+      # Frontend configuration
+      - VITE_API_ENDPOINT=https://your-domain.com/api
+      - VITE_ERGO_NODE_URL=https://your-ergo-node.com
+    volumes:
+      # Mount SSL certificates (if using)
+      - ./ssl:/etc/nginx/ssl:ro
+    networks:
+      - duckpools-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 60s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    depends_on:
+      - backend  # Start backend first
+
+  # Off-chain Bot Service
+  off-chain-bot:
+    build:
+      context: ./off-chain-bot
+      target: production  # Use production target
+    container_name: duckpools-offchain-bot-prod
+    restart: unless-stopped
+    environment:
+      # Bot configuration
+      - NODE_ENV=production
+      - LOG_LEVEL=INFO
+      # Ergo node configuration (external)
+      - ERGO_NODE_URL=http://host.docker.internal:9052
+      - ERGO_API_KEY=${ERGO_API_KEY}
+    volumes:
+      # Mount logs directory (only)
+      - ./logs/bot:/app/logs
+    networks:
+      - duckpools-network
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "main.py"]
+      interval: 60s
+      timeout: 10s
+      start_period: 60s
+      retries: 5
+    depends_on:
+      - backend  # Start backend first
+
+# Network configuration
+networks:
+  duckpools-network:
+    driver: bridge
