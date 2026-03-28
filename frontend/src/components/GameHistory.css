@@ -46,6 +46,40 @@
   to { transform: rotate(360deg); }
 }
 
+/* ── Filter Tabs ───────────────────────────────────── */
+
+.gh-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.gh-filter-btn {
+  background: transparent;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  border-radius: 20px;
+  padding: 6px 16px;
+  color: var(--text-secondary, #8892b0);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: var(--font-body, 'Inter', system-ui, sans-serif);
+}
+
+.gh-filter-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary, #f0f0f0);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.gh-filter-btn--active {
+  background: rgba(240, 180, 41, 0.15);
+  border-color: var(--accent-gold, #f0b429);
+  color: var(--accent-gold, #f0b429);
+  font-weight: 600;
+}
+
 /* ── Table ──────────────────────────────────────── */
 
 .gh-table-wrap {
@@ -204,4 +238,7 @@
 @media (max-width: 640px) {
   .gh-container { padding: 16px; }
   .gh-table th, .gh-table td { padding: 8px 8px; font-size: 0.78rem; }
+  .gh-filters {
+    flex-wrap: wrap;
+  }
 }
