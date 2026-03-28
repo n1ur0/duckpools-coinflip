@@ -86,7 +86,7 @@ export class BetManager {
       amount: options.amount,
       commitment,
       choice: options.choice,
-      secret,
+      parseInt(secret, 16),
       betId,
       timeoutHeight,
       inputBoxId: '', // Will be filled by wallet

@@ -38,7 +38,7 @@ class TestDataGeneration(unittest.TestCase):
             self.assertGreaterEqual(amount, 0.1)
             self.assertLessEqual(amount, 5.0)
     
-def test_generate_secret(self):
+    def test_generate_secret(self):
         """Test secret generation."""
         secret = generate_secret()
         self.assertIsInstance(secret, str)
@@ -50,7 +50,7 @@ def test_generate_secret(self):
         except ValueError:
             self.fail("Secret is not valid hex")
     
-def test_generate_commitment(self):
+    def test_generate_commitment(self):
         """Test commitment generation."""
         secret = generate_secret()
         commitment = generate_commitment(secret)
@@ -65,7 +65,7 @@ def test_generate_commitment(self):
         except ValueError:
             self.fail("Commitment is not valid hex")
         
-# Verify it's correct SHA256 hash of secret
+        # Verify it's correct SHA256 hash of secret
         secret_bytes = bytes.fromhex(secret)
         expected = hashlib.sha256(secret_bytes).hexdigest()
         self.assertEqual(commitment, expected)
