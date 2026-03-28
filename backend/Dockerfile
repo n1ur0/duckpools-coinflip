@@ -3,8 +3,8 @@
 # =============================================================================
 #
 # Multi-stage build for FastAPI backend
-# - development: Hot-reload enabled, runs uvicorn with --reload
-# - production: Optimized image, non-root user, health check
+# - development: Hot-reload enabled, installs dev dependencies
+# - production: Optimized image, minimal dependencies, runs as non-root
 #
 # Usage:
 #   docker build -t duckpools-backend --target development .
@@ -22,7 +22,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install system dependencies (curl for health check)
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
@@ -35,12 +35,11 @@ WORKDIR /app
 # =============================================================================
 FROM base as development
 
-# Copy requirements first for better layer caching
-COPY requirements.txt .
-
 # Install Python dependencies
+COPY requirements.txt .
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+    pip install -r requirements.txt && \
+    pip install pytest pytest-asyncio httpx  # For testing
 
 # Copy application code
 COPY . .
@@ -55,7 +54,7 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Run with hot-reload for development
+# Run with hot-reload
 CMD ["uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
 # =============================================================================
@@ -66,10 +65,8 @@ FROM base as production
 # Create non-root user for security
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-# Copy requirements first for better layer caching
+# Install only runtime dependencies
 COPY requirements.txt .
-
-# Install Python dependencies
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
@@ -89,5 +86,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Run without hot-reload for production
-CMD ["uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run with production settings (multiple workers)
+CMD ["uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
