@@ -128,14 +128,25 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS
+# CORS — SEC-A4: Explicit allowlist for methods and headers.
+# Wildcard ("*") with credentials=true is a misconfiguration per OWASP.
+# Browsers silently ignore the response when allow_origins=["*"] + credentials=true,
+# but explicit allow_methods/headers prevents injection of unsafe methods/headers.
+CORS_ALLOW_METHODS = os.getenv(
+    "CORS_ALLOW_METHODS",
+    "GET,POST,OPTIONS",
+)
+CORS_ALLOW_HEADERS = os.getenv(
+    "CORS_ALLOW_HEADERS",
+    "Content-Type,Authorization,X-Api-Key,Accept,Origin",
+)
 cors_origins = [o.strip() for o in CORS_ORIGINS_STR.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=[m.strip() for m in CORS_ALLOW_METHODS.split(",") if m.strip()],
+    allow_headers=[h.strip() for h in CORS_ALLOW_HEADERS.split(",") if h.strip()],
 )
 
 # Security headers — registered after CORS so headers are always applied
