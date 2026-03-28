@@ -10,7 +10,7 @@ MAT-309: Rebuild backend API to match frontend contract.
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
 from validators import validate_ergo_address, ValidationError as ErgoValidationError
@@ -93,8 +93,16 @@ class PlaceBetRequest(BaseModel):
             raise ValueError("amount must be positive (nanoERG)")
         if amount < 1_000_000:
             raise ValueError("minimum bet is 0.001 ERG (1,000,000 nanoERG)")
-        if amount > 100_000_000_000:
-            raise ValueError("maximum bet is 100 ERG (100,000,000,000 nanoERG)")
+        # MAT-194: Dynamic max bet based on pool liquidity
+        pool_safe_max = get_pool_safe_max_bet()
+        if amount > pool_safe_max:
+            pool_liquidity_erg = int(_pool_stats["liquidity"]) // 1_000_000_000
+            max_bet_erg = pool_safe_max // 1_000_000_000
+            raise ValueError(
+                f"maximum bet is {max_bet_erg} ERG ({pool_safe_max} nanoERG). "
+                f"Pool liquidity: {pool_liquidity_erg} ERG. "
+                f"Single bet limited to 10% of pool for safety."
+            )
         return v
 
     @field_validator("choice")
@@ -181,6 +189,22 @@ class CompPointsResponse(BaseModel):
 
 # ─── In-memory game store (PoC — no database) ──────────────────────
 
+
+# MAT-194: Pool state endpoint
+class PoolStateResponse(BaseModel):
+    """Pool state for liquidity monitoring and dynamic bet caps."""
+    liquidity: str  # Total pool liquidity in nanoERG
+    liquidityErg: str  # Pool liquidity in ERG (readable)
+    maxBet: str  # Current maximum allowed bet in nanoERG
+    maxBetErg: str  # Current maximum allowed bet in ERG (readable)
+    safetyFactor: float  # Percentage of pool that can be bet at once
+    totalBets: int
+    playerWins: int
+    houseWins: int
+    totalFees: str
+
+
+
 _bets: List[dict] = []
 _pool_stats = {
     "liquidity": "50000000000000",  # 50,000 ERG in nanoERG
@@ -190,8 +214,52 @@ _pool_stats = {
     "totalFees": "0",
 }
 
+# ─── Pool State (MAT-194: Dynamic max bet cap) ─────────────────────
+# SAFETY_FACTOR: Max single bet = 10% of pool liquidity
+# This prevents a single bet from draining the pool
+SAFETY_FACTOR = 0.10  # 10% of pool liquidity
+MAX_BET_NANOERG = 100_000_000_000  # 100 ERG hard cap (absolute max)
+
+
+def get_pool_safe_max_bet() -> int:
+    """Calculate dynamic max bet based on current pool liquidity.
+    
+    Returns min(hard_cap, pool_liquidity * SAFETY_FACTOR)
+    Ensures no single bet can drain more than 10% of the pool.
+    """
+    pool_liquidity = int(_pool_stats["liquidity"])
+    dynamic_max = int(pool_liquidity * SAFETY_FACTOR)
+    return min(MAX_BET_NANOERG, dynamic_max)
+
+
+
 
 # ─── Routes ───────────────────────────────────────────────────────
+
+
+@router.get("/pool/state", response_model=PoolStateResponse)
+async def get_pool_state():
+    """Return current pool state including liquidity and dynamic max bet.
+    
+    MAT-194: Exposes pool liquidity and calculated max bet cap.
+    Frontend can use this to show appropriate bet limits.
+    """
+    liquidity_nano = int(_pool_stats["liquidity"])
+    max_bet_nano = get_pool_safe_max_bet()
+    
+    return PoolStateResponse(
+        liquidity=_pool_stats["liquidity"],
+        liquidityErg=str(liquidity_nano // 1_000_000_000),
+        maxBet=str(max_bet_nano),
+        maxBetErg=str(max_bet_nano // 1_000_000_000),
+        safetyFactor=SAFETY_FACTOR,
+        totalBets=_pool_stats["totalBets"],
+        playerWins=_pool_stats["playerWins"],
+        houseWins=_pool_stats["houseWins"],
+        totalFees=_pool_stats["totalFees"],
+    )
+
+
 
 @router.get("/leaderboard", response_model=LeaderboardResponse)
 async def get_leaderboard():
