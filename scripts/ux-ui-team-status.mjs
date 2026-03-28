@@ -57,7 +57,7 @@ async function main() {
   }
 
   for (const row of assignments) {
-    if (row.issue_number) {
+    if (row.title) {  // Check if issue exists, not just issue_number
       agentIssues[row.agent_id].issues.push({
         id: row.issue_id,
         number: row.issue_number,

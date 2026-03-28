@@ -90,6 +90,7 @@ export class BetManager {
       betId,
       timeoutHeight,
       inputBoxId: '', // Will be filled by wallet
+      inputBoxValue: 0n, // Will be filled by wallet
     });
 
     // Submit transaction
@@ -139,9 +140,11 @@ export class BetManager {
       throw new BetError('Secret does not match commitment');
     }
 
-    // Get current block hash for RNG
-    const currentHeight = await this.nodeClient.getCurrentHeight();
-    const blockHash = await this.getBlockHash(currentHeight);
+    // Get block hash for RNG — use bet confirmation height, not current height
+    // Using current height gives the bot a timing attack (SDK-SEC-2).
+    // The PendingBetBox creationHeight is deterministic and unchangeable.
+    const rngHeight = betBox.creationHeight;
+    const blockHash = await this.getBlockHash(rngHeight);
 
     // Compute outcome
     const outcome = await computeRng(blockHash, options.secret);
@@ -154,6 +157,7 @@ export class BetManager {
     // Build reveal transaction
     const tx = this.txBuilder.buildRevealTransaction({
       betBoxId: options.boxId,
+      betBoxValue: betBox.value,
       houseAddress: this.houseAddress,
       playerAddress: '', // Will be filled from R4 register
       betAmount,
@@ -177,6 +181,7 @@ export class BetManager {
       result,
       payout,
       blockHash,
+      rngHeight,
       rngHash,
     };
   }
@@ -219,6 +224,7 @@ export class BetManager {
     // Build refund transaction
     const tx = this.txBuilder.buildRefundTransaction({
       betBoxId: options.boxId,
+      betBoxValue: betBox.value,
       playerAddress: options.refundAddress,
       betAmount: betBox.value,
     });

@@ -39,9 +39,10 @@ logger = get_logger(__name__)
 
 # Load from environment variables
 NODE_URL = os.getenv("NODE_URL", "http://localhost:9052")
-NODE_API_KEY = os.getenv("NODE_API_KEY", "")
+NODE_API_KEY=os.getenv("NODE_API_KEY", "")
 HEARTBEAT_FILE = os.getenv("HEARTBEAT_FILE", "/tmp/off-chain-bot-heartbeat.txt")
 HEARTBEAT_INTERVAL_SECONDS = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "30"))
+HEALTH_SERVER_PORT = int(os.getenv("HEALTH_SERVER_PORT", "8001"))
 
 # ─── Retry Configuration ────────────────────────────────────────────────────
 
@@ -427,6 +428,7 @@ async def main():
         api_key=NODE_API_KEY,
         heartbeat_file=HEARTBEAT_FILE,
         heartbeat_interval_seconds=HEARTBEAT_INTERVAL_SECONDS,
+        health_server_port=HEALTH_SERVER_PORT,
     )
 
     try:

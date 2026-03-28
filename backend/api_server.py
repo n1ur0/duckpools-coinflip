@@ -263,6 +263,20 @@ async def health():
     except Exception as e:
         health_data["oracle_error"] = str(e)
 
+    # Check off-chain bot health (MAT-224)
+    bot_health_port = int(os.getenv("BOT_HEALTH_PORT", "8001"))
+    try:
+        async with httpx.AsyncClient(timeout=3) as client:
+            resp = await client.get(f"http://localhost:{bot_health_port}/health")
+            if resp.status_code == 200:
+                bot_health = resp.json()
+                health_data["bot"] = bot_health
+            else:
+                health_data["bot_error"] = f"HTTP {resp.status_code}"
+    except Exception as e:
+        # Bot health check is optional - don't fail overall health if bot is unreachable
+        health_data["bot_error"] = str(e)
+
     return health_data
 
 

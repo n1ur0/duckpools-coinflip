@@ -1,4 +1,5 @@
 import { Component, ErrorInfo, ReactNode, useState, useEffect } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { WalletProvider } from './contexts/WalletContext';
 import GameHistory from './components/GameHistory';
 import StatsDashboard from './components/StatsDashboard';
@@ -8,6 +9,9 @@ import BetForm from './components/BetForm';
 import PoolManager from './components/PoolManager';
 import TestWallet from './components/TestWallet';
 import WalletConnector from './components/WalletConnector';
+import GameNav from './components/GameNav';
+import DiceGame from './components/games/DiceGame';
+import { GameType } from './types/Game';
 import OnboardingWizard, {
   hasCompletedOnboarding,
   triggerOnboarding,
@@ -57,6 +61,7 @@ function App() {
   const network = import.meta.env.VITE_NETWORK || 'testnet';
   const explorerUrl = import.meta.env.VITE_EXPLORER_URL || 'https://testnet.ergoplatform.com';
   const [showDevPanel, setShowDevPanel] = useState(false);
+  const [activeGame, setActiveGame] = useState<GameType>('coinflip');
 
   // Onboarding state
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -93,6 +98,10 @@ function App() {
 
   const handleHelpClick = () => {
     triggerOnboarding();
+  };
+
+  const handleGameChange = (game: GameType) => {
+    setActiveGame(game);
   };
 
   return (
@@ -136,9 +145,38 @@ function App() {
           {/* Main */}
           <main id="main-content" className="app-main">
             <div className="main-content">
-              <div className={highlightBetForm ? 'bet-form-highlight' : ''}>
-                <BetForm />
+              {/* Game Navigation */}
+              <GameNav activeGame={activeGame} onGameChange={handleGameChange} />
+              
+              {/* Game Content with Animation */}
+              <div className="game-container">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={activeGame}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15, ease: "easeInOut" }}
+                    className="game-transition-wrapper"
+                  >
+                    {activeGame === 'coinflip' && (
+                      <div className={highlightBetForm ? 'bet-form-highlight' : ''}>
+                        <BetForm />
+                      </div>
+                    )}
+                    {activeGame === 'dice' && (
+                      <DiceGame />
+                    )}
+                    {activeGame === 'plinko' && (
+                      <div className="coming-soon-game">
+                        <h3>Plinko Game</h3>
+                        <p>Coming soon!</p>
+                      </div>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
               </div>
+              
               <PoolManager />
               <GameHistory />
               <StatsDashboard />
