@@ -28,10 +28,24 @@ from pool_manager import PoolConfig, PoolStateManager
 from lp_routes import router as lp_router
 from ws_manager import ConnectionManager
 from ws_routes import router as ws_router
-from oracle_service import OracleService, OracleConfig
-from oracle_routes import router as oracle_router
-from bankroll_routes import router as bankroll_router
 from game_routes import router as game_router
+
+# Optional routers that may fail if PostgreSQL / oracle deps are unavailable.
+# The coinflip PoC only needs game_routes; these are nice-to-have.
+_oracle_router = None
+_oracle_service_cls = None
+_oracle_config_cls = None
+try:
+    from oracle_service import OracleService as _oracle_service_cls, OracleConfig as _oracle_config_cls
+    from oracle_routes import router as _oracle_router
+except Exception as exc:
+    print(f"WARN: oracle routes unavailable ({exc})", file=sys.stderr)
+
+_bankroll_router = None
+try:
+    from bankroll_routes import router as _bankroll_router
+except Exception as exc:
+    print(f"WARN: bankroll routes unavailable ({exc})", file=sys.stderr)
 
 
 # ─── Environment ────────────────────────────────────────────────────
@@ -54,13 +68,10 @@ ORACLE_BACKUP_URLS = [u.strip() for u in os.getenv("ORACLE_BACKUP_URLS", "").spl
 ORACLE_STALE_THRESHOLD_SECONDS = int(os.getenv("ORACLE_STALE_THRESHOLD_SECONDS", "300"))
 ORACLE_HEALTH_CHECK_INTERVAL_SECONDS = int(os.getenv("ORACLE_HEALTH_CHECK_INTERVAL_SECONDS", "30"))
 
-# ─── BE-8: Fail-fast on empty NODE_API_KEY ──────────────────────
-# The node API key is required for all blockchain operations.
-# Starting without it silently degrades every endpoint. Fail loudly.
+# ─── BE-8: NODE_API_KEY is required for on-chain operations.
+# For PoC with in-memory game_routes, warn but don't crash.
 if not NODE_API_KEY:
-    print("FATAL: NODE_API_KEY environment variable is not set.", file=sys.stderr)
-    print("Set NODE_API_KEY in .env or your environment before starting.", file=sys.stderr)
-    sys.exit(1)
+    print("WARN: NODE_API_KEY not set. On-chain endpoints will be degraded.", file=sys.stderr)
 
 
 # ─── Security Headers Middleware ────────────────────────────────
@@ -138,15 +149,18 @@ async def lifespan(app: FastAPI):
         config=config,
     )
 
-    # Oracle service
-    oracle_config = OracleConfig(
-        primary_oracle_url=ORACLE_PRIMARY_URL,
-        backup_oracle_urls=ORACLE_BACKUP_URLS,
-        stale_threshold_seconds=ORACLE_STALE_THRESHOLD_SECONDS,
-        health_check_interval_seconds=ORACLE_HEALTH_CHECK_INTERVAL_SECONDS,
-    )
-    app.state.oracle_service = OracleService(config=oracle_config)
-    await app.state.oracle_service.start()
+    # Oracle service (optional — may not be available in PoC)
+    if _oracle_service_cls and _oracle_config_cls:
+        oracle_config = _oracle_config_cls(
+            primary_oracle_url=ORACLE_PRIMARY_URL,
+            backup_oracle_urls=ORACLE_BACKUP_URLS,
+            stale_threshold_seconds=ORACLE_STALE_THRESHOLD_SECONDS,
+            health_check_interval_seconds=ORACLE_HEALTH_CHECK_INTERVAL_SECONDS,
+        )
+        app.state.oracle_service = _oracle_service_cls(config=oracle_config)
+        await app.state.oracle_service.start()
+    else:
+        app.state.oracle_service = None
 
     yield
 
@@ -194,9 +208,11 @@ app.add_middleware(SecurityHeadersMiddleware)
 # Register routers
 app.include_router(lp_router, prefix="/api")
 app.include_router(ws_router)
-app.include_router(oracle_router)
-app.include_router(bankroll_router)
-app.include_router(game_router)
+app.include_router(game_router)  # MAT-309: Frontend-facing game endpoints (critical)
+if _oracle_router:
+    app.include_router(_oracle_router)
+if _bankroll_router:
+    app.include_router(_bankroll_router)
 
 
 # ─── Root Endpoints ─────────────────────────────────────────────────
