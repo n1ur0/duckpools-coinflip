@@ -36,7 +36,7 @@ BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 TEST_TIMEOUT = 15
 
 # Test credentials (development only!)
-DEV_API_KEY = os.getenv("API_KEY", "hello")
+DEV_API_KEY=os.getenv("API_KEY", "hello")
 TEST_ADDRESS = "3WyrB3D5AMpyEc88UJ7FpdsBMXAZKwzQzkKeDbAQVfXytDPgxF26"
 TEST_AMOUNT = 1_000_000_000  # 1 ERG in nanoERG
 
@@ -948,9 +948,9 @@ class TestCORS:
                 "Origin": "http://localhost:3000",
                 "Access-Control-Request-Method": "GET",
             }
-        )
+)
 
-        allow_credentials = response.headers.get("access-control-allow-credentials", "")
+        allow_credentials = response.headers.get("access-control-allow-credentials", "").lower()
         allow_origin = response.headers.get("access-control-allow-origin", "")
 
         # If credentials allowed, origin should not be *
