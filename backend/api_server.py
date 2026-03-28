@@ -1,72 +1,52 @@
 """
-DuckPools - Main API Server
+DuckPools CoinFlip - Main API Server
 
-FastAPI application serving both the coinflip game endpoints and the
-LP liquidity pool endpoints, plus real-time WebSocket bet updates.
+FastAPI application serving the coinflip game endpoints and
+real-time WebSocket bet updates.
 
-MAT-15: Tokenized bankroll and liquidity pool
-MAT-30: Real-time game history with WebSocket updates
+PoC scope: ONE game (coinflip). No LP, bankroll, oracle, or other games.
 """
 
+import logging
 import os
 import sys
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
 load_dotenv()
 
-# Add backend directory to Python path so pool_manager imports work
+# Add backend directory to Python path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from pool_manager import PoolConfig, PoolStateManager
-from lp_routes import router as lp_router
 from ws_manager import ConnectionManager
 from ws_routes import router as ws_router
 from game_routes import router as game_router
 
-# Optional routers that may fail if PostgreSQL / oracle deps are unavailable.
-# The coinflip PoC only needs game_routes; these are nice-to-have.
-_oracle_router = None
-_oracle_service_cls = None
-_oracle_config_cls = None
-try:
-    from oracle_service import OracleService as _oracle_service_cls, OracleConfig as _oracle_config_cls
-    from oracle_routes import router as _oracle_router
-except Exception as exc:
-    print(f"WARN: oracle routes unavailable ({exc})", file=sys.stderr)
+# ─── Logging Setup ──────────────────────────────────────────────────
 
-_bankroll_router = None
-try:
-    from bankroll_routes import router as _bankroll_router
-except Exception as exc:
-    print(f"WARN: bankroll routes unavailable ({exc})", file=sys.stderr)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-8s %(name)s  %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("duckpools")
 
 
 # ─── Environment ────────────────────────────────────────────────────
 
 NODE_URL = os.getenv("NODE_URL", "http://localhost:9052")
 NODE_API_KEY = os.getenv("NODE_API_KEY", "")
-BOT_API_KEY = os.getenv("BOT_API_KEY", "")
-POOL_NFT_ID = os.getenv("POOL_NFT_ID", "")
-LP_TOKEN_ID = os.getenv("LP_TOKEN_ID", "")
-HOUSE_ADDRESS = os.getenv("HOUSE_ADDRESS", "")
-BANKROLL_TREE_HEX = os.getenv("BANKROLL_TREE_HEX", "")
-WITHDRAW_REQUEST_TREE_HEX = os.getenv("WITHDRAW_REQUEST_TREE_HEX", "")
 HOUSE_EDGE_BPS = int(os.getenv("HOUSE_EDGE_BPS", "300"))
-COOLDOWN_BLOCKS = int(os.getenv("COOLDOWN_BLOCKS", "60"))
 CORS_ORIGINS_STR = os.getenv("CORS_ORIGINS_STR", "http://localhost:3000")
-
-# Oracle configuration
-ORACLE_PRIMARY_URL = os.getenv("ORACLE_PRIMARY_URL", "https://api.oraclepool.xyz")
-ORACLE_BACKUP_URLS = [u.strip() for u in os.getenv("ORACLE_BACKUP_URLS", "").split(",") if u.strip()]
-ORACLE_STALE_THRESHOLD_SECONDS = int(os.getenv("ORACLE_STALE_THRESHOLD_SECONDS", "300"))
-ORACLE_HEALTH_CHECK_INTERVAL_SECONDS = int(os.getenv("ORACLE_HEALTH_CHECK_INTERVAL_SECONDS", "30"))
 
 # ─── BE-8: NODE_API_KEY is required — fail-fast if missing.
 if not NODE_API_KEY:
@@ -75,15 +55,11 @@ if not NODE_API_KEY:
 
 
 # ─── Security Headers Middleware ────────────────────────────────
-# Audit finding SEC-2: SecurityHeadersMiddleware was defined but never
-# registered on the app. This middleware injects standard security
-# headers on every response to mitigate clickjacking, MIME-sniffing,
-# and information leakage.
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Inject standard security headers on all responses.
-    
-    MAT-218: Fixed security headers implementation to include:
+
+    Headers applied:
     - X-Content-Type-Options: nosniff
     - X-Frame-Options: DENY
     - X-XSS-Protection: 1; mode=block
@@ -95,7 +71,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        
+
         # Apply security headers
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
@@ -104,8 +80,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Permissions-Policy"] = (
             "camera=(), microphone=(), geolocation=(), payment=()"
         )
-        
+
         # Content Security Policy - prevent XSS and data injection
+        # NOTE: unsafe-inline/unsafe-eval needed for Vite dev server (HMR).
+        #       For production, use nonces instead.
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
@@ -117,74 +95,67 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "base-uri 'self'; "
             "object-src 'none'"
         )
-        
-        # Strict Transport Security - only in production with HTTPS
-        # For development, we'll add it but with max-age=0 to disable
+
+        # Strict Transport Security - max-age=0 for development
         response.headers["Strict-Transport-Security"] = "max-age=0; includeSubDomains"
-        
-        # Debug header to verify middleware is running
-        response.headers["X-Security-Middleware"] = "active"
-        
+
         return response
+
+
+# ─── Request/Response Logging Middleware (MAT-228) ──────────────
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    """Log all HTTP requests with method, path, status, and duration."""
+
+    # Paths to skip logging (health checks, etc.)
+    SKIP_PATHS = {"/health", "/"}
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        method = request.method
+
+        start = time.perf_counter()
+        try:
+            response = await call_next(request)
+            duration_ms = (time.perf_counter() - start) * 1000
+        except Exception as exc:
+            duration_ms = (time.perf_counter() - start) * 1000
+            logger.error(
+                "%s %s -> 500 (%.1fms) error=%s",
+                method, path, duration_ms, exc,
+            )
+            raise
+
+        if path not in self.SKIP_PATHS:
+            logger.info(
+                "%s %s -> %d (%.1fms)",
+                method, path, response.status_code, duration_ms,
+            )
+
+        return response
+
+
+# ─── Global Error Handlers (MAT-227) ──────────────────────────
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize pool manager, WebSocket manager, and oracle service on startup."""
-    # WebSocket connection manager
+    """Initialize WebSocket manager on startup."""
     app.state.ws_manager = ConnectionManager()
-
-    # Pool manager
-    config = PoolConfig(
-        pool_nft_id=POOL_NFT_ID or None,
-        lp_token_id=LP_TOKEN_ID or None,
-        bankroll_tree_hex=BANKROLL_TREE_HEX or None,
-        withdraw_request_tree_hex=WITHDRAW_REQUEST_TREE_HEX or None,
-        house_edge_bps=HOUSE_EDGE_BPS,
-        cooldown_blocks=COOLDOWN_BLOCKS,
-    )
-    app.state.pool_manager = PoolStateManager(
-        node_url=NODE_URL,
-        api_key=NODE_API_KEY,
-        config=config,
-    )
-
-    # Oracle service (optional — may not be available in PoC)
-    if _oracle_service_cls and _oracle_config_cls:
-        oracle_config = _oracle_config_cls(
-            primary_oracle_url=ORACLE_PRIMARY_URL,
-            backup_oracle_urls=ORACLE_BACKUP_URLS,
-            stale_threshold_seconds=ORACLE_STALE_THRESHOLD_SECONDS,
-            health_check_interval_seconds=ORACLE_HEALTH_CHECK_INTERVAL_SECONDS,
-        )
-        app.state.oracle_service = _oracle_service_cls(config=oracle_config)
-        await app.state.oracle_service.start()
-    else:
-        app.state.oracle_service = None
-
     yield
-
-    # Cleanup on shutdown
-    app.state.pool_manager = None
     app.state.ws_manager = None
-    if app.state.oracle_service:
-        await app.state.oracle_service.stop()
-        app.state.oracle_service = None
 
 
 # ─── App ────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="DuckPools API",
-    description="DuckPools Coinflip + LP Liquidity Pool API",
+    title="DuckPools CoinFlip API",
+    description="DuckPools CoinFlip PoC API",
     version="0.2.0",
     lifespan=lifespan,
 )
 
-# CORS — SEC-A4: Explicit allowlist for methods and headers.
-# Wildcard ("*") with credentials=true is a misconfiguration per OWASP.
-# Browsers silently ignore the response when allow_origins=["*"] + credentials=true,
-# but explicit allow_methods/headers prevents injection of unsafe methods/headers.
+# CORS — Explicit allowlist for methods and headers.
 CORS_ALLOW_METHODS = os.getenv(
     "CORS_ALLOW_METHODS",
     "GET,POST,OPTIONS",
@@ -197,7 +168,7 @@ cors_origins = [o.strip() for o in CORS_ORIGINS_STR.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_credentials=False,  # MAT-218: Changed from True to False to reduce CSRF risk
+    allow_credentials=True,
     allow_methods=[m.strip() for m in CORS_ALLOW_METHODS.split(",") if m.strip()],
     allow_headers=[h.strip() for h in CORS_ALLOW_HEADERS.split(",") if h.strip()],
 )
@@ -205,14 +176,45 @@ app.add_middleware(
 # Security headers — registered after CORS so headers are always applied
 app.add_middleware(SecurityHeadersMiddleware)
 
-# Register routers
-app.include_router(lp_router, prefix="/api")
+# Request/response logging (MAT-228)
+app.add_middleware(RequestLoggingMiddleware)
+
+# Register routers — coinflip only
 app.include_router(ws_router)
-app.include_router(game_router)  # MAT-309: Frontend-facing game endpoints (critical)
-if _oracle_router:
-    app.include_router(_oracle_router)
-if _bankroll_router:
-    app.include_router(_bankroll_router)
+app.include_router(game_router)
+
+
+# ─── Global Error Handlers (MAT-227) ─────────────────────────────
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """Return structured JSON for all HTTP exceptions (4xx, 5xx)."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": exc.status_code,
+                "message": exc.detail,
+                "path": str(request.url.path),
+            }
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Catch-all for unhandled errors — return 500 with structured JSON."""
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "code": 500,
+                "message": "Internal server error",
+                "path": str(request.url.path),
+            }
+        },
+    )
 
 
 # ─── Root Endpoints ─────────────────────────────────────────────────
@@ -235,10 +237,10 @@ async def root():
 
 @app.get("/health")
 async def health():
-    """Health check: verify node connectivity, pool state, and oracle status."""
+    """Health check: verify node connectivity."""
     import httpx
 
-    health_data = {"status": "ok", "node": NODE_URL, "pool_configured": bool(POOL_NFT_ID)}
+    health_data = {"status": "ok", "node": NODE_URL}
 
     # Check node connectivity
     try:
@@ -250,43 +252,6 @@ async def health():
     except Exception as e:
         health_data["status"] = "degraded"
         health_data["node_error"] = str(e)
-
-    # Check pool state if configured
-    if POOL_NFT_ID:
-        try:
-            mgr = app.state.pool_manager
-            if mgr:
-                state = await mgr.get_pool_state(force_refresh=True)
-                health_data["pool_bankroll"] = str(state.bankroll)
-                health_data["pool_supply"] = str(state.total_supply)
-        except Exception as e:
-            health_data["pool_error"] = str(e)
-
-    # Check oracle status if configured
-    try:
-        oracle_svc = getattr(app.state, "oracle_service", None)
-        if oracle_svc:
-            oracle_status = oracle_svc.get_service_status()
-            health_data["oracle_status"] = oracle_status["status"]
-            health_data["oracle_endpoint"] = oracle_status["current_endpoint"]
-            if oracle_status["status"] in ["stale", "degraded", "no_endpoints"]:
-                health_data["status"] = "degraded"
-    except Exception as e:
-        health_data["oracle_error"] = str(e)
-
-    # Check off-chain bot health (MAT-224)
-    bot_health_url = os.getenv("BOT_HEALTH_URL", f"http://localhost:{os.getenv('BOT_HEALTH_PORT', '8001')}/health")
-    try:
-        async with httpx.AsyncClient(timeout=3) as client:
-            resp = await client.get(bot_health_url)
-            if resp.status_code == 200:
-                bot_health = resp.json()
-                health_data["bot"] = bot_health
-            else:
-                health_data["bot_error"] = f"HTTP {resp.status_code}"
-    except Exception as e:
-        # Bot health check is optional - don't fail overall health if bot is unreachable
-        health_data["bot_error"] = str(e)
 
     return health_data
 
