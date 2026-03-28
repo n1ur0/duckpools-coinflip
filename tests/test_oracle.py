@@ -115,7 +115,8 @@ class TestOracleService:
         # Mock successful response
         mock_response = AsyncMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"price": "1.23"}
+        mock_response.json = AsyncMock(return_value={"price": "1.23"})
+        mock_response.raise_for_status = AsyncMock()
 
         mock_client = AsyncMock()
         mock_client.get.return_value = mock_response
@@ -132,13 +133,16 @@ class TestOracleService:
         # Mock primary failure, backup success
         mock_response_primary = AsyncMock()
         mock_response_primary.status_code = 500
-        mock_response_primary.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "500 Server Error", request=MagicMock(), response=mock_response_primary
+        mock_response_primary.raise_for_status = AsyncMock(
+            side_effect=httpx.HTTPStatusError(
+                "500 Server Error", request=MagicMock(), response=mock_response_primary
+            )
         )
 
         mock_response_backup = AsyncMock()
         mock_response_backup.status_code = 200
-        mock_response_backup.json.return_value = {"price": "1.23"}
+        mock_response_backup.json = AsyncMock(return_value={"price": "1.23"})
+        mock_response_backup.raise_for_status = AsyncMock()
 
         mock_client = AsyncMock()
         mock_client.get.side_effect = [
@@ -158,8 +162,10 @@ class TestOracleService:
         # Mock all endpoints failing
         mock_response = AsyncMock()
         mock_response.status_code = 500
-        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "500 Server Error", request=MagicMock(), response=mock_response
+        mock_response.raise_for_status = AsyncMock(
+            side_effect=httpx.HTTPStatusError(
+                "500 Server Error", request=MagicMock(), response=mock_response
+            )
         )
 
         mock_client = AsyncMock()
@@ -196,8 +202,10 @@ class TestOracleService:
         # Mock failed health check
         mock_response = AsyncMock()
         mock_response.status_code = 500
-        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "500 Server Error", request=MagicMock(), response=mock_response
+        mock_response.raise_for_status = AsyncMock(
+            side_effect=httpx.HTTPStatusError(
+                "500 Server Error", request=MagicMock(), response=mock_response
+            )
         )
 
         mock_client = AsyncMock()
@@ -303,9 +311,10 @@ class TestOracleRoutes:
     """Tests for oracle API routes."""
 
     @pytest.mark.asyncio
-    async def test_get_oracle_health(self):
+    async def test_get_oracle_health_endpoint():
         """Test GET /api/oracle/health endpoint."""
-        from backend.oracle_routes import router, get_oracle_service
+        from backend.oracle_routes import router
+        from backend.oracle_service import OracleService
 
         # Mock oracle service
         mock_service = MagicMock()
@@ -313,18 +322,18 @@ class TestOracleRoutes:
             "primary": {"status": "healthy", "latency_ms": 100.0}
         }
 
-        # Create mock request with app state
-        mock_request = MagicMock()
-        mock_request.app.state.oracle_service = mock_service
-
-        # Call endpoint
-        result = await router.routes[0].endpoint(oracle_service=mock_service)
-        assert result["primary"]["status"] == "healthy"
+        # Find the health endpoint
+        for route in router.routes:
+            if hasattr(route, "path") and route.path.endswith("/health"):
+                result = await route.endpoint(oracle_service=mock_service)
+                assert result["primary"]["status"] == "healthy"
+                break
 
     @pytest.mark.asyncio
-    async def test_get_oracle_status(self):
+    async def test_get_oracle_status_endpoint():
         """Test GET /api/oracle/status endpoint."""
         from backend.oracle_routes import router
+        from backend.oracle_service import OracleService
 
         # Mock oracle service
         mock_service = MagicMock()

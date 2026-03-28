@@ -270,15 +270,33 @@ export class BetManager {
   }
 
   /**
-   * Get block hash at height
+   * Get block hash at height.
+   *
+   * SECURITY (SDK-SEC-1): Never falls back to a deterministic placeholder.
+   * If the block hash cannot be obtained, the reveal MUST fail.
+   * A silent fallback would allow an attacker who disrupts node
+   * connectivity to force a known RNG outcome via SHA256(known_hash || secret).
    */
   private async getBlockHash(height: number): Promise<string> {
-    try {
-      const blockInfo = await this.nodeClient.getBlockHeaderByHeight(height);
-      return blockInfo.headerId || blockInfo.id || 'unknown_block_hash';
-    } catch {
-      return 'placeholder_block_hash';
+    const blockInfo = await this.nodeClient.getBlockHeaderByHeight(height);
+    const hash = blockInfo.headerId || blockInfo.id;
+
+    if (!hash) {
+      throw new BetError(
+        `Cannot determine block hash for height ${height} — ` +
+        `node returned unexpected format. Aborting reveal to prevent RNG manipulation.`
+      );
     }
+
+    // Defense-in-depth: reject obviously fake hashes
+    if (hash === 'placeholder_block_hash' || hash === 'unknown_block_hash') {
+      throw new BetError(
+        `Suspicious block hash at height ${height}: "${hash}". ` +
+        `Aborting reveal to prevent RNG manipulation.`
+      );
+    }
+
+    return hash;
   }
 
   /**
