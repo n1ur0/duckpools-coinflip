@@ -3,7 +3,7 @@
  *
  * Dice uses the same commit-reveal architecture as coinflip but with:
  * - Player picks a roll target (2-98): "I bet the roll will be UNDER this number"
- * - RNG outcome = SHA256(blockHash || secret)[0] % 100 (0-99)
+ * - RNG outcome = blake2b256(blockHash || secret)[0] % 100 (0-99)
  * - Player wins if rngOutcome < rollTarget
  * - Variable house edge: riskier bets (lower rollTarget) get lower house edge
  * - Payout multiplier displayed live as the user adjusts the target
@@ -100,12 +100,12 @@ export async function generateDiceCommit(
   const targetByte = new Uint8Array(1);
   targetByte[0] = rollTarget & 0xff;
 
-  // Commitment = SHA256(secret || rollTarget_byte)
+  // Commitment = blake2b256(secret || rollTarget_byte)
   const commitInput = new Uint8Array(actualSecret.length + 1);
   commitInput.set(actualSecret, 0);
   commitInput.set(targetByte, actualSecret.length);
 
-  const commitHash = await sha256(commitInput);
+  const commitHash = blake2b256(commitInput);
   return {
     secret: actualSecret,
     commitment: bytesToHex(commitHash),
@@ -156,7 +156,7 @@ export async function computeDiceRng(
   rngInput.set(blockHashBuffer, 0);
   rngInput.set(secretBytes, blockHashBuffer.length);
 
-  const rngHash = await sha256(rngInput);
+  const rngHash = blake2b256(rngInput);
 
   // Rejection sampling: only accept bytes < 200 (2 * 100)
   // Each accepted byte maps uniformly to 0-99 via modulo 100
