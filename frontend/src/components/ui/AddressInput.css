@@ -1,0 +1,117 @@
+/* AddressInput - ui-address-input prefix */
+
+.ui-address-input-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* ── Copy Button ────────────────────────────────── */
+
+.ui-address-input__copy {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 6px;
+  color: var(--text-secondary, #8892b0);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.ui-address-input__copy:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--text-primary, #f0f0f0);
+  transform: translateY(-50%) scale(1.05);
+}
+
+.ui-address-input__copy:active {
+  transform: translateY(-50%) scale(0.95);
+}
+
+.ui-address-input__copy--copied {
+  background: rgba(0, 255, 136, 0.1);
+  border-color: rgba(0, 255, 136, 0.3);
+  color: var(--accent-green, #00ff88);
+}
+
+.ui-address-input__copy-icon {
+  display: block;
+  transition: transform 0.2s ease;
+}
+
+.ui-address-input__copy:hover .ui-address-input__copy-icon {
+  transform: scale(1.1);
+}
+
+/* Adjust input padding when copy button is present */
+.ui-address-input--with-copy {
+  padding-right: 44px !important;
+}
+
+/* ── Tooltip ─────────────────────────────────────── */
+
+.ui-address-input__tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-tooltip, rgba(15, 20, 35, 0.95));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  font-size: 0.75rem;
+  color: var(--text-secondary, #8892b0);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: all 0.2s ease;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.ui-address-input-group:hover .ui-address-input__tooltip,
+.ui-address-input-group:focus-within .ui-address-input__tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Accessibility ───────────────────────────────── */
+
+.ui-address-input-group:focus-within .ui-address-input__copy {
+  outline: 2px solid var(--accent-gold, #f0b429);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Responsive ─────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .ui-address-input__tooltip {
+    font-size: 0.7rem;
+    padding: 6px 8px;
+  }
+  
+  .ui-address-input__copy {
+    padding: 4px;
+  }
+  
+  .ui-address-input--with-copy {
+    padding-right: 36px !important;
+  }
+}
