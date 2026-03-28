@@ -1,0 +1,181 @@
+/* Button - ui-btn prefix */
+
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: none;
+  border-radius: 10px;
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+  white-space: nowrap;
+  user-select: none;
+  outline: none;
+  line-height: 1.2;
+}
+
+.ui-btn:focus-visible {
+  box-shadow: 0 0 0 2px var(--bg-primary, #080b14), 0 0 0 4px var(--accent-gold, #f0b429);
+}
+
+/* ── Sizes ─────────────────────────────────────── */
+
+.ui-btn--sm {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.78rem;
+  border-radius: 8px;
+  letter-spacing: 0.02em;
+}
+
+.ui-btn--md {
+  padding: 0.7rem 1.4rem;
+  font-size: 0.9rem;
+  letter-spacing: 0.03em;
+}
+
+.ui-btn--lg {
+  padding: 1rem 2rem;
+  font-size: 1.05rem;
+  border-radius: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* ── Variants ──────────────────────────────────── */
+
+/* Primary: gold gradient */
+.ui-btn--primary {
+  background: linear-gradient(135deg, var(--accent-gold, #f0b429), #e09800);
+  color: #080b14;
+  box-shadow: 0 4px 16px rgba(240, 180, 41, 0.25);
+}
+
+.ui-btn--primary:hover:not(:disabled) {
+  box-shadow: 0 6px 24px rgba(240, 180, 41, 0.4);
+  transform: translateY(-1px);
+}
+
+.ui-btn--primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(240, 180, 41, 0.2);
+}
+
+/* Secondary: glass */
+.ui-btn--secondary {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary, #f0f0f0);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+}
+
+.ui-btn--secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.ui-btn--secondary:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Ghost */
+.ui-btn--ghost {
+  background: transparent;
+  color: var(--text-secondary, #8892b0);
+}
+
+.ui-btn--ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary, #f0f0f0);
+}
+
+/* Danger */
+.ui-btn--danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--accent-red, #ef4444);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.ui-btn--danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+/* Success */
+.ui-btn--success {
+  background: rgba(0, 255, 136, 0.1);
+  color: var(--accent-green, #00ff88);
+  border: 1px solid rgba(0, 255, 136, 0.2);
+}
+
+.ui-btn--success:hover:not(:disabled) {
+  background: rgba(0, 255, 136, 0.18);
+  border-color: rgba(0, 255, 136, 0.35);
+}
+
+/* Gold (outline variant) */
+.ui-btn--gold {
+  background: rgba(240, 180, 41, 0.08);
+  color: var(--accent-gold, #f0b429);
+  border: 1px solid rgba(240, 180, 41, 0.25);
+}
+
+.ui-btn--gold:hover:not(:disabled) {
+  background: rgba(240, 180, 41, 0.15);
+  border-color: rgba(240, 180, 41, 0.45);
+  box-shadow: 0 0 16px rgba(240, 180, 41, 0.12);
+}
+
+/* ── States ────────────────────────────────────── */
+
+.ui-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.ui-btn--fullWidth {
+  width: 100%;
+}
+
+/* ── Loading ───────────────────────────────────── */
+
+.ui-btn--loading {
+  pointer-events: none;
+}
+
+.ui-btn__spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: ui-btn-spin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes ui-btn-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Icon ──────────────────────────────────────── */
+
+.ui-btn__icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: 1.1em;
+}
+
+.ui-btn__icon--start {
+  margin-right: -0.15em;
+}
+
+.ui-btn__icon--end {
+  margin-left: -0.15em;
+}

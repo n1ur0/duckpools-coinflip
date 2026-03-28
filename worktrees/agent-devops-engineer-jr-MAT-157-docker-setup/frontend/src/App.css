@@ -1,0 +1,579 @@
+/* ─── App Layout ─────────────────────────────────────────────────── */
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary, #080b14);
+  color: var(--text-primary, #e2e8f0);
+  font-family: var(--font-body, 'Inter', sans-serif);
+}
+
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.5rem 1rem;
+  background: var(--accent-gold, #f0b429);
+  color: #000;
+  border-radius: 0 0 8px 8px;
+  z-index: 1000;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* ─── Header ────────────────────────────────────────────────────── */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+  background: var(--bg-secondary, #0f1423);
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.header-logo {
+  font-size: 1.5rem;
+}
+
+.header-title {
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0;
+  background: linear-gradient(135deg, var(--accent-gold, #f0b429), #ffd700);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.network-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.network-testnet {
+  background: rgba(240, 180, 41, 0.15);
+  color: var(--accent-gold, #f0b429);
+  border: 1px solid rgba(240, 180, 41, 0.3);
+}
+
+.network-mainnet {
+  background: rgba(0, 255, 136, 0.15);
+  color: var(--color-win, #00ff88);
+  border: 1px solid rgba(0, 255, 136, 0.3);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.help-button {
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  background: transparent;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.help-button:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary, #e2e8f0);
+}
+
+.explorer-link {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #94a3b8);
+  text-decoration: none;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  transition: all 0.2s;
+}
+
+.explorer-link:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary, #e2e8f0);
+}
+
+/* ─── Main Content ──────────────────────────────────────────────── */
+
+.app-main {
+  flex: 1;
+  padding: 2rem;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  overflow-x: hidden; /* Prevent horizontal overflow */
+}
+
+.main-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  width: 100%;
+  overflow-x: hidden; /* Prevent horizontal overflow */
+}
+
+.bet-form-highlight {
+  animation: highlightPulse 0.6s ease-in-out 3;
+}
+
+@keyframes highlightPulse {
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: 0 0 20px rgba(240, 180, 41, 0.3); border-radius: 12px; }
+}
+
+/* ─── Dev Panel ─────────────────────────────────────────────────── */
+
+.dev-panel {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  width: 400px;
+  max-height: 60vh;
+  background: var(--bg-secondary, #0f1423);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 12px 0 0 0;
+  overflow-y: auto;
+  z-index: 200;
+  box-shadow: -4px -4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.dev-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary, #0f1423);
+}
+
+.dev-panel-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #94a3b8);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.25rem;
+}
+
+/* ─── Footer ────────────────────────────────────────────────────── */
+
+.app-footer {
+  padding: 1.5rem 2rem;
+  border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  background: var(--bg-secondary, #0f1423);
+}
+
+.footer-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.footer-disclaimer {
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.footer-links {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.footer-links a {
+  color: var(--text-secondary, #94a3b8);
+  text-decoration: none;
+  font-size: 0.8rem;
+  transition: color 0.2s;
+}
+
+.footer-links a:hover {
+  color: var(--accent-gold, #f0b429);
+}
+
+.footer-dev-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  color: var(--text-secondary, #94a3b8);
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.footer-dev-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary, #e2e8f0);
+}
+
+/* ─── Error Boundary ────────────────────────────────────────────── */
+
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--bg-primary, #080b14);
+}
+
+.error-boundary-card {
+  text-align: center;
+  padding: 3rem;
+  background: var(--bg-card, rgba(15, 20, 35, 0.8));
+  border: 1px solid var(--color-loss, #ef4444);
+  border-radius: 16px;
+  max-width: 400px;
+}
+
+.error-icon {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.error-boundary h2 {
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  margin: 0 0 0.75rem;
+}
+
+.error-boundary p {
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+  word-break: break-word;
+}
+
+.error-boundary button {
+  padding: 0.6rem 1.5rem;
+  background: var(--accent-gold, #f0b429);
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.error-boundary button:hover {
+  opacity: 0.85;
+}
+
+/* ─── Responsive ────────────────────────────────────────────────── */
+
+/* Extra large desktop (1920px+) */
+@media (min-width: 1920px) {
+  .app-main {
+    padding: 2.5rem;
+    max-width: 1400px;
+  }
+
+  .app-header {
+    padding: 1.25rem 2.5rem;
+  }
+
+  .app-footer {
+    padding: 2rem 2.5rem;
+  }
+}
+
+/* Large desktop (1440px - 1919px) */
+@media (min-width: 1440px) and (max-width: 1919px) {
+  .app-main {
+    padding: 2rem;
+    max-width: 1300px;
+  }
+}
+
+/* Desktop (1024px - 1439px) */
+@media (min-width: 1024px) and (max-width: 1439px) {
+  .app-main {
+    padding: 1.75rem;
+  }
+}
+
+/* Tablet (768px - 1023px) */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .app-header {
+    padding: 0.875rem 1.5rem;
+  }
+
+  .header-title {
+    font-size: 1.15rem;
+  }
+
+  .app-main {
+    padding: 1.5rem;
+  }
+
+  .main-content {
+    gap: 1.5rem;
+  }
+
+  .app-footer {
+    padding: 1.25rem 1.5rem;
+  }
+
+  .dev-panel {
+    width: 360px;
+  }
+}
+
+/* Mobile large (576px - 767px) */
+@media (min-width: 576px) and (max-width: 767px) {
+  .app-header {
+    padding: 0.75rem 1.25rem;
+  }
+
+  .header-left {
+    gap: 0.5rem;
+  }
+
+  .header-title {
+    font-size: 1.05rem;
+  }
+
+  .header-right {
+    gap: 0.5rem;
+  }
+
+  .app-main {
+    padding: 1.25rem;
+  }
+
+  .main-content {
+    gap: 1.25rem;
+  }
+
+  .app-footer {
+    padding: 1.25rem;
+  }
+
+  .footer-content {
+    gap: 0.75rem;
+  }
+
+  .footer-disclaimer {
+    font-size: 0.75rem;
+  }
+
+  .dev-panel {
+    width: 100%;
+    max-height: 45vh;
+    border-radius: 12px 12px 0 0;
+  }
+}
+
+/* Mobile medium (425px - 575px) */
+@media (min-width: 425px) and (max-width: 575px) {
+  .app-header {
+    padding: 0.625rem 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .header-left {
+    gap: 0.4rem;
+  }
+
+  .header-title {
+    font-size: 1rem;
+  }
+
+  .header-logo {
+    font-size: 1.25rem;
+  }
+
+  .header-right {
+    gap: 0.5rem;
+  }
+
+  .app-main {
+    padding: 1rem;
+  }
+
+  .main-content {
+    gap: 1rem;
+  }
+
+  .footer-content {
+    flex-direction: column;
+    text-align: center;
+    gap: 0.75rem;
+  }
+
+  .dev-panel {
+    width: 100%;
+    max-height: 40vh;
+    border-radius: 12px 12px 0 0;
+  }
+}
+
+/* Mobile small (375px - 424px) */
+@media (min-width: 375px) and (max-width: 424px) {
+  .app-header {
+    padding: 0.5rem 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+  }
+
+  .header-left {
+    gap: 0.375rem;
+  }
+
+  .header-title {
+    font-size: 0.95rem;
+  }
+
+  .header-logo {
+    font-size: 1.15rem;
+  }
+
+  .header-right {
+    gap: 0.375rem;
+  }
+
+  .help-button,
+  .explorer-link {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+  }
+
+  .app-main {
+    padding: 0.875rem;
+  }
+
+  .main-content {
+    gap: 0.875rem;
+  }
+
+  .app-footer {
+    padding: 1rem 0.75rem;
+  }
+
+  .footer-disclaimer {
+    font-size: 0.7rem;
+  }
+
+  .footer-links a {
+    font-size: 0.7rem;
+  }
+
+  .dev-panel {
+    width: 100%;
+    max-height: 35vh;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .dev-panel-header {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+  }
+}
+
+/* Mobile extra small (320px - 374px) */
+@media (max-width: 374px) {
+  .app-header {
+    padding: 0.5rem 0.5rem;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+
+  .header-left {
+    gap: 0.25rem;
+  }
+
+  .header-title {
+    font-size: 0.85rem;
+  }
+
+  .header-logo {
+    font-size: 1rem;
+  }
+
+  .network-badge {
+    font-size: 0.55rem;
+    padding: 0.1rem 0.375rem;
+  }
+
+  .header-right {
+    gap: 0.25rem;
+  }
+
+  .help-button,
+  .explorer-link {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.65rem;
+  }
+
+  .app-main {
+    padding: 0.75rem;
+  }
+
+  .main-content {
+    gap: 0.75rem;
+  }
+
+  .app-footer {
+    padding: 0.75rem 0.5rem;
+  }
+
+  .footer-disclaimer {
+    font-size: 0.65rem;
+  }
+
+  .footer-links a {
+    font-size: 0.65rem;
+  }
+
+  .footer-links {
+    gap: 0.5rem;
+  }
+
+  .dev-panel {
+    width: 100%;
+    max-height: 30vh;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .dev-panel-header {
+    padding: 0.5rem 0.5rem;
+    font-size: 0.8rem;
+  }
+}

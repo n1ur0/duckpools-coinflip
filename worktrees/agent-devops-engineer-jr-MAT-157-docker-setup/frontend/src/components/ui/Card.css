@@ -1,0 +1,87 @@
+/* Card - ui-card prefix */
+
+.ui-card {
+  background: var(--bg-card, rgba(255, 255, 255, 0.03));
+  border-radius: 16px;
+  transition: all 0.2s ease;
+}
+
+/* ── Variants ──────────────────────────────────── */
+
+/* Default */
+.ui-card--default {
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+}
+
+/* Glass (glassmorphism) */
+.ui-card--glass {
+  background: var(--bg-card, rgba(15, 20, 35, 0.8));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Elevated */
+.ui-card--elevated {
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+
+.ui-card--elevated.ui-card--hoverable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* Bordered */
+.ui-card--bordered {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* ── Padding ───────────────────────────────────── */
+
+.ui-card--pad-sm { padding: 12px; }
+.ui-card--pad-md { padding: 24px; }
+.ui-card--pad-lg { padding: 32px; }
+
+/* ── Hoverable ─────────────────────────────────── */
+
+.ui-card--hoverable {
+  cursor: pointer;
+}
+
+.ui-card--hoverable:hover {
+  background: var(--bg-card-hover, rgba(255, 255, 255, 0.06));
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* ── Clickable ─────────────────────────────────── */
+
+.ui-card--clickable {
+  cursor: pointer;
+}
+
+.ui-card--clickable:active {
+  transform: scale(0.995);
+}
+
+/* ── Header / Footer ───────────────────────────── */
+
+.ui-card__header {
+  padding: 20px 24px 0;
+}
+
+.ui-card__body {
+  padding: 16px 24px;
+}
+
+.ui-card__footer {
+  padding: 0 24px 20px;
+}
+
+/* When no explicit padding variant is set and header/body/footer are used */
+.ui-card--pad-md > .ui-card__header,
+.ui-card--pad-md > .ui-card__body,
+.ui-card--pad-md > .ui-card__footer {
+  padding-left: 0;
+  padding-right: 0;
+}

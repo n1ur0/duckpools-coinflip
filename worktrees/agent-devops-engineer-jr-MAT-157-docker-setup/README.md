@@ -22,10 +22,10 @@ A provably-fair gambling protocol on Ergo blockchain using a commit-reveal schem
 2. **Start the development stack**
    ```bash
    # Start both backend and frontend with hot-reload
-   docker-compose up
+   docker compose up
    
    # Or run in background
-   docker-compose up -d
+   docker compose up -d
    ```
 
 3. **Access the application**
@@ -35,7 +35,7 @@ A provably-fair gambling protocol on Ergo blockchain using a commit-reveal schem
 
 4. **Stop the services**
    ```bash
-   docker-compose down
+   docker compose down
    ```
 
 ### Manual Development (Without Docker)
@@ -90,26 +90,26 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 
 ```bash
 # Start development environment
-docker-compose up
+docker compose up
 
 # Start in background
-docker-compose up -d
+docker compose up -d
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 
 # View specific service logs
-docker-compose logs -f backend
-docker-compose logs -f frontend
+docker compose logs -f backend-api
+docker compose logs -f frontend
 
 # Stop services
-docker-compose down
+docker compose down
 
 # Rebuild and start
-docker-compose up --build
+docker compose up --build
 
 # Clean up volumes
-docker-compose down -v
+docker compose down -v
 ```
 
 ### Service Details
@@ -121,10 +121,10 @@ docker-compose down -v
 - **Hot-Reload**: Enabled (code changes trigger restart)
 - **Environment Variables**:
   - `NODE_ENV`: development
-  - `LOG_LEVEL`: DEBUG
+  - `LOG_LEVEL`: DEBUG (in development override)
   - `ERGO_NODE_URL`: External Ergo node URL
   - `ERGO_API_KEY`: Ergo node API key
-  - `FRONTEND_URL`: Frontend URL for CORS
+  - `CORS_ORIGINS`: Comma-separated list of allowed origins
 
 #### Frontend Service
 
@@ -169,10 +169,10 @@ To configure a different Ergo node:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `NODE_ENV` | development | Environment (development/production) |
-| `LOG_LEVEL` | DEBUG | Logging level |
+| `LOG_LEVEL` | DEBUG | Logging level (development override) |
 | `ERGO_NODE_URL` | http://host.docker.internal:9052 | Ergo node URL |
 | `ERGO_API_KEY` | blake2b256("hello") | Ergo node API key |
-| `FRONTEND_URL` | http://localhost:3000 | Frontend URL for CORS |
+| `CORS_ORIGINS` | http://localhost:3000 | Frontend URLs for CORS |
 
 #### Frontend
 
@@ -180,6 +180,16 @@ To configure a different Ergo node:
 |----------|---------|-------------|
 | `VITE_API_ENDPOINT` | http://localhost:8000 | Backend API URL |
 | `VITE_ERGO_NODE_URL` | http://localhost:9052 | Ergo node URL |
+| `VITE_DEBUG_MODE` | true | Debug mode (development override) |
+
+### Docker Compose Override
+
+The `docker-compose.override.yml` file provides development-specific overrides:
+
+- **Hot-reload**: Volume mounts for live code changes
+- **Debug ports**: Additional ports for debugging
+- **Resource limits**: Lower resource requirements for development
+- **Debug logging**: Enhanced logging in development
 
 ## 📚 Documentation
 

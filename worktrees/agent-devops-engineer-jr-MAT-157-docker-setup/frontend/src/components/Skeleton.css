@@ -1,0 +1,114 @@
+/* Skeleton loading placeholders - sk- prefix */
+
+.sk-line {
+  height: 12px;
+  border-radius: 4px;
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0.03) 25%,
+    rgba(255, 255, 255, 0.07) 50%,
+    rgba(255, 255, 255, 0.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: sk-shimmer 1.5s ease-in-out infinite;
+}
+
+.sk-line--sm { height: 10px; }
+.sk-line--md { height: 14px; }
+.sk-line--lg { height: 18px; }
+.sk-line--xl { height: 24px; }
+
+/* ── Card Skeleton ──────────────────────────────── */
+
+.sk-card {
+  background: var(--bg-card, rgba(15, 20, 35, 0.8));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 16px;
+  padding: 24px;
+  backdrop-filter: blur(12px);
+}
+
+.sk-card__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.sk-card__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0.03) 25%,
+    rgba(255, 255, 255, 0.07) 50%,
+    rgba(255, 255, 255, 0.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: sk-shimmer 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.sk-card__title {
+  flex: 1;
+}
+
+.sk-card__title .sk-line:first-child {
+  height: 16px;
+  width: 60%;
+  margin-bottom: 8px;
+}
+
+.sk-card__title .sk-line:last-child {
+  height: 10px;
+  width: 40%;
+}
+
+.sk-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sk-card__body .sk-line {
+  width: 100%;
+}
+
+.sk-card__body .sk-line:last-child {
+  width: 70%;
+}
+
+/* ── Table Skeleton ─────────────────────────────── */
+
+.sk-table {
+  background: var(--bg-card, rgba(15, 20, 35, 0.8));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 16px;
+  padding: 20px;
+  backdrop-filter: blur(12px);
+}
+
+.sk-table__header {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 12px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+}
+
+.sk-table__row {
+  display: grid;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.sk-table__row:last-child {
+  border-bottom: none;
+}
+
+/* ── Animation ──────────────────────────────────── */
+
+@keyframes sk-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

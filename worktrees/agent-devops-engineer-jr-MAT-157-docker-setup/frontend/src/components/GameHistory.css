@@ -1,0 +1,244 @@
+/* GameHistory - gh- prefix */
+
+.gh-container {
+  background: var(--bg-card, rgba(15, 20, 35, 0.8));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 16px;
+  padding: 24px;
+  backdrop-filter: blur(12px);
+}
+
+.gh-title {
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary, #f0f0f0);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.gh-refresh-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: var(--text-secondary, #8892b0);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gh-refresh-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary, #f0f0f0);
+}
+
+.gh-refresh-btn--spinning svg {
+  animation: gh-spin 0.8s linear infinite;
+}
+
+@keyframes gh-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Filter Tabs ───────────────────────────────────── */
+
+.gh-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.gh-filter-btn {
+  background: transparent;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  border-radius: 20px;
+  padding: 6px 16px;
+  color: var(--text-secondary, #8892b0);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: var(--font-body, 'Inter', system-ui, sans-serif);
+}
+
+.gh-filter-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary, #f0f0f0);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.gh-filter-btn--active {
+  background: rgba(240, 180, 41, 0.15);
+  border-color: var(--accent-gold, #f0b429);
+  color: var(--accent-gold, #f0b429);
+  font-weight: 600;
+}
+
+/* ── Table ──────────────────────────────────────── */
+
+.gh-table-wrap {
+  overflow-x: auto;
+}
+
+.gh-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.gh-table th {
+  text-align: left;
+  padding: 10px 12px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary, #8892b0);
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  white-space: nowrap;
+}
+
+.gh-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  white-space: nowrap;
+}
+
+.gh-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.gh-mono {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.8rem;
+}
+
+.gh-date {
+  color: var(--text-secondary, #8892b0);
+  font-size: 0.78rem;
+}
+
+.gh-choice-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.gh-choice-badge--heads {
+  background: rgba(240, 180, 41, 0.12);
+  color: var(--accent-gold, #f0b429);
+}
+
+.gh-choice-badge--tails {
+  background: rgba(99, 179, 237, 0.12);
+  color: #63b3ed;
+}
+
+/* ── Outcome colors ─────────────────────────────── */
+
+.gh-outcome {
+  font-weight: 600;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+}
+
+.gh-outcome--win { color: var(--accent-green, #00ff88); }
+.gh-outcome--loss { color: var(--accent-red, #ef4444); }
+.gh-outcome--pending {
+  color: #f0b429;
+  animation: gh-pulse 1.5s ease-in-out infinite;
+}
+.gh-outcome--refunded { color: var(--text-secondary, #8892b0); }
+
+@keyframes gh-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ── TX Link ────────────────────────────────────── */
+
+.gh-tx-link {
+  color: var(--text-secondary, #8892b0);
+  text-decoration: none;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.75rem;
+  transition: color 0.2s;
+}
+
+.gh-tx-link:hover {
+  color: var(--accent-gold, #f0b429);
+}
+
+/* ── Empty State ────────────────────────────────── */
+
+.gh-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-secondary, #8892b0);
+  font-size: 0.9rem;
+}
+
+/* ── Error ──────────────────────────────────────── */
+
+.gh-error {
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: var(--accent-red, #ef4444);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+/* ── Skeleton ───────────────────────────────────── */
+
+.gh-skeleton-row {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.gh-skeleton-cell {
+  height: 14px;
+  border-radius: 4px;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.04) 25%,
+    rgba(255,255,255,0.08) 50%,
+    rgba(255,255,255,0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: gh-shimmer 1.5s infinite;
+}
+
+@keyframes gh-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Connect Prompt ─────────────────────────────── */
+
+.gh-connect {
+  text-align: center;
+  padding: 24px;
+  color: var(--text-secondary, #8892b0);
+  font-size: 0.9rem;
+}
+
+/* ── Responsive ─────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .gh-container { padding: 16px; }
+  .gh-table th, .gh-table td { padding: 8px 8px; font-size: 0.78rem; }
+  .gh-filters {
+    flex-wrap: wrap;
+  }
+}

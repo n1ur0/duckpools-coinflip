@@ -1,0 +1,100 @@
+/* Toggle - ui-toggle prefix */
+
+.ui-toggle-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ui-toggle-group--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Track ─────────────────────────────────────── */
+
+.ui-toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.ui-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.ui-toggle__track {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.25s ease;
+  cursor: pointer;
+}
+
+/* ── Thumb ─────────────────────────────────────── */
+
+.ui-toggle__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  background: var(--text-secondary, #8892b0);
+  border-radius: 50%;
+  transition: all 0.25s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Checked State ─────────────────────────────── */
+
+.ui-toggle input:checked ~ .ui-toggle__track {
+  background: rgba(240, 180, 41, 0.25);
+  border-color: rgba(240, 180, 41, 0.4);
+}
+
+.ui-toggle input:checked ~ .ui-toggle__thumb {
+  transform: translateX(20px);
+  background: var(--accent-gold, #f0b429);
+  box-shadow: 0 0 8px rgba(240, 180, 41, 0.3);
+}
+
+/* ── Focus ─────────────────────────────────────── */
+
+.ui-toggle input:focus-visible ~ .ui-toggle__track {
+  box-shadow: 0 0 0 2px var(--bg-primary, #080b14), 0 0 0 4px var(--accent-gold, #f0b429);
+}
+
+/* ── Disabled ──────────────────────────────────── */
+
+.ui-toggle--disabled input ~ .ui-toggle__track {
+  opacity: 0.5;
+}
+
+.ui-toggle--disabled input ~ .ui-toggle__thumb {
+  opacity: 0.5;
+}
+
+/* ── Labels ────────────────────────────────────── */
+
+.ui-toggle__label {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #8892b0);
+  line-height: 1;
+}
+
+.ui-toggle__label--on {
+  color: var(--accent-gold, #f0b429);
+}
+
+.ui-toggle input:checked ~ .ui-toggle__label--off {
+  color: rgba(255, 255, 255, 0.25);
+}

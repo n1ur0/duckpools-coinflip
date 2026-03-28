@@ -1,0 +1,144 @@
+/* TestWallet - tw- prefix (dev utility) */
+
+.tw-container {
+  background: var(--bg-card, rgba(15, 20, 35, 0.8));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 16px;
+  padding: 24px;
+  backdrop-filter: blur(12px);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.82rem;
+}
+
+.tw-title {
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--accent-gold, #f0b429);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── State Grid ─────────────────────────────────── */
+
+.tw-state-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tw-state-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.06));
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.tw-state-key {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: var(--text-secondary, #8892b0);
+  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+}
+
+.tw-state-val {
+  color: var(--text-primary, #f0f0f0);
+  word-break: break-all;
+  font-size: 0.78rem;
+}
+
+.tw-state-val--true { color: var(--accent-green, #00ff88); }
+.tw-state-val--false { color: var(--accent-red, #ef4444); }
+
+/* ── Test Buttons ───────────────────────────────── */
+
+.tw-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tw-btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary, #f0f0f0);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tw-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--accent-gold, #f0b429);
+}
+
+.tw-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tw-btn--loading {
+  pointer-events: none;
+}
+
+/* ── Raw Response ───────────────────────────────── */
+
+.tw-response {
+  margin-top: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.06));
+  border-radius: 8px;
+  padding: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+  font-size: 0.72rem;
+  color: var(--text-secondary, #8892b0);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.tw-response-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: var(--accent-gold, #f0b429);
+  margin-bottom: 6px;
+  letter-spacing: 0.5px;
+}
+
+/* ── Spinner ────────────────────────────────────── */
+
+.tw-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: tw-spin 0.6s linear infinite;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+@keyframes tw-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Error ──────────────────────────────────────── */
+
+.tw-error {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: var(--accent-red, #ef4444);
+  font-size: 0.78rem;
+}
