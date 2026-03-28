@@ -1,6 +1,7 @@
 import { Component, ErrorInfo, ReactNode, useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { WalletProvider } from './contexts/WalletContext';
+import { useGameStore } from './stores';
 import GameHistory from './components/GameHistory';
 import StatsDashboard from './components/StatsDashboard';
 import Leaderboard from './components/Leaderboard';
@@ -11,7 +12,6 @@ import TestWallet from './components/TestWallet';
 import WalletConnector from './components/WalletConnector';
 import GameNav from './components/GameNav';
 import DiceGame from './components/games/DiceGame';
-import { GameType } from './types/Game';
 import OnboardingWizard, {
   hasCompletedOnboarding,
   triggerOnboarding,
@@ -61,7 +61,7 @@ function App() {
   const network = import.meta.env.VITE_NETWORK || 'testnet';
   const explorerUrl = import.meta.env.VITE_EXPLORER_URL || 'https://testnet.ergoplatform.com';
   const [showDevPanel, setShowDevPanel] = useState(false);
-  const [activeGame, setActiveGame] = useState<GameType>('coinflip');
+  const activeGame = useGameStore((s) => s.activeGame);
 
   // Onboarding state
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -98,10 +98,6 @@ function App() {
 
   const handleHelpClick = () => {
     triggerOnboarding();
-  };
-
-  const handleGameChange = (game: GameType) => {
-    setActiveGame(game);
   };
 
   return (
@@ -146,7 +142,7 @@ function App() {
           <main id="main-content" className="app-main">
             <div className="main-content">
               {/* Game Navigation */}
-              <GameNav activeGame={activeGame} onGameChange={handleGameChange} />
+              <GameNav />
               
               {/* Game Content with Animation */}
               <div className="game-container">

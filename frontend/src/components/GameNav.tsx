@@ -1,11 +1,6 @@
-import React from 'react';
 import { motion } from 'framer-motion';
-import { GameType } from '../types/Game';
-
-interface GameNavProps {
-  activeGame: GameType | null;
-  onGameChange: (game: GameType) => void;
-}
+import { useGameStore } from '../stores';
+import type { GameType } from '../types/Game';
 
 const games: { id: GameType; label: string; comingSoon?: boolean }[] = [
   { id: 'coinflip', label: 'Coin Flip' },
@@ -13,7 +8,10 @@ const games: { id: GameType; label: string; comingSoon?: boolean }[] = [
   { id: 'plinko', label: 'Plinko', comingSoon: true },
 ];
 
-export default function GameNav({ activeGame, onGameChange }: GameNavProps) {
+export default function GameNav() {
+  const activeGame = useGameStore((s) => s.activeGame);
+  const setActiveGame = useGameStore((s) => s.setActiveGame);
+
   return (
     <nav className="game-nav">
       <div className="game-nav-tabs">
@@ -33,7 +31,7 @@ export default function GameNav({ activeGame, onGameChange }: GameNavProps) {
             <button
               key={game.id}
               className={`game-nav-tab ${isActive ? 'game-nav-tab--active' : ''}`}
-              onClick={() => onGameChange(game.id)}
+              onClick={() => setActiveGame(game.id)}
               disabled={isActive}
             >
               <span className="game-nav-label">{game.label}</span>
