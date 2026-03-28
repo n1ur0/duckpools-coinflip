@@ -106,22 +106,22 @@
 
 /* Info - Blue theme */
 .toast--info {
-  background: rgba(99, 179, 237, 0.1);
-  border: 1px solid rgba(99, 179, 237, 0.3);
-  color: #63b3ed;
+  background: var(--accent-tails-subtle);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: var(--accent-blue);
 }
 
 .toast--info .toast__icon {
-  color: #63b3ed;
+  color: var(--accent-blue);
 }
 
 .toast--info .toast__close {
-  color: #63b3ed;
-  border-color: rgba(99, 179, 237, 0.3);
+  color: var(--accent-blue);
+  border-color: rgba(59, 130, 246, 0.3);
 }
 
 .toast--info .toast__close:hover {
-  background: rgba(99, 179, 237, 0.2);
+  background: rgba(59, 130, 246, 0.2);
 }
 
 /* ── Icon ─────────────────────────────────────────── */
