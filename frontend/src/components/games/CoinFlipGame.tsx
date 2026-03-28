@@ -55,6 +55,7 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFlipping, setIsFlipping] = useState(false);
   const [result, setResult] = useState<'heads' | 'tails' | null>(null);
+  const [winOutcome, setWinOutcome] = useState<'win' | 'loss' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingBet, setPendingBet] = useState<{
     txId: string;
@@ -168,8 +169,11 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
       }
 
       // 4. Trigger coin flip animation for chosen side
-      const flipResult: 'heads' | 'tails' = choice === 0 ? 'heads' : 'tails';
+      const flipResult: 'heads' | 'tails' = Math.random() < 0.5 ? 'heads' : 'tails';
+      const won = (choice === 0 && flipResult === 'heads') || (choice === 1 && flipResult === 'tails');
+      
       setResult(flipResult);
+      setWinOutcome(won ? 'win' : 'loss');
       setIsFlipping(true);
 
       // 5. Show pending state
@@ -225,9 +229,16 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
                 onFlipComplete={() => setIsFlipping(false)}
                 size={140}
               />
-              {result && (
-                <div className={`coinflip-result ${result}`}>
-                  {result === 'heads' ? 'HEADS' : 'TAILS'}
+              {!isFlipping && result && (
+                <div className="coinflip-result-section">
+                  <div className={`coinflip-result ${result}`}>
+                    {result === 'heads' ? 'HEADS' : 'TAILS'}
+                  </div>
+                  {winOutcome && (
+                    <div className={`coinflip-outcome ${winOutcome}`}>
+                      {winOutcome === 'win' ? 'YOU WIN!' : 'YOU LOSE'}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -343,6 +354,22 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
 
       {/* ── Error ────────────────────────────────────────────────── */}
       {error && <div className="coinflip-error">{error}</div>}
+
+      {/* ── Result Actions ─────────────────────────────────────────── */}
+      {!isFlipping && result && winOutcome && (
+        <div className="coinflip-result-actions">
+          <button
+            className="coinflip-flip-again-btn"
+            onClick={() => {
+              setResult(null);
+              setWinOutcome(null);
+              setError(null);
+            }}
+          >
+            Flip Again
+          </button>
+        </div>
+      )}
 
       {/* ── Pending Bet ──────────────────────────────────────────── */}
       {pendingBet && (
