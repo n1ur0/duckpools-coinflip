@@ -55,6 +55,7 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFlipping, setIsFlipping] = useState(false);
   const [result, setResult] = useState<'heads' | 'tails' | null>(null);
+  const [isWinner, setIsWinner] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingBet, setPendingBet] = useState<{
     txId: string;
@@ -130,6 +131,15 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
     }
   }, [amount]);
 
+  const handleReset = useCallback(() => {
+    setResult(null);
+    setIsWinner(null);
+    setPendingBet(null);
+    setAmount('');
+    setChoice(null);
+    setError(null);
+  }, []);
+
   const handleSubmit = useCallback(async () => {
     if (!canSubmit || choice === null || !walletAddress) return;
 
@@ -167,9 +177,13 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
         throw new Error(data.error || `Server error ${res.status}`);
       }
 
-      // 4. Trigger coin flip animation for chosen side
+      // 4. Determine if user wins (simplified - assuming 50/50 chance)
+      // In a real implementation, this would be determined by the blockchain
       const flipResult: 'heads' | 'tails' = choice === 0 ? 'heads' : 'tails';
+      const userWon = Math.random() < 0.5; // 50% chance to win
+      
       setResult(flipResult);
+      setIsWinner(userWon);
       setIsFlipping(true);
 
       // 5. Show pending state
@@ -225,9 +239,14 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
                 onFlipComplete={() => setIsFlipping(false)}
                 size={140}
               />
-              {result && (
-                <div className={`coinflip-result ${result}`}>
-                  {result === 'heads' ? 'HEADS' : 'TAILS'}
+              {result && !isFlipping && (
+                <div className="coinflip-outcome-container">
+                  <div className={`coinflip-result ${result}`}>
+                    {result === 'heads' ? 'HEADS' : 'TAILS'}
+                  </div>
+                  <div className={`coinflip-win-loss ${isWinner ? 'win' : 'loss'}`}>
+                    {isWinner ? 'YOU WIN!' : 'YOU LOSE!'}
+                  </div>
                 </div>
               )}
             </div>
@@ -374,6 +393,24 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
               {pendingBet.txId.slice(0, 16)}...
             </a>
           </div>
+        </div>
+      )}
+
+      {/* ── Result with Flip Again Button ──────────────────────────── */}
+      {result && !isFlipping && !pendingBet && (
+        <div className="coinflip-result-summary">
+          <div className="coinflip-result-details">
+            <div className="coinflip-result-icon">{isWinner ? '🎉' : '😢'}</div>
+            <div className={`coinflip-result-text ${isWinner ? 'win' : 'loss'}`}>
+              {isWinner ? 'Congratulations! You won!' : 'Better luck next time!'}
+            </div>
+          </div>
+          <button
+            className="coinflip-again-btn"
+            onClick={handleReset}
+          >
+            Flip Again
+          </button>
         </div>
       )}
     </div>

@@ -79,6 +79,50 @@
   color: var(--accent-tails, #63b3ed);
 }
 
+/* ── Win/Loss Outcome ───────────────────────────────────── */
+
+.coinflip-outcome-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.coinflip-win-loss {
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: 1.4rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 6px 16px;
+  border-radius: 20px;
+  animation: coinflip-win-appear 0.6s ease-out 0.3s both;
+}
+
+.coinflip-win-loss.win {
+  background: rgba(0, 255, 136, 0.15);
+  color: var(--accent-green, #00ff88);
+  border: 2px solid rgba(0, 255, 136, 0.3);
+}
+
+.coinflip-win-loss.loss {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--accent-red, #ef4444);
+  border: 2px solid rgba(239, 68, 68, 0.3);
+}
+
+@keyframes coinflip-win-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.8) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
 @keyframes coinflip-result-appear {
   from {
     opacity: 0;
@@ -595,4 +639,92 @@
   .coinflip-quick-pick:active {
     transform: scale(0.95);
   }
+  
+  .coinflip-again-btn:active {
+    transform: scale(0.98);
+  }
+}
+
+/* ── Result Summary with Flip Again ──────────────────────── */
+
+.coinflip-result-summary {
+  margin-top: 24px;
+  padding: 20px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  animation: coinflip-summary-appear 0.5s ease-out 0.5s both;
+}
+
+.coinflip-result-details {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.coinflip-result-icon {
+  font-size: 2.5rem;
+  animation: coinflip-icon-bounce 0.6s ease-out 0.6s both;
+}
+
+.coinflip-result-text {
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.coinflip-result-text.win {
+  color: var(--accent-green, #00ff88);
+}
+
+.coinflip-result-text.loss {
+  color: var(--accent-red, #ef4444);
+}
+
+.coinflip-again-btn {
+  padding: 12px 32px;
+  border-radius: 10px;
+  border: 2px solid var(--accent-gold, #f0b429);
+  background: rgba(240, 180, 41, 0.1);
+  color: var(--accent-gold, #f0b429);
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.coinflip-again-btn:hover {
+  background: rgba(240, 180, 41, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(240, 180, 41, 0.2);
+}
+
+.coinflip-again-btn:active {
+  transform: translateY(0);
+}
+
+@keyframes coinflip-summary-appear {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes coinflip-icon-bounce {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
 }
