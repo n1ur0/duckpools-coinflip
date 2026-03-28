@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from pool_manager import PoolConfig, PoolStateManager
 from lp_routes import router as lp_router
+from bankroll_routes import router as bankroll_router
 from ws_manager import ConnectionManager
 from ws_routes import router as ws_router
 from oracle_service import OracleService, OracleConfig
@@ -92,7 +93,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="DuckPools API",
-    description="DuckPools Coinflip + LP Liquidity Pool API",
+    description="DuckPools Coinflip + LP Liquidity Pool + Bankroll Management API",
     version="0.2.0",
     lifespan=lifespan,
 )
@@ -109,6 +110,7 @@ app.add_middleware(
 
 # Register routers
 app.include_router(lp_router, prefix="/api")
+app.include_router(bankroll_router)
 app.include_router(ws_router)
 app.include_router(oracle_router)
 
@@ -131,6 +133,10 @@ async def root():
             "request_withdraw": "POST /api/lp/request-withdraw",
             "execute_withdraw": "POST /api/lp/execute-withdraw",
             "cancel_withdraw": "POST /api/lp/cancel-withdraw",
+            "bankroll_status": "/api/bankroll/status",
+            "bankroll_deposit": "POST /api/bankroll/deposit",
+            "bankroll_withdraw": "POST /api/bankroll/withdraw",
+            "bankroll_estimate_withdraw": "/api/bankroll/estimate/withdraw",
             "oracle_health": "/api/oracle/health",
             "oracle_status": "/api/oracle/status",
             "oracle_endpoints": "/api/oracle/endpoints",
