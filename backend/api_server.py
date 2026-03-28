@@ -17,6 +17,10 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 # Add backend directory to Python path so pool_manager imports work
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -27,6 +31,7 @@ from ws_routes import router as ws_router
 from oracle_service import OracleService, OracleConfig
 from oracle_routes import router as oracle_router
 from bankroll_routes import router as bankroll_router
+from game_routes import router as game_router
 
 
 # ─── Environment ────────────────────────────────────────────────────
@@ -191,6 +196,7 @@ app.include_router(lp_router, prefix="/api")
 app.include_router(ws_router)
 app.include_router(oracle_router)
 app.include_router(bankroll_router)
+app.include_router(game_router)
 
 
 # ─── Root Endpoints ─────────────────────────────────────────────────
