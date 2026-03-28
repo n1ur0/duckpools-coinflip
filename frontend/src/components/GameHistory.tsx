@@ -3,7 +3,8 @@ import { RefreshCw } from 'lucide-react';
 import { useWallet } from '../contexts/WalletContext';
 import { buildApiUrl } from '../utils/network';
 import { formatErg } from '../utils/ergo';
-import type { BetRecord } from '../types/Game';
+import type { BetRecord, GameType } from '../types/Game';
+import { formatChoiceLabel } from '../types/Game';
 import './GameHistory.css';
 
 const REFRESH_INTERVAL = 30_000;
@@ -76,12 +77,16 @@ export default function GameHistory() {
   }, [isConnected, walletAddress, fetchHistory]);
 
   // Filter bets based on selected game type
-  // Note: For now, all bets are coinflip, so filter is visual only
-  const filteredBets = bets.filter(() => {
+  const filteredBets = bets.filter((bet) => {
     if (activeFilter === 'All') return true;
-    // Backend doesn't have gameType field yet, so all bets are coinflip
-    // When gameType is added, filter like: return bet.gameType === activeFilter;
-    return activeFilter === 'Coinflip';
+    const gameTypeMap: Record<GameTypeFilter, GameType | null> = {
+      All: null,
+      Coinflip: 'coinflip',
+      Dice: 'dice',
+      Plinko: 'plinko',
+    };
+    const target = gameTypeMap[activeFilter];
+    return target ? bet.gameType === target : true;
   });
 
   // ── Not connected ───────────────────────────────────────────────
@@ -157,12 +162,8 @@ export default function GameHistory() {
                 <tr key={bet.betId}>
                   <td className="gh-date">{formatDate(bet.timestamp)}</td>
                   <td>
-                    <span
-                      className={`gh-choice-badge gh-choice-badge--${
-                        bet.choice.value === 0 ? 'heads' : 'tails'
-                      }`}
-                    >
-                      {bet.choice.label}
+                    <span className={`gh-choice-badge gh-choice-badge--${bet.gameType}`}>
+                      {formatChoiceLabel(bet.choice)}
                     </span>
                   </td>
                   <td className="gh-mono">{formatErg(bet.betAmount)} ERG</td>
