@@ -127,6 +127,10 @@ async def ws_authenticate(request: Request, body: WSAuthRequest):
     Full Nautilus wallet signature verification will be added when the wallet
     integration layer is complete (depends on frontend wallet adapter).
 
+    ⚠️ SECURITY WARNING: This is a PoC implementation. Signatures are NOT
+    cryptographically verified. Anyone can obtain a token for any address.
+    See README.md for details.
+
     Returns a signed token valid for WS_TOKEN_MAX_AGE seconds.
     """
     address = body.address.strip()
@@ -150,9 +154,15 @@ async def ws_authenticate(request: Request, body: WSAuthRequest):
         "exp": expires_at,
     })
 
-    logger.info("WS auth token issued for %s (expires %d)", address[:10], expires_at)
+    logger.warning("⚠️ SECURITY WARNING: Issuing WS token for %s without signature verification (PoC limitation)", address[:10])
 
-    return WSAuthResponse(token=token, expires_at=expires_at)
+    response = WSAuthResponse(token=token, expires_at=expires_at)
+    
+    # Add security warning header
+    return {
+        **response.model_dump(),
+        "_security_warning": "CRITICAL: This is a PoC implementation. Signatures are NOT cryptographically verified. Anyone can obtain a token for any address. See README.md for details."
+    }
 
 
 # ─── WebSocket Endpoint ────────────────────────────────────────
@@ -363,10 +373,22 @@ class WSStatsResponse(BaseModel):
 async def ws_stats(request: Request):
     """Get WebSocket connection manager statistics. Requires admin API key."""
     import os
-    api_key = request.headers.get("X-Api-Key", "")
+    api_key = request.headers.get("x-api-key", "")
     expected = os.getenv("ADMIN_API_KEY", "")
-    if not expected or not api_key or not hmac.compare_digest(api_key, expected):
-        raise HTTPException(status_code=401, detail="Admin API key required")
+    
+    # If ADMIN_API_KEY is not configured, return 403 instead of 401
+    if not expected:
+        raise HTTPException(
+            status_code=403, 
+            detail="Admin API key not configured. Set ADMIN_API_KEY environment variable to access this endpoint."
+        )
+    
+    if not api_key or not hmac.compare_digest(api_key, expected):
+        raise HTTPException(
+            status_code=401, 
+            detail="Invalid or missing admin API key"
+        )
+    
     ws_manager: ConnectionManager = request.app.state.ws_manager
     stats = ws_manager.get_stats()
     return WSStatsResponse(**stats)
