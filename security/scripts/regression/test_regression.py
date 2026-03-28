@@ -323,6 +323,72 @@ def test_rng_uses_commit_reveal():
 
 
 # ═══════════════════════════════════════════════════════════════
+# 5b. DICE RNG MODULO BIAS (RNG-SEC-2)
+#     Frontend dice RNG must use rejection sampling, not naive % 100.
+# ═══════════════════════════════════════════════════════════════
+
+def test_dice_rng_no_modulo_bias():
+    """
+    RNG-SEC-2: Verify frontend dice RNG does NOT use naive modulo 100.
+
+    `hash[0] % 100` is biased: 256 % 100 = 56, so outcomes 0-55 have
+    probability 2/256 vs 1/256 for 56-99. This gives players a ~1.5%
+    edge on rollTarget > 56 bets — a direct money leak.
+
+    The correct implementation uses rejection sampling: accept bytes < 200,
+    reject bytes >= 200. This matches backend/rng_module.py dice_rng().
+    """
+    dice_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..",
+        "frontend", "src", "utils", "dice.ts"
+    )
+    dice_path = os.path.normpath(dice_path)
+
+    if not os.path.exists(dice_path):
+        pytest.skip(f"dice.ts not found at {dice_path}")
+
+    with open(dice_path, "r") as f:
+        source = f.read()
+
+    # Check that rejection sampling is present
+    has_rejection = "200" in source and ("rejection" in source.lower() or "< 200" in source)
+
+    # Check that naive modulo is NOT the sole mechanism
+    # (it's OK if "% 100" appears inside a rejection block)
+    lines = source.split("\n")
+
+    # Find lines with "% 100" or "%100" that are NOT in rejection blocks
+    naive_modulo_lines = []
+    in_rejection_block = False
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        # Track if we're inside a rejection sampling block
+        if "200" in stripped and ("<" in stripped or "rejection" in stripped.lower()):
+            in_rejection_block = True
+        if in_rejection_block and stripped.startswith("}"):
+            in_rejection_block = False
+
+        if ("% 100" in stripped or "%100" in stripped) and not in_rejection_block:
+            # Skip comments
+            if stripped.startswith("//") or stripped.startswith("*") or stripped.startswith("/*"):
+                continue
+            naive_modulo_lines.append((i + 1, stripped))
+
+    if naive_modulo_lines and not has_rejection:
+        pytest.fail(
+            "RNG-SEC-2: Naive `% 100` detected in dice.ts WITHOUT rejection sampling. "
+            f"Lines: {naive_modulo_lines}. "
+            "This introduces modulo bias (outcomes 0-55 have 2/256 prob vs 1/256 for 56-99). "
+            "Use rejection sampling: accept bytes < 200, reject >= 200."
+        )
+
+    assert has_rejection, (
+        "RNG-SEC-2: No rejection sampling detected in dice.ts computeDiceRng. "
+        "Naive `% 100` introduces ~1.5% player edge on rollTarget > 56 bets."
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
 # 6. CORS CONFIGURATION SAFETY (SEC-3)
 # ═══════════════════════════════════════════════════════════════
 

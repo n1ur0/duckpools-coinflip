@@ -39,7 +39,7 @@ logger = get_logger(__name__)
 
 # Load from environment variables
 NODE_URL = os.getenv("NODE_URL", "http://localhost:9052")
-API_KEY = os.getenv("API_KEY", "")
+NODE_API_KEY = os.getenv("NODE_API_KEY", "")
 HEARTBEAT_FILE = os.getenv("HEARTBEAT_FILE", "/tmp/off-chain-bot-heartbeat.txt")
 HEARTBEAT_INTERVAL_SECONDS = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "30"))
 
@@ -405,7 +405,7 @@ async def main():
     """Main entry point."""
     bot = OffChainBot(
         node_url=NODE_URL,
-        api_key=API_KEY,
+        api_key=NODE_API_KEY,
         heartbeat_file=HEARTBEAT_FILE,
         heartbeat_interval_seconds=HEARTBEAT_INTERVAL_SECONDS,
     )

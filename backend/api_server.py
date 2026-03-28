@@ -30,7 +30,8 @@ from oracle_routes import router as oracle_router
 # ─── Environment ────────────────────────────────────────────────────
 
 NODE_URL = os.getenv("NODE_URL", "http://localhost:9052")
-API_KEY = os.getenv("API_KEY", "hello")
+NODE_API_KEY = os.getenv("NODE_API_KEY", "")
+BOT_API_KEY = os.getenv("BOT_API_KEY", "")
 POOL_NFT_ID = os.getenv("POOL_NFT_ID", "")
 LP_TOKEN_ID = os.getenv("LP_TOKEN_ID", "")
 HOUSE_ADDRESS = os.getenv("HOUSE_ADDRESS", "")
@@ -64,7 +65,7 @@ async def lifespan(app: FastAPI):
     )
     app.state.pool_manager = PoolStateManager(
         node_url=NODE_URL,
-        api_key=API_KEY,
+        api_key=NODE_API_KEY,
         config=config,
     )
 
@@ -154,7 +155,7 @@ async def health():
     # Check node connectivity
     try:
         async with httpx.AsyncClient(timeout=5) as client:
-            resp = await client.get(f"{NODE_URL}/info", headers={"api_key": API_KEY})
+            resp = await client.get(f"{NODE_URL}/info", headers={"api_key": NODE_API_KEY})
             resp.raise_for_status()
             info = resp.json()
             health_data["node_height"] = info.get("fullHeight")

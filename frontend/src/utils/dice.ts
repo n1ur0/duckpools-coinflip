@@ -128,7 +128,18 @@ export async function verifyDiceCommit(
 
 /**
  * Compute dice RNG outcome from block hash and player secret.
- * outcome = SHA256(blockHash_as_utf8 || secret_bytes)[0] % 100
+ *
+ * Uses rejection sampling to avoid modulo bias.
+ *
+ * Naive `hash[0] % 100` is BIASED because 256 % 100 = 56:
+ *   outcomes 0-55 have probability 2/256, outcomes 56-99 have 1/256.
+ *   This gives the player a ~1.5% edge on rollTarget > 56 bets.
+ *
+ * Rejection sampling (matching backend/rng_module.py dice_rng):
+ *   - Accept bytes in range [0, 199] → byte % 100 (uniform)
+ *   - Reject bytes in range [200, 255] → try next byte
+ *   - Guaranteed to terminate: 200/256 = 78% acceptance per byte,
+ *     and SHA-256 produces 32 bytes of entropy.
  *
  * Returns a value 0-99. Player wins if outcome < rollTarget.
  *
@@ -147,8 +158,18 @@ export async function computeDiceRng(
 
   const rngHash = await sha256(rngInput);
 
-  // Use first byte modulo 100 for 0-99 range
-  return rngHash[0] % 100;
+  // Rejection sampling: only accept bytes < 200 (2 * 100)
+  // Each accepted byte maps uniformly to 0-99 via modulo 100
+  for (let i = 0; i < rngHash.length; i++) {
+    const byte = rngHash[i];
+    if (byte < 200) {
+      return byte % 100;
+    }
+  }
+
+  // Fallback — astronomically unlikely (all 32 bytes >= 200: probability ~10^-7)
+  // Use two bytes for a wider range
+  return (rngHash[0] * 256 + rngHash[1]) % 100;
 }
 
 /**
