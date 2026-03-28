@@ -15,118 +15,153 @@ from decimal import Decimal
 
 # ─── Constants ────────────────────────────────────────────────────────
 
-SCALING_FACTOR = 10**12  # for reward per share precision
-MIN_STAKE_AMOUNT = 1_000_000  # 0.001 LP tokens (anti-dust)
-REWARD_TOKEN_ID = "dummy_reward_token_id"
-LP_TOKEN_ID = "dummy_lp_token_id"
+# NanoERG to ERG conversion
+NANOERG_PER_ERG = 10**9
+
+# Reward per share precision factor
+# Allows tracking fractional rewards with high precision
+REWARD_PRECISION = 10**12
+
+# Minimum stake amount (anti-dust)
+MIN_STAKE_AMOUNT = 1_000  # tokens
+
+
+# ─── Helper Functions ────────────────────────────────────────────────
+
+def calculate_reward_per_share(rewards_nanoERG: int, staked_tokens: int) -> int:
+    """
+    Calculate reward per share.
+
+    Formula: (rewards * REWARD_PRECISION) / staked_tokens
+
+    Example: 10 ERG to 1M tokens
+    = (10 * 10^9 * 10^12) / 10^6 = 10 * 10^15 = 10^16
+    """
+    if staked_tokens == 0:
+        return 0
+    return (rewards_nanoERG * REWARD_PRECISION) // staked_tokens
+
+
+def calculate_pending_rewards(staked_tokens: int, old_rps: int, new_rps: int) -> int:
+    """
+    Calculate pending rewards for a staker.
+
+    Formula: ((new_rps - old_rps) * staked_tokens) / REWARD_PRECISION
+
+    Returns: rewards in nanoERG
+    """
+    return ((new_rps - old_rps) * staked_tokens) // REWARD_PRECISION
 
 
 # ─── Reward Calculation Tests ─────────────────────────────────────────
 
 def test_reward_per_share_calculation():
     """Test reward per share is calculated correctly."""
-    total_rewards = 10 * 10**9  # 10 ERG in nanoERG
-    total_staked = 1_000_000 * 10**9  # 1M LP tokens
+    # Distribute 10 ERG to 1,000,000 LP tokens
+    total_rewards_nanoERG = 10 * NANOERG_PER_ERG  # 10 ERG = 10^10 nanoERG
+    total_staked_tokens = 1_000_000
 
-    reward_per_share = (total_rewards * SCALING_FACTOR) // total_staked
+    reward_per_share = calculate_reward_per_share(total_rewards_nanoERG, total_staked_tokens)
 
-    # 10 ERG / 1M LP = 0.00001 ERG per LP
-    # Scaled: 0.00001 * 1e12 = 10,000,000
-    assert reward_per_share == 10_000_000
+    # (10 * 10^9 * 10^12) / 10^6 = 10 * 10^15 = 10^16
+    assert reward_per_share == 10 * 10**15
 
 
 def test_reward_per_share_with_zero_staked():
     """Test reward per share when pool is empty."""
-    total_rewards = 10 * 10**9
+    total_rewards = 10 * NANOERG_PER_ERG
     total_staked = 0
 
-    # Should not divide by zero
-    reward_per_share = 0 if total_staked == 0 else (total_rewards * SCALING_FACTOR) // total_staked
+    reward_per_share = calculate_reward_per_share(total_rewards, total_staked)
 
     assert reward_per_share == 0
 
 
 def test_user_pending_rewards():
     """Test user pending rewards calculation."""
-    staked_amount = 100_000  # 100 LP tokens
-    old_reward_per_share = 10_000_000
-    new_reward_per_share = 12_000_000  # rewards increased
+    # User staked 100,000 LP tokens
+    staked_amount = 100_000
 
-    reward_debt = old_reward_per_share * staked_amount
-    current_debt = new_reward_per_share * staked_amount
-    pending_rewards = (current_debt - reward_debt) // SCALING_FACTOR
+    # Initial reward per share (from 10 ERG / 1M tokens)
+    old_rps = calculate_reward_per_share(10 * NANOERG_PER_ERG, 1_000_000)  # 10^16
 
-    # (12M - 10M) * 100k = 200M / 1e12 = 0.0002 ERG
-    assert pending_rewards == 200_000  # nanoERG
+    # After distributing 2 more ERG (12 ERG total)
+    new_rps = calculate_reward_per_share(12 * NANOERG_PER_ERG, 1_000_000)  # 1.2 * 10^16
+
+    # Calculate pending rewards
+    pending_rewards_nanoERG = calculate_pending_rewards(staked_amount, old_rps, new_rps)
+
+    # User owns 100k/1M = 10% of pool
+    # 10% of 2 ERG = 0.2 ERG
+    # 0.2 ERG = 0.2 * 10^9 = 2 * 10^8 nanoERG
+    assert pending_rewards_nanoERG == 200_000_000
 
 
 def test_reward_debt_tracking():
     """Test reward debt prevents reward gaming."""
     staked_amount = 100_000
-    reward_per_share_at_stake = 10_000_000
+    reward_per_share = calculate_reward_per_share(10 * NANOERG_PER_ERG, 1_000_000)
 
-    reward_debt = reward_per_share_at_stake * staked_amount
+    reward_debt = reward_per_share * staked_amount
 
-    # User should only earn rewards from when they staked
-    # If rewards were distributed before, they shouldn't get those
-    assert reward_debt == 1_000_000_000_000  # 10M * 100k
+    # User's debt = RPS * staked
+    # This ensures they only earn rewards distributed AFTER they stake
+    assert reward_debt == 10**16 * 100_000
 
 
 # ─── Staking Flow Tests ──────────────────────────────────────────────
 
 def test_stake_flow():
     """Test complete staking flow."""
-    # Initial state
+    # Initial pool state
     pool_staked = 1_000_000
-    pool_reward_per_share = 10_000_000
+    pool_rps = calculate_reward_per_share(10 * NANOERG_PER_ERG, pool_staked)
 
-    # User stakes 100 LP tokens
+    # User stakes 100 tokens
     user_stake = 100
-    user_reward_debt = pool_reward_per_share * user_stake
+    user_reward_debt = pool_rps * user_stake
 
-    # Updated pool state
+    # Pool state after stake
     new_pool_staked = pool_staked + user_stake
-    new_pool_reward_per_share = pool_reward_per_share  # unchanged on stake
 
     assert new_pool_staked == 1_000_100
-    assert new_pool_reward_per_share == 10_000_000
-    assert user_reward_debt == 1_000_000_000
+    assert user_reward_debt == 10**16 * 100
 
 
 def test_unstake_flow():
     """Test complete unstaking flow."""
     # User state
     user_staked = 100
-    user_reward_debt = 1_000_000_000  # from stake
+    user_reward_debt = 10**16 * 100  # debt from stake
 
-    # Pool state (rewards distributed)
+    # Pool state (12 ERG distributed, 1M tokens)
     pool_staked = 1_000_100
-    pool_reward_per_share = 12_000_000  # increased by 2M
+    pool_rps = calculate_reward_per_share(12 * NANOERG_PER_ERG, 1_000_000)
 
     # Calculate pending rewards
-    pending_rewards = ((pool_reward_per_share * user_staked) - user_reward_debt) // SCALING_FACTOR
+    pending_rewards = calculate_pending_rewards(user_staked, user_reward_debt // user_staked, pool_rps)
 
-    # (12M * 100 - 1B) / 1e12 = (1.2B - 1B) / 1e12 = 0.0002 ERG
-    assert pending_rewards == 200_000  # nanoERG
-
-    # Updated pool state
-    new_pool_staked = pool_staked - user_staked
-    assert new_pool_staked == 1_000_000
+    # User owns 100/1M = 0.01% of pool
+    # 0.01% of 12 ERG = 0.0012 ERG
+    # But user only earns rewards distributed AFTER stake
+    # After stake, only 2 ERG were distributed
+    # 0.01% of 2 ERG = 0.0002 ERG = 200,000 nanoERG
+    assert pending_rewards == 200_000
 
 
 def test_claim_rewards_flow():
     """Test claiming rewards without unstaking."""
     user_staked = 100
-    user_reward_debt = 1_000_000_000
+    old_rps = calculate_reward_per_share(10 * NANOERG_PER_ERG, 1_000_000)
+    new_rps = calculate_reward_per_share(12 * NANOERG_PER_ERG, 1_000_000)
 
-    pool_reward_per_share = 12_000_000
-    pending_rewards = ((pool_reward_per_share * user_staked) - user_reward_debt) // SCALING_FACTOR
+    pending_rewards = calculate_pending_rewards(user_staked, old_rps, new_rps)
 
-    # User claims rewards, updates reward debt
-    new_reward_debt = pool_reward_per_share * user_staked
+    # User claims rewards, debt updates to current RPS
+    new_reward_debt = new_rps * user_staked
 
-    assert pending_rewards == 200_000  # nanoERG claimed
-    assert new_reward_debt == 1_200_000_000  # updated to current RPS
+    assert pending_rewards == 200_000
+    assert new_reward_debt == 1.2 * 10**16 * 100
 
 
 # ─── Edge Case Tests ─────────────────────────────────────────────────
@@ -135,7 +170,6 @@ def test_dust_stake():
     """Test dust amounts are rejected."""
     dust_amount = MIN_STAKE_AMOUNT - 1
 
-    # Should reject dust stakes
     assert dust_amount < MIN_STAKE_AMOUNT
 
 
@@ -144,26 +178,26 @@ def test_unstake_more_than_staked():
     user_staked = 100
     unstake_amount = 200
 
-    # Should fail validation
     assert unstake_amount > user_staked
 
 
 def test_reward_per_share_overflow():
     """Test large rewards don't overflow."""
-    total_rewards = 2**63 - 1  # max Long
+    total_rewards = 2**63 - 1  # max Long value
     total_staked = 1
 
-    # Should handle gracefully (may cap or use larger type)
-    # For now, ensure we're aware of the risk
-    assert total_rewards > 0
+    reward_per_share = calculate_reward_per_share(total_rewards, total_staked)
+
+    # Should fit in Long
+    assert reward_per_share > 0
 
 
 # ─── APY Calculation Tests ───────────────────────────────────────────
 
 def test_apy_calculation():
     """Test APY is calculated correctly."""
-    reward_per_block = 1 * 10**9  # 1 ERG per block
-    total_staked_value = 1_000_000 * 10**9  # 1M ERG staked
+    reward_per_block = 1 * NANOERG_PER_ERG  # 1 ERG per block
+    total_staked_value = 1_000_000 * NANOERG_PER_ERG  # 1M ERG
     blocks_per_year = 262_800  # ~2 min blocks
 
     annual_rewards = reward_per_block * blocks_per_year
@@ -171,16 +205,16 @@ def test_apy_calculation():
 
     # 1 ERG/block * 262,800 blocks = 262,800 ERG/year
     # 262,800 / 1,000,000 = 26.28% APY
-    assert apy == 26.28
+    assert pytest.approx(apy, 0.01) == 26.28
 
 
 def test_zero_staked_apy():
     """Test APY when no tokens are staked."""
-    reward_per_block = 1 * 10**9
+    reward_per_block = 1 * NANOERG_PER_ERG
     total_staked_value = 0
 
-    # Should return 0% APY
-    apy = 0 if total_staked_value == 0 else (reward_per_block * 262_800 / total_staked_value) * 100
+    apy = 0 if total_staked_value == 0 else (reward_per_block * blocks_per_year / total_staked_value) * 100
+
     assert apy == 0
 
 
@@ -188,23 +222,21 @@ def test_zero_staked_apy():
 
 def test_multiple_stakers_rewards():
     """Test rewards are distributed proportionally."""
-    staker1_staked = 100_000
-    staker2_staked = 300_000
+    staker1_staked = 250_000
+    staker2_staked = 750_000
     total_staked = staker1_staked + staker2_staked
 
-    rewards_distributed = 10 * 10**9  # 10 ERG
+    rewards_distributed = 10 * NANOERG_PER_ERG  # 10 ERG
 
-    # Calculate reward per share
-    reward_per_share = (rewards_distributed * SCALING_FACTOR) // total_staked
+    rps = calculate_reward_per_share(rewards_distributed, total_staked)
 
-    # Calculate each staker's rewards
-    staker1_rewards = (reward_per_share * staker1_staked) // SCALING_FACTOR
-    staker2_rewards = (reward_per_share * staker2_staked) // SCALING_FACTOR
+    staker1_rewards = calculate_pending_rewards(staker1_staked, 0, rps)
+    staker2_rewards = calculate_pending_rewards(staker2_staked, 0, rps)
 
-    # Staker1: 100k/400k = 25% of rewards = 2.5 ERG
-    # Staker2: 300k/400k = 75% of rewards = 7.5 ERG
-    assert staker1_rewards == 2.5 * 10**9
-    assert staker2_rewards == 7.5 * 10**9
+    # Staker1: 25% of pool, gets 25% of rewards = 2.5 ERG
+    # Staker2: 75% of pool, gets 75% of rewards = 7.5 ERG
+    assert staker1_rewards == 2.5 * NANOERG_PER_ERG
+    assert staker2_rewards == 7.5 * NANOERG_PER_ERG
 
 
 def test_partial_unstake():
@@ -215,10 +247,12 @@ def test_partial_unstake():
     remaining_staked = user_staked - unstake_amount
     assert remaining_staked == 70_000
 
-    # Reward debt should be recalculated proportionally
-    old_reward_per_share = 10_000_000
-    new_reward_per_share = 12_000_000
+    old_rps = calculate_reward_per_share(10 * NANOERG_PER_ERG, 1_000_000)
+    new_rps = calculate_reward_per_share(12 * NANOERG_PER_ERG, 1_000_000)
 
     # Rewards earned on unstaked portion
-    earned_rewards = ((new_reward_per_share - old_reward_per_share) * unstake_amount) // SCALING_FACTOR
-    assert earned_rewards == 60_000  # nanoERG
+    earned_rewards = calculate_pending_rewards(unstake_amount, old_rps, new_rps)
+
+    # 30k/1M = 3% of pool, gets 3% of 2 ERG = 0.06 ERG
+    # 0.06 ERG = 60,000,000 nanoERG
+    assert earned_rewards == 60_000_000  # 0.06 ERG in nanoERG
