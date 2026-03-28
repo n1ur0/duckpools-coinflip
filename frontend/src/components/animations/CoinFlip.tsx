@@ -36,17 +36,29 @@ const CoinFlip: React.FC<CoinFlipProps> = ({
     }
   }, [isFlipping, onFlipComplete, prefersReducedMotion]);
 
-  const getAnimationName = () => {
-    if (!isFlipping) return 'none';
-    if (prefersReducedMotion) return 'none';
-    return result === 'heads' ? 'coinFlipHeads' : 'coinFlipTails';
-  };
+  
 
-  const getCoinColor = () => {
-    if (isFlipping) return 'var(--accent-gold)';
-    if (result === 'heads') return 'var(--accent-gold)';
-    if (result === 'tails') return 'var(--accent-tails)';
-    return 'var(--accent-gold)';
+  const getCoinClassName = () => {
+    const classes = ['coin'];
+    
+    // Add size class
+    if (size <= 60) classes.push('coin--size-sm');
+    else if (size <= 90) classes.push('coin--size-md');
+    else if (size <= 110) classes.push('coin--size-lg');
+    else classes.push('coin--size-xl');
+    
+    // Add coin side class
+    if (result === 'heads') classes.push('coin--heads');
+    else if (result === 'tails') classes.push('coin--tails');
+    
+    // Add flipping class
+    if (isFlipping && !prefersReducedMotion) {
+      classes.push('coin--flipping');
+      if (result === 'heads') classes.push('coin--heads-flipping');
+      else if (result === 'tails') classes.push('coin--tails-flipping');
+    }
+    
+    return classes.join(' ');
   };
 
   const getCoinLabel = () => {
@@ -62,29 +74,11 @@ const CoinFlip: React.FC<CoinFlipProps> = ({
       style={{
         width: `${size}px`,
         height: `${size}px`,
-        perspective: '1000px',
       }}
       role="img"
       aria-label={isFlipping ? 'Flipping coin' : `Coin result: ${result}`}
     >
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          borderRadius: '50%',
-          background: `linear-gradient(135deg, ${getCoinColor()}, ${getCoinColor()}dd)`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: `${size * 0.4}px`,
-          fontWeight: 'bold',
-          color: '#fff',
-          textShadow: '0 2px 4px rgba(0,0,0,0.3)',
-          animation: isFlipping && !prefersReducedMotion ? `${getAnimationName()} 2s ease-out forwards` : 'none',
-          boxShadow: '0 8px 20px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.2)',
-          transition: isFlipping ? 'none' : 'transform 0.3s ease',
-        }}
-      >
+      <div className={getCoinClassName()}>
         {getCoinLabel()}
       </div>
     </div>
