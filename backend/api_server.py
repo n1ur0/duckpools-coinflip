@@ -44,7 +44,7 @@ logger = logging.getLogger("duckpools")
 # ─── Environment ────────────────────────────────────────────────────
 
 NODE_URL = os.getenv("NODE_URL", "http://localhost:9052")
-NODE_API_KEY = os.getenv("NODE_API_KEY", "")
+NODE_API_KEY=os.getenv("NODE_API_KEY", "")
 HOUSE_EDGE_BPS = int(os.getenv("HOUSE_EDGE_BPS", "300"))
 CORS_ORIGINS_STR = os.getenv("CORS_ORIGINS_STR", "http://localhost:3000")
 
@@ -73,33 +73,41 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
 
         # Apply security headers
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = (
-            "camera=(), microphone=(), geolocation=(), payment=()"
-        )
-
-        # Content Security Policy - prevent XSS and data injection
-        # NOTE: unsafe-inline/unsafe-eval needed for Vite dev server (HMR).
-        #       For production, use nonces instead.
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-            "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data:; "
-            "connect-src 'self'; "
-            "frame-ancestors 'none'; "
-            "form-action 'self'; "
-            "base-uri 'self'; "
-            "object-src 'none'"
-        )
-
-        # Strict Transport Security - max-age=0 for development
-        response.headers["Strict-Transport-Security"] = "max-age=0; includeSubDomains"
+        _apply_security_headers(response)
 
         return response
+
+
+def _apply_security_headers(response):
+    """Apply security headers to any response object."""
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = (
+        "camera=(), microphone=(), geolocation=(), payment=()"
+    )
+
+# Content Security Policy - prevent XSS and data injection
+        # NOTE: unsafe-inline needed for Vite dev server (HMR).
+# Content Security Policy - prevent XSS and data injection
+    # NOTE: unsafe-inline/unsafe-eval needed for Vite dev server (HMR).
+    #       For production, use nonces instead.
+    # NOTE: connect-src includes WebSocket for development
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "connect-src 'self' ws://localhost:3000 wss://localhost:3000 ws://localhost:8000 wss://localhost:8000; "
+        "frame-ancestors 'none'; "
+        "form-action 'self'; "
+        "base-uri 'self'; "
+        "object-src 'none'"
+    )
+
+    # Strict Transport Security - max-age=0 for development
+    response.headers["Strict-Transport-Security"] = "max-age=0; includeSubDomains"
 
 
 # ─── Request/Response Logging Middleware (MAT-228) ──────────────
@@ -189,7 +197,7 @@ app.include_router(game_router)
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     """Return structured JSON for all HTTP exceptions (4xx, 5xx)."""
-    return JSONResponse(
+    response = JSONResponse(
         status_code=exc.status_code,
         content={
             "error": {
@@ -199,13 +207,16 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
             }
         },
     )
+    # Apply security headers to error responses
+    _apply_security_headers(response)
+    return response
 
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     """Catch-all for unhandled errors — return 500 with structured JSON."""
     logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
-    return JSONResponse(
+    response = JSONResponse(
         status_code=500,
         content={
             "error": {
@@ -215,6 +226,9 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
             }
         },
     )
+    # Apply security headers to error responses
+    _apply_security_headers(response)
+    return response
 
 
 # ─── Root Endpoints ─────────────────────────────────────────────────
