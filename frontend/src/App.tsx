@@ -1,24 +1,16 @@
 import { Component, ErrorInfo, ReactNode, useState, useEffect } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { WalletProvider } from './contexts/WalletContext';
-import { useGameStore } from './stores';
 import GameHistory from './components/GameHistory';
 import StatsDashboard from './components/StatsDashboard';
 import Leaderboard from './components/Leaderboard';
-import CompPoints from './components/CompPoints';
 import CoinFlipGame from './components/games/CoinFlipGame';
-import PoolManager from './components/PoolManager';
 import TestWallet from './components/TestWallet';
 import WalletConnector from './components/WalletConnector';
-import GameNav from './components/GameNav';
-import DiceGame from './components/games/DiceGame';
-import PlinkoGame from './components/games/PlinkoGame';
 import OnboardingWizard, {
   hasCompletedOnboarding,
   triggerOnboarding,
 } from './components/OnboardingWizard';
 import './App.css';
-import './components/GameTransition.css';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -63,7 +55,6 @@ function App() {
   const network = import.meta.env.VITE_NETWORK || 'testnet';
   const explorerUrl = import.meta.env.VITE_EXPLORER_URL || 'https://testnet.ergoplatform.com';
   const [showDevPanel, setShowDevPanel] = useState(false);
-  const activeGame = useGameStore((s) => s.activeGame);
 
   // Onboarding state
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -143,37 +134,15 @@ function App() {
           {/* Main */}
           <main id="main-content" className="app-main">
             <div className="main-content">
-              {/* Game Navigation */}
-              <GameNav />
-              
-              {/* Game Content with Animation */}
+              {/* Game Content */}
               <div className="game-container">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={activeGame}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.175, ease: "easeInOut" }}
-                    className="game-transition-wrapper"
-                  >
-                    {activeGame === 'coinflip' && (
-                      <div className={highlightBetForm ? 'bet-form-highlight' : ''}>
-                        <CoinFlipGame />
-                      </div>
-                    )}
-                    {activeGame === 'dice' && (
-                      <DiceGame />
-                    )}
-                    {activeGame === 'plinko' && <PlinkoGame />}
-                  </motion.div>
-                </AnimatePresence>
+                <div className={highlightBetForm ? 'bet-form-highlight' : ''}>
+                  <CoinFlipGame />
+                </div>
               </div>
-              
-              <PoolManager />
+
               <GameHistory />
               <StatsDashboard />
-              <CompPoints />
               <Leaderboard />
             </div>
 
@@ -206,9 +175,6 @@ function App() {
                 </a>
                 <a href="https://github.com/duckpools/coinflip-game" target="_blank" rel="noopener noreferrer">
                   GitHub
-                </a>
-                <a href="https://discord.gg/duckpools" target="_blank" rel="noopener noreferrer">
-                  Discord
                 </a>
                 <button
                   className="footer-dev-btn"

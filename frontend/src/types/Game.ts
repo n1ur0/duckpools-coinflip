@@ -1,49 +1,26 @@
 // ─── Game Type ─────────────────────────────────────────────────
 
-export type GameType = 'coinflip' | 'dice' | 'plinko';
+export type GameType = 'coinflip';
 
-// ─── Discriminated Union: Player's Bet Choice ─────────────────
-// Use `gameType` discriminant for type narrowing:
-//   if (bet.choice.gameType === 'dice') { /* TS knows rollTarget exists */ }
+// ─── Player's Bet Choice ─────────────────────────────────────
 
 export interface CoinflipChoice {
   gameType: 'coinflip';
   side: 'heads' | 'tails';
 }
 
-export interface DiceChoice {
-  gameType: 'dice';
-  rollTarget: number;   // 2-98 (win if rngValue < rollTarget)
-}
+export type GameChoice = CoinflipChoice;
 
-export interface PlinkoChoice {
-  gameType: 'plinko';
-  rows: number;         // 8-16
-}
-
-export type GameChoice = CoinflipChoice | DiceChoice | PlinkoChoice;
-
-// ─── Discriminated Union: Actual Outcome ──────────────────────
+// ─── Actual Outcome ──────────────────────────────────────────
 
 export interface CoinflipOutcome {
   gameType: 'coinflip';
   result: 'heads' | 'tails';
 }
 
-export interface DiceOutcome {
-  gameType: 'dice';
-  rngValue: number;     // 0-99
-}
+export type GameOutcome = CoinflipOutcome;
 
-export interface PlinkoOutcome {
-  gameType: 'plinko';
-  slot: number;         // 0 to rows
-  multiplier: number;   // payout multiplier for that slot
-}
-
-export type GameOutcome = CoinflipOutcome | DiceOutcome | PlinkoOutcome;
-
-// ─── Bet Record (multi-game) ──────────────────────────────────
+// ─── Bet Record ──────────────────────────────────────────────
 
 export interface BetRecord {
   betId: string;
@@ -56,7 +33,7 @@ export interface BetRecord {
   outcome: 'pending' | 'win' | 'loss' | 'refunded';
   actualOutcome: GameOutcome | null;
   payout: string;          // nanoERG
-  payoutMultiplier: number; // e.g. 1.94 for coinflip, variable for dice/plinko
+  payoutMultiplier: number; // e.g. 1.94 for coinflip
   timestamp: string;       // ISO 8601
   blockHeight: number;
   resolvedAtHeight: number | null;
@@ -75,36 +52,13 @@ export interface BetChoice {
 
 /** Format a player's choice as a human-readable label. */
 export function formatChoiceLabel(choice: GameChoice): string {
-  switch (choice.gameType) {
-    case 'coinflip':
-      return choice.side.charAt(0).toUpperCase() + choice.side.slice(1);
-    case 'dice':
-      return `Roll under ${choice.rollTarget}`;
-    case 'plinko':
-      return `${choice.rows} rows`;
-  }
+  return choice.side.charAt(0).toUpperCase() + choice.side.slice(1);
 }
 
 /** Format an outcome as a human-readable label. */
 export function formatOutcomeLabel(outcome: GameOutcome | null): string {
   if (!outcome) return '—';
-  switch (outcome.gameType) {
-    case 'coinflip':
-      return outcome.result.charAt(0).toUpperCase() + outcome.result.slice(1);
-    case 'dice':
-      return `Rolled ${outcome.rngValue}`;
-    case 'plinko':
-      return `Slot ${outcome.slot} (${outcome.multiplier}x)`;
-  }
-}
-
-export interface PoolState {
-  liquidity: string;       // nanoERG
-  totalBets: number;
-  playerWins: number;
-  houseWins: number;
-  totalFees: string;       // nanoERG
-  houseEdge: number;       // e.g. 0.03
+  return outcome.result.charAt(0).toUpperCase() + outcome.result.slice(1);
 }
 
 export interface PlayerStats {
@@ -122,8 +76,6 @@ export interface PlayerStats {
   currentStreak: number;
   longestWinStreak: number;
   longestLossStreak: number;
-  compPoints: number;
-  compTier: string;
 }
 
 export interface LeaderboardEntry {
@@ -132,23 +84,10 @@ export interface LeaderboardEntry {
   totalBets: number;
   netPnL: string;
   winRate: number;
-  compPoints: number;
-  compTier: string;
 }
 
 export interface LeaderboardResponse {
   players: LeaderboardEntry[];
   totalPlayers: number;
   sortBy: string;
-}
-
-export interface CompPoints {
-  address: string;
-  points: number;
-  tier: string;
-  tierProgress: number;
-  nextTier: string;
-  pointsToNextTier: number;
-  totalEarned: number;
-  benefits: string[];
 }

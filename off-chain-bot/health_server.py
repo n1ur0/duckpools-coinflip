@@ -57,7 +57,7 @@ class HealthServer:
         self._runner = web.AppRunner(self.app)
         await self._runner.setup()
         
-        self._site = web.TCPSite(self._runner, 'localhost', self.port)
+        self._site = web.TCPSite(self._runner, '0.0.0.0', self.port)
         await self._site.start()
         
         logger.info(

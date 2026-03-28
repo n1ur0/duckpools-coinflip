@@ -17,7 +17,7 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
 
 /**
  * Reusable Input component with label, error state, icon prefix, and suffix support.
- * Matches the existing input patterns from BetForm and PoolManager.
+ * Matches the existing input patterns from BetForm.
  *
  * @example
  * ```tsx

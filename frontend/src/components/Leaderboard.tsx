@@ -4,13 +4,6 @@ import { formatErg, formatAddress } from '../utils/ergo';
 import type { LeaderboardEntry, LeaderboardResponse } from '../types/Game';
 import './Leaderboard.css';
 
-const TIER_CLASS_MAP: Record<string, string> = {
-  bronze: 'lb-tier--bronze',
-  silver: 'lb-tier--silver',
-  gold: 'lb-tier--gold',
-  diamond: 'lb-tier--diamond',
-};
-
 function getExplorerAddressUrl(address: string): string {
   return `https://explorer.ergoplatform.com/en/addresses/${address}`;
 }
@@ -61,7 +54,6 @@ export default function Leaderboard() {
               <div className="lb-skeleton-cell" style={{ width: 50 }} />
               <div className="lb-skeleton-cell" style={{ width: 80 }} />
               <div className="lb-skeleton-cell" style={{ width: 60 }} />
-              <div className="lb-skeleton-cell" style={{ width: 70 }} />
             </div>
           ))}
         </div>
@@ -77,14 +69,11 @@ export default function Leaderboard() {
                 <th>Bets</th>
                 <th>Net PnL</th>
                 <th>Win Rate</th>
-                <th>Tier</th>
               </tr>
             </thead>
             <tbody>
               {data.map((entry) => {
                 const pnl = parseFloat(entry.netPnL);
-                const tierClass =
-                  TIER_CLASS_MAP[entry.compTier.toLowerCase()] || '';
                 const rankClass =
                   entry.rank <= 3 ? `lb-rank--${entry.rank}` : '';
 
@@ -119,11 +108,6 @@ export default function Leaderboard() {
                       </span>
                     </td>
                     <td className="lb-rank">{entry.winRate.toFixed(1)}%</td>
-                    <td>
-                      <span className={`lb-tier ${tierClass}`}>
-                        {entry.compTier}
-                      </span>
-                    </td>
                   </tr>
                 );
               })}
