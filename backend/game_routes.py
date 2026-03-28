@@ -18,14 +18,6 @@ router = APIRouter(tags=["game"])
 
 # ─── Response Models (match frontend types/Game.ts) ────────────────
 
-class PoolStateResponse(BaseModel):
-    liquidity: str = "0"
-    totalBets: int = 0
-    playerWins: int = 0
-    houseWins: int = 0
-    totalFees: str = "0"
-    houseEdge: float = 0.03
-
 
 class GameChoice(BaseModel):
     gameType: str = "coinflip"
@@ -133,31 +125,6 @@ _pool_stats = {
 
 
 # ─── Routes ───────────────────────────────────────────────────────
-
-@router.get("/pool/state", response_model=PoolStateResponse)
-async def get_pool_state():
-    """Pool state for PoolManager.tsx."""
-    return PoolStateResponse(
-        liquidity=_pool_stats["liquidity"],
-        totalBets=_pool_stats["totalBets"],
-        playerWins=_pool_stats["playerWins"],
-        houseWins=_pool_stats["houseWins"],
-        totalFees=_pool_stats["totalFees"],
-        houseEdge=0.03,
-    )
-
-
-@router.post("/pool/deposit")
-async def pool_deposit():
-    """Deposit to pool (stub for PoC)."""
-    return {"success": False, "error": "Pool deposits not yet implemented in PoC"}
-
-
-@router.post("/pool/withdraw")
-async def pool_withdraw():
-    """Withdraw from pool (stub for PoC)."""
-    return {"success": False, "error": "Pool withdrawals not yet implemented in PoC"}
-
 
 @router.get("/leaderboard", response_model=LeaderboardResponse)
 async def get_leaderboard():

@@ -220,28 +220,15 @@ if _bankroll_router:
 @app.get("/")
 async def root():
     return {
-        "name": "DuckPools API",
+        "name": "DuckPools CoinFlip API",
         "version": "0.2.0",
         "endpoints": {
-            "pool": "/api/lp/pool",
-            "price": "/api/lp/price",
-            "apy": "/api/lp/apy",
-            "balance": "/api/lp/balance/{address}",
-            "estimate_deposit": "/api/lp/estimate/deposit",
-            "estimate_withdraw": "/api/lp/estimate/withdraw",
-            "deposit": "POST /api/lp/deposit",
-            "request_withdraw": "POST /api/lp/request-withdraw",
-            "execute_withdraw": "POST /api/lp/execute-withdraw",
-            "cancel_withdraw": "POST /api/lp/cancel-withdraw",
-            "oracle_health": "/api/oracle/health",
-            "oracle_status": "/api/oracle/status",
-            "oracle_endpoints": "/api/oracle/endpoints",
-            "oracle_data": "POST /api/oracle/data/{oracle_box_id}",
-            "oracle_switch": "POST /api/oracle/switch",
-        },
-        "websocket": {
-            "bet_updates": "ws://host/ws/bets/{address}",
-            "stats": "/ws/stats",
+            "place_bet": "POST /place-bet",
+            "leaderboard": "/leaderboard",
+            "history": "/history/{address}",
+            "player_stats": "/player/stats/{address}",
+            "player_comp": "/player/comp/{address}",
+            "health": "/health",
         },
     }
 
