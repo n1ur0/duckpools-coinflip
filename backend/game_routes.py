@@ -19,16 +19,17 @@ router = APIRouter(tags=["game"])
 
 # ─── Compiled Contract Constants ──────────────────────────────────
 # coinflip_v2.es compiled against node v6.0.3 (Lithos testnet)
-COINFLIP_P2S_ADDRESS = "6d48wTUX3sXR9tw4vRvX9bKg8zKYhpM7bFwNYDFNEXeVvKSYapzFiHxENW6QUzzavmuDUKHmdooq9d6GkVddFwvutZ9thCJqySLxMrxbKBQ5gUQgHGmVxaJTd2G4d5LgKJYB2hV6mTsc3SgvvEUSuret9mYknpGwjQzekbJD4gShxwGsyxoWL9oxM4pkL3yEj2eYQDowTm8XZC9oDR7nonnvqg3wo3HQ1cwL"
-COINFLIP_ERGO_TREE = "1006040004040402040005020564d804d601b2a5730000d602e4c6a7050ed603d1ed92b1a57301aedb6308b2a5730200d901034d0eed938c7203018cb2db6308a773030001938c7203027304d604c1a7eb02ea02ea02ea02cdeee4c6a7040ed193cbb37a7ee4c6a70804057a7ee4c6a7070405e4c6a7060ed193c2720172027203ea02ea02ea02d192a3e4c6a70904cdee7202d192c172019972049d720473057203"
+# Source of truth: smart-contracts/coinflip_deployed.json
+COINFLIP_P2S_ADDRESS = "3yNMkSZ6b36YGBJJNhpavxxCFg4f2ceH5JF81hXJgzWoWozuFJSjoW8Q5JXow6fsTVNrqz48h8a9ajYSTKfwaxG16GbHzxrDcsarkBkbR6NYdGeoCZ9KgNcNMYPLV9RPkLFwBPLHxDxyTmBfqn5L75zqftETuAadKr8FHEYZrVPZ6kn6gdiZbzMwghxRy2g4wpTdby4jnxhA42UH7JJzMibgMNBW4yvzw8EaguPLVja6xsxx43yihw5DEzMGzL7HKWYUs6uVugK1C8Feh3KUX9kpea5xpLXX5oZCV47W6cnTrJfJD3"
+COINFLIP_ERGO_TREE = "19d8010c04000200020104000404040005c20105640400040004000564d805d601cdeee4c6a7040ed602e4c6a7090ed603e4c6a70704d604cdeee4c6a7050ed605c1a7eb02ea02ea027201d193cbb3720283010295937203730073017302e4c6a7060ed195939e7eb2cbb3db6902db6503fe72027303000473047203d801d606b2a5730500ed93c27206d0720492c172069d9c720573067307d801d606b2a5730800ed93c27206d0720192c172067205ea02ea02ea02d192a3e4c6a708047204d193c2b2a5730900d07204d192c1b2a5730a009972059d7205730b"
 
 # Register layout (must match coinflip_v2.es)
-# R4: housePubKey (Coll[Byte])  — 33-byte compressed public key
-# R5: playerPubKey (Coll[Byte]) — 33-byte compressed public key
-# R6: commitmentHash (Coll[Byte]) — blake2b256(longToByteArray(secret) ++ longToByteArray(choice))
-# R7: playerChoice (Int)        — 0=heads, 1=tails
-# R8: playerSecret (Int)        — player random secret
-# R9: timeoutHeight (Int)       — block height for refund
+# R4: housePubKey (Coll[Byte])    — 33-byte compressed public key
+# R5: playerPubKey (Coll[Byte])   — 33-byte compressed public key
+# R6: commitmentHash (Coll[Byte]) — blake2b256(secret ++ choice_byte) — 32 bytes
+# R7: playerChoice (Int)          — 0=heads, 1=tails
+# R8: timeoutHeight (Int)         — block height for refund
+# R9: playerSecret (Coll[Byte])   — player random secret (raw bytes)
 
 
 # ─── Response Models (match frontend types/Game.ts) ────────────────
@@ -351,8 +352,8 @@ async def contract_info():
             "R5": "playerPubKey (Coll[Byte])",
             "R6": "commitmentHash (Coll[Byte])",
             "R7": "playerChoice (Int)",
-            "R8": "playerSecret (Int)",
-            "R9": "timeoutHeight (Int)",
+            "R8": "timeoutHeight (Int)",
+            "R9": "playerSecret (Coll[Byte])",
         },
     }
 
