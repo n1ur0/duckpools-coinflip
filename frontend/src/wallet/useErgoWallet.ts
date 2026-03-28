@@ -28,7 +28,7 @@ import { getExpectedNetworkType, getNetworkFromAddress } from '../utils/network'
 import { getWalletConnection, waitForConnector, getWalletInfo } from './adapters';
 
 // Use a simple flag for logging - in production this would be false
-const isDev = process.env.NODE_ENV === 'development';
+const isDev = import.meta.env.DEV;
 const log = isDev ? console : { log: () => {}, warn: () => {}, error: () => {} };
 
 // ─── Helpers ────────────────────────────────────────────────────

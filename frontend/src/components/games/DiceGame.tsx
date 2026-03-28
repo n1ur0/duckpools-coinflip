@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, TouchEvent } from 'react';
 import { useWallet } from '../../contexts/WalletContext';
-import { generateDiceCommit, computeDiceRng, isDiceWin, getDiceMultiplier, DICE_MIN_TARGET, DICE_MAX_TARGET, DICE_DEFAULT_TARGET } from '../../utils/dice';
+import { generateDiceCommit, getDiceMultiplier, DICE_MIN_TARGET, DICE_MAX_TARGET, DICE_DEFAULT_TARGET } from '../../utils/dice';
 import { ergToNanoErg, formatErg } from '../../utils/ergo';
 import { buildApiUrl } from '../../utils/network';
 import './DiceGame.css';

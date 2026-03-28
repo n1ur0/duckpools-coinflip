@@ -1,18 +1,18 @@
 // Network and API utilities
 
-const API_BASE = process.env.VITE_API_ENDPOINT || '';
+const API_BASE = import.meta.env.VITE_API_ENDPOINT || '';
 
 export function buildApiUrl(endpoint: string): string {
-  if (process.env.NODE_ENV === 'development') return `/api${endpoint}`;
+  if (import.meta.env.DEV) return `/api${endpoint}`;
   return `${API_BASE}${endpoint}`;
 }
 
 export function getNodeUrl(): string {
-  return process.env.VITE_NODE_URL || 'https://api-testnet.ergoplatform.com';
+  return import.meta.env.VITE_NODE_URL || 'https://api-testnet.ergoplatform.com';
 }
 
 export function getExpectedNetworkType(): 'testnet' | 'mainnet' {
-  return (process.env.VITE_NETWORK as 'testnet' | 'mainnet') || 'testnet';
+  return (import.meta.env.VITE_NETWORK as 'testnet' | 'mainnet') || 'testnet';
 }
 
 /**
