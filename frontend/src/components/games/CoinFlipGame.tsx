@@ -138,7 +138,7 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
     setIsSubmitting(true);
     setError(null);
 
-    try {
+try {
       // 1. Generate secret & commitment
       const secret = generateSecret();
       const commitment = generateCommitment(secret, choice);
