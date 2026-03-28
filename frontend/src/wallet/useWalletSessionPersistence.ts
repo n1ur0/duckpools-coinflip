@@ -35,7 +35,7 @@ const SESSION_KEY = 'duckpools-wallet-session';
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 // Use a simple flag for logging - in production this would be false
-const isDev = process.env.NODE_ENV === 'development';
+const isDev = import.meta.env.DEV;
 const log = isDev ? console : { log: () => {}, warn: () => {}, error: () => {} };
 
 /**

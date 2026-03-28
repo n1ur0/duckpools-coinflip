@@ -19,10 +19,10 @@ filterwarnings = [
 addopts = "-v --tb=short"
 asyncio_mode = "auto"
 
-[tool.pytest.coverage.run]
+[tool.coverage.run]
 source = ["backend", "sdk"]
 omit = ["tests/*", "*/node_modules/*", "*/__pycache__/*"]
 
-[tool.pytest.coverage.report]
+[tool.coverage.report]
 fail_under = 50
 show_missing = true
