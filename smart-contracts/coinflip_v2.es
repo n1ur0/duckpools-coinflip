@@ -3,7 +3,23 @@
  *
  * Commit-reveal coinflip with on-chain block-hash RNG.
  *
- * Register layout (MUST match sdk/TransactionBuilder.ts):
+ * TRUST ASSUMPTIONS (see ARCHITECTURE.md for details):
+ * - TA-1: Player secret stored in R9 is visible on-chain. Any observer
+ *   can read the player's choice after commit. The contract needs the
+ *   secret to verify the commitment hash — this is a fundamental
+ *   ErgoScript limitation (no ZK proofs).
+ * - TA-2: House selects the reveal block (block-hash grinding risk).
+ *   The house controls when to submit the reveal tx, so it could
+ *   theoretically wait for a favorable block hash. Mitigated by the
+ *   timeout mechanism (R8) — if the house delays too long, the player
+ *   can claim a 98% refund.
+ * - TA-4: Only the house can trigger reveal. No player-initiated reveal.
+ *   If the house is offline, the player must wait for timeout.
+ *
+ * Production hardening: dual commitment scheme (house pre-commits too),
+ * ZK proofs for secret verification, player-initiated reveal path.
+ *
+ * COMPILED (2026-03-28, ergo-6.0.3 Lithos testnet, treeVersion=1):
  *   R4:  Coll[Byte]  — house's compressed public key (33 bytes)
  *   R5:  Coll[Byte]  — player's compressed public key (33 bytes)
  *   R6:  Coll[Byte]  — blake2b256(secret || choice) — 32 bytes

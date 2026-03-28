@@ -3,6 +3,19 @@
  * 
  * Classic coinflip game with commit-reveal scheme.
  * Fixed: NFT preservation in refund path to prevent protocol breakage.
+ *
+ * TRUST ASSUMPTIONS (see ARCHITECTURE.md for details):
+ * - TA-1: Player secret stored in R8 is visible on-chain. Any observer
+ *   can read the player's choice after commit. This is a fundamental
+ *   trade-off — the contract needs the secret to verify the commitment.
+ * - TA-2: No on-chain RNG. v1 has no block-hash based outcome; the
+ *   house determines the result off-chain. v2 fixes this.
+ * - TA-3: Reveal path does NOT enforce payout amount. A malicious house
+ *   could reveal with 0 ERG to the player. v2 enforces payout on-chain.
+ * - TA-4: Only the house can trigger reveal. If the house is offline,
+ *   the player must wait for timeout to claim a 98% refund.
+ *
+ * STATUS: Superseded by coinflip_v2.es. Kept for reference only.
  */
 
 {
