@@ -183,6 +183,11 @@ class OracleService:
         if self._client:
             await self._client.aclose()
             self._client = None
+            
+        # Stop Ergo oracle pool adapter
+        if self._ergo_adapter:
+            await self._ergo_adapter.stop()
+            self._ergo_adapter = None
 
         logger.info("Oracle service stopped")
 
@@ -419,3 +424,146 @@ class OracleService:
                 "enable_failover": self.config.enable_failover,
             },
         }
+
+    def add_oracle_feed(self, feed: OracleFeed) -> None:
+        """
+        Add an oracle feed configuration.
+        
+        Args:
+            feed: Oracle feed configuration
+        """
+        if not self.config.enable_on_chain_oracles:
+            logger.warning("On-chain oracles are disabled, feed will not be used")
+            return
+            
+        # Check if feed with same name already exists
+        for existing_feed in self._configured_feeds:
+            if existing_feed.name == feed.name:
+                logger.warning(f"Feed with name '{feed.name}' already exists, updating")
+                self._configured_feeds.remove(existing_feed)
+                break
+        
+        self._configured_feeds.append(feed)
+        logger.info(f"Added oracle feed: {feed.name} (box: {feed.box_id})")
+
+    def remove_oracle_feed(self, feed_name: str) -> bool:
+        """
+        Remove an oracle feed configuration.
+        
+        Args:
+            feed_name: Name of the feed to remove
+            
+        Returns:
+            True if feed was removed, False if not found
+        """
+        for i, feed in enumerate(self._configured_feeds):
+            if feed.name == feed_name:
+                self._configured_feeds.pop(i)
+                logger.info(f"Removed oracle feed: {feed_name}")
+                return True
+        
+        logger.warning(f"Feed not found: {feed_name}")
+        return False
+
+    def get_configured_feeds(self) -> List[Dict[str, Any]]:
+        """
+        Get list of configured oracle feeds.
+        
+        Returns:
+            List of feed configurations
+        """
+        return [
+            {
+                "name": feed.name,
+                "box_id": feed.box_id,
+                "data_type": feed.data_type.value,
+                "register_indices": feed.register_indices,
+                "description": feed.description,
+                "decimals": feed.decimals,
+                "base_asset": feed.base_asset,
+                "quote_asset": feed.quote_asset
+            }
+            for feed in self._configured_feeds
+        ]
+
+    async def get_on_chain_oracle_data(
+        self,
+        feed_name: Optional[str] = None,
+        box_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get data from on-chain oracle pools.
+        
+        Args:
+            feed_name: Name of the configured feed to fetch (optional)
+            box_id: Box ID of oracle to fetch (optional, overrides feed_name)
+            
+        Returns:
+            Oracle data or None if failed
+        """
+        if not self.config.enable_on_chain_oracles:
+            logger.warning("On-chain oracles are disabled")
+            return None
+            
+        if not self._ergo_adapter:
+            logger.error("Ergo oracle pool adapter not initialized")
+            return None
+        
+        # If box_id is provided, fetch directly
+        if box_id:
+            return await self._ergo_adapter.get_oracle_pool_info(box_id)
+        
+        # If feed_name is provided, fetch from configured feed
+        if feed_name:
+            for feed in self._configured_feeds:
+                if feed.name == feed_name:
+                    return await self._ergo_adapter.get_oracle_feed_data(feed)
+            
+            logger.warning(f"Feed not found: {feed_name}")
+            return None
+        
+        # If neither is provided, fetch all configured feeds
+        if self._configured_feeds:
+            return await self._ergo_adapter.get_multiple_feeds_data(self._configured_feeds)
+        
+        logger.warning("No feeds configured and no specific feed requested")
+        return None
+
+    async def get_latest_price_feed(self, base_asset: str, quote_asset: str) -> Optional[Dict[str, Any]]:
+        """
+        Get the latest price feed for a specific asset pair.
+        
+        Args:
+            base_asset: Base asset (e.g., "ERG")
+            quote_asset: Quote asset (e.g., "USD")
+            
+        Returns:
+            Price feed data or None if not found
+        """
+        if not self.config.enable_on_chain_oracles:
+            logger.warning("On-chain oracles are disabled")
+            return None
+            
+        # Find feeds that match the asset pair
+        matching_feeds = []
+        for feed in self._configured_feeds:
+            if (feed.base_asset == base_asset and feed.quote_asset == quote_asset and
+                feed.data_type == OracleDataType.PRICE):
+                matching_feeds.append(feed)
+        
+        if not matching_feeds:
+            logger.warning(f"No price feeds found for {base_asset}/{quote_asset}")
+            return None
+        
+        # Fetch data from the first matching feed
+        # In a more sophisticated implementation, you might want to:
+        # 1. Fetch from all matching feeds
+        # 2. Apply some consensus mechanism
+        # 3. Return the median or weighted average
+        
+        feed_data = await self._ergo_adapter.get_oracle_feed_data(matching_feeds[0])
+        if feed_data:
+            # Update last feed timestamp
+            self._last_feed_update = datetime.now(timezone.utc)
+        
+        return feed_data
