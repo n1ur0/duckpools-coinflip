@@ -25,6 +25,16 @@ Browser-based tests to verify the frontend loads correctly.
 - FR-3: API Proxy - Routes proxy correctly to backend
 - Basic responsiveness checks
 
+### 3. Dice Game E2E Tests (`test_dice_game_e2e.py`)
+End-to-end tests for the dice game covering complete user flow.
+
+**Coverage:**
+- DG-1: Place Bet - User can place dice bets with amount and target
+- DG-2: Reveal - Game reveals dice roll results after confirmation
+- DG-3: Payout - Correct payout calculation and display
+- DG-4: Wallet Balance - Balance updates after game outcomes
+- Security: RNG validation, input validation, modulo bias prevention
+
 ## Prerequisites
 
 ### For Backend Tests
@@ -97,22 +107,29 @@ These tests should run as part of the CI/CD pipeline:
 ### Latest Test Status (MAT-55 Completion)
 
 #### Backend API Regression Tests
-- **13/16 tests passing** (81.25% success rate)
-- **3 failures**:
-  1. `test_history_invalid_address`: API accepts invalid addresses (returns 200 instead of 400/404)
-  2. `test_oracle_health_endpoint`: Oracle endpoint not implemented (returns 404)
-  3. `test_oracle_status_endpoint`: Oracle endpoint not implemented (returns 404)
+- **7/16 tests passing** (43.75% success rate)
+- **9 failures**:
+  1. `test_health_includes_node_status`: Response missing 'node' field
+  2. `test_health_includes_wallet_status`: Response missing 'pool_configured' field
+  3. `test_pool_state_returns_200`: Expected 200/500/503, got 404
+  4. `test_lp_price_endpoint`: Expected 200/503/500, got 404
+  5. `test_lp_apy_endpoint`: Expected 200/503/500, got 404
+  6. `test_lp_balance_endpoint`: Expected 200/400/503/500, got 404
+  7. `test_oracle_health_endpoint`: Expected 200/503/500, got 404
+  8. `test_oracle_status_endpoint`: Expected 200/503/500, got 404
+  9. `test_pool_state_has_required_fields`: Skipped due to previous failure
 
 #### Frontend Smoke Tests
-- **All tested scenarios passing** 
-- Verified page load, UI elements, and API proxy functionality
+- **8/8 tests passing** (100% success rate)
+- Verified page load, UI elements, API proxy functionality, and responsiveness
 
 #### Existing Python Test Suite
-- **177/231 tests passing** (76.62% success rate)
-- **54 failures** primarily due to:
+- **327/370 tests passing** (88.38% success rate)
+- **43 failures** primarily due to:
   - Missing backend services (404 errors)
-  - Module import issues (off_chain_bot)
+  - Module import issues (off_chain_bot, oracle_cache, price_feed_aggregator)
   - Penetration test expectations
+  - Invalid URL characters in test inputs
 
 Run with `--tb=short` for shorter error output:
 ```bash
