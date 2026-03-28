@@ -9,9 +9,6 @@
  *   - @fleet-sdk/serializer (SInt, SColl, SByte)
  *   - @fleet-sdk/crypto (blake2b256)
  *
- * BLOCKED by MAT-344: contract must be compiled before on-chain flow works.
- * When P2S_ADDRESS is empty, buildPlaceBetTx throws.
- *
  * Register layout MUST match coinflip_v2.es (compiled 2026-03-28):
  *   R4: Coll[Byte]  — house's compressed public key (33 bytes)
  *   R5: Coll[Byte]  — player's compressed public key (33 bytes)
@@ -19,6 +16,9 @@
  *   R7: Int         — player's choice: 0=heads, 1=tails
  *   R8: Int         — block height for timeout/refund
  *   R9: Coll[Byte]  — player's secret (raw bytes from crypto.getRandomValues)
+ *
+ * NOTE: coinflip_v2.es does NOT check for tokens. The NFT is optional
+ * and only included for off-chain box indexing convenience.
  *
  * SECURITY NOTE (SEC-CRITICAL): Previous version used R4=GroupElement,
  * R8=Int(secret), R9=Int(timeout). This caused type/register mismatches
@@ -90,20 +90,20 @@ function secretToHex(secret: Uint8Array): string {
  *
  * This creates a PendingBetBox locked by the coinflip contract with:
  * - The bet amount in nanoERG
- * - The Game NFT as the first token
+ * - Optional Game NFT as the first token (for off-chain indexing only)
  * - R4-R9 registers matching coinflip_v2.es layout
  *
  * The returned transaction must be passed to wallet.signTransaction()
  * which triggers the Nautilus popup, then wallet.submitTransaction()
  * to broadcast.
  *
- * @throws Error if on-chain flow is not enabled (contract not compiled)
+ * @throws Error if on-chain flow is not enabled (contract not configured)
  * @throws Error if insufficient UTXOs to cover bet + fee
  */
 export async function buildPlaceBetTx(params: PlaceBetParams): Promise<PlaceBetResult> {
   if (!isOnChainEnabled()) {
     throw new Error(
-      'On-chain bet flow is not available. The coinflip contract has not been compiled yet (MAT-344).'
+      'On-chain bet flow is not available. Configure VITE_CONTRACT_P2S_ADDRESS and VITE_HOUSE_PUB_KEY in .env.local.'
     );
   }
 
@@ -120,16 +120,18 @@ export async function buildPlaceBetTx(params: PlaceBetParams): Promise<PlaceBetR
 
   const contractAddress = ErgoAddress.fromBase58(P2S_ADDRESS);
 
-  const betBox = new OutputBuilder(params.amountNanoErg, contractAddress, params.currentHeight)
-    .addNfts(GAME_NFT_ID)
-    .setAdditionalRegisters({
-      R4: SColl(SByte, HOUSE_PUB_KEY),                  // housePkBytes (Coll[Byte])
-      R5: SColl(SByte, params.playerPubKey),             // playerPkBytes (Coll[Byte])
-      R6: SColl(SByte, params.commitment),             // commitmentHash (Coll[Byte])
-      R7: SInt(params.choice),                         // playerChoice (Int)
-      R8: SInt(timeoutHeight),                         // timeoutHeight (Int)
-      R9: SColl(SByte, secretToHex(params.secret)),    // playerSecret (Coll[Byte])
-    });
+  const betBox = new OutputBuilder(params.amountNanoErg, contractAddress, params.currentHeight);
+  if (GAME_NFT_ID) {
+    betBox.addNfts(GAME_NFT_ID);
+  }
+  betBox.setAdditionalRegisters({
+    R4: SColl(SByte, HOUSE_PUB_KEY),                  // housePkBytes (Coll[Byte])
+    R5: SColl(SByte, params.playerPubKey),             // playerPkBytes (Coll[Byte])
+    R6: SColl(SByte, params.commitment),             // commitmentHash (Coll[Byte])
+    R7: SInt(params.choice),                         // playerChoice (Int)
+    R8: SInt(timeoutHeight),                         // timeoutHeight (Int)
+    R9: SColl(SByte, secretToHex(params.secret)),    // playerSecret (Coll[Byte])
+  });
 
   // Select UTXOs to cover bet amount + fee
   const target = { nanoErgs: params.amountNanoErg };
