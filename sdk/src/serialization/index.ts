@@ -5,8 +5,8 @@
  * Reference: off-chain-bot/sigma_serializer.py
  */
 
-import type { SValue } from '../types';
-import { SerializationError } from '../types';
+import type { SValue } from '../types/index.js';
+import { SerializationError } from '../types/index.js';
 
 /**
  * VLQ (Variable-Length Quantity) encoding

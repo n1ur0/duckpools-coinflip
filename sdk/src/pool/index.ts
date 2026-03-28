@@ -14,11 +14,11 @@ export {
   calculateDepositShares,
   calculateWithdrawErg,
   calculateAPY,
-} from './BankrollPool';
-export type { PoolState, WithdrawalRequest } from './BankrollPool';
+} from './BankrollPool.js';
+export type { PoolState, WithdrawalRequest } from './BankrollPool.js';
 
-export { PoolManager } from './PoolManager';
-export { HttpPoolClient, PoolFormatters } from './PoolClient';
+export { PoolManager } from './PoolManager.js';
+export { HttpPoolClient, PoolFormatters } from './PoolClient.js';
 export type {
   PoolConfig,
   PoolStateResponse,
@@ -33,4 +33,4 @@ export type {
   WithdrawalInfo,
   WithdrawalStatus,
   PoolClient,
-} from './types';
+} from './types.js';

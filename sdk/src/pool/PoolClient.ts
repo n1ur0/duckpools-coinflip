@@ -12,7 +12,7 @@ import type {
   LPBalanceResponse,
   TxResponse,
   PoolClient,
-} from './types';
+} from './types.js';
 
 /**
  * HTTP-based pool client for frontend usage

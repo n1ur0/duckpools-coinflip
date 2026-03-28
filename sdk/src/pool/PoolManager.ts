@@ -5,19 +5,19 @@
  * MAT-15: Tokenized bankroll and liquidity pool
  */
 
-import { NodeClient } from '../client/NodeClient';
+import { NodeClient } from '../client/NodeClient.js';
 import type {
   PoolState as OnChainPoolState,
   WithdrawalRequest,
-} from './BankrollPool';
+} from './BankrollPool.js';
 import {
   calculatePricePerShare,
   calculateDepositShares,
   calculateWithdrawErg,
   calculateAPY,
   POOL_CONFIG,
-} from './BankrollPool';
-import type { DuckPoolsError } from '../types';
+} from './BankrollPool.js';
+import type { DuckPoolsError } from '../types/index.js';
 
 export class PoolManager {
   private nodeClient: NodeClient;
