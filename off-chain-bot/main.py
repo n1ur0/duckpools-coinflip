@@ -8,9 +8,11 @@ Features:
 - Graceful shutdown on SIGINT/SIGTERM
 - Heartbeat file for liveness monitoring
 - Structured logging
+- HTTP health endpoint for backend monitoring
 
 MAT-182: Structured logging and error recovery
 MAT-223: Add retry logic and graceful shutdown
+MAT-224: Add bot heartbeat/health endpoint for backend monitoring
 """
 
 import asyncio
@@ -21,6 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+import aiohttp
 import httpx
 from tenacity import (
     retry,
@@ -42,6 +45,7 @@ NODE_URL = os.getenv("NODE_URL", "http://localhost:9052")
 NODE_API_KEY = os.getenv("NODE_API_KEY", "")
 HEARTBEAT_FILE = os.getenv("HEARTBEAT_FILE", "/tmp/off-chain-bot-heartbeat.txt")
 HEARTBEAT_INTERVAL_SECONDS = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "30"))
+HEALTH_PORT = int(os.getenv("HEALTH_PORT", "8001"))
 
 # ─── Retry Configuration ────────────────────────────────────────────────────
 
@@ -210,6 +214,75 @@ class HeartbeatManager:
         self.heartbeat_file.write_text(timestamp)
 
 
+# ─── Health Server ────────────────────────────────────────────────────────
+
+class HealthServer:
+    """HTTP server for bot health monitoring."""
+
+    def __init__(self, port: int):
+        self.port = port
+        self._app: Optional[aiohttp.web.Application] = None
+        self._runner: Optional[aiohttp.web.AppRunner] = None
+        self._site: Optional[aiohttp.web.TCPSite] = None
+        self._task: Optional[asyncio.Task] = None
+        self._stop_event = asyncio.Event()
+
+    async def start(self):
+        """Start the HTTP health server."""
+        self._stop_event.clear()
+        
+        # Create aiohttp application
+        self._app = aiohttp.web.Application()
+        self._app.router.add_get('/health', self._handle_health)
+        
+        # Create runner and site
+        self._runner = aiohttp.web.AppRunner(self._app)
+        await self._runner.setup()
+        
+        self._site = aiohttp.web.TCPSite(self._runner, 'localhost', self.port)
+        await self._site.start()
+        
+        logger.info(
+            "health_server_started",
+            port=self.port,
+            url=f"http://localhost:{self.port}/health"
+        )
+
+    async def stop(self):
+        """Stop the HTTP health server."""
+        if self._task:
+            self._stop_event.set()
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
+
+        if self._site:
+            await self._site.stop()
+            self._site = None
+
+        if self._runner:
+            await self._runner.cleanup()
+            self._runner = None
+
+        self._app = None
+        logger.info("health_server_stopped")
+
+    async def _handle_health(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+        """Handle health check requests."""
+        # This will be updated by the OffChainBot with actual metrics
+        health_data = {
+            "status": "alive",
+            "uptime_seconds": request.app.get('uptime_seconds', 0),
+            "bets_processed": request.app.get('bets_processed', 0),
+            "last_processed_at": request.app.get('last_processed_at')
+        }
+        
+        return aiohttp.web.json_response(health_data)
+
+
 # ─── Ergo Node Client ───────────────────────────────────────────────────
 
 class ErgoNodeClient:
@@ -313,13 +386,20 @@ class OffChainBot:
         api_key: str,
         heartbeat_file: str,
         heartbeat_interval_seconds: int = 30,
+        health_port: int = 8001,
     ):
         self.node_url = node_url
         self.api_key = api_key
         self.shutdown_manager = ShutdownManager()
         self.heartbeat_manager = HeartbeatManager(heartbeat_file)
         self.heartbeat_interval_seconds = heartbeat_interval_seconds
+        self.health_server = HealthServer(health_port)
         self.client: Optional[ErgoNodeClient] = None
+        
+        # Metrics for health endpoint
+        self.start_time = datetime.now(timezone.utc)
+        self.bets_processed = 0
+        self.last_processed_at: Optional[str] = None
 
     async def run(self):
         """Run the off-chain bot main loop."""
@@ -332,6 +412,12 @@ class OffChainBot:
         async with ErgoNodeClient(self.node_url, self.api_key) as client:
             self.client = client
 
+            # Start health server
+            await self.health_server.start()
+            
+            # Update health server with metrics
+            await self._update_health_metrics()
+
             # Start heartbeat
             await self.heartbeat_manager.start(self.heartbeat_interval_seconds)
 
@@ -340,6 +426,9 @@ class OffChainBot:
             finally:
                 # Stop heartbeat
                 await self.heartbeat_manager.stop()
+
+                # Stop health server
+                await self.health_server.stop()
 
                 # Restore signal handlers
                 self.shutdown_manager.restore_signal_handlers()
@@ -398,6 +487,17 @@ class OffChainBot:
             logger.error("node_api_error", error=str(e))
             raise
 
+    async def _update_health_metrics(self):
+        """Update health server with current metrics."""
+        if self.health_server._app:
+            # Calculate uptime
+            uptime = (datetime.now(timezone.utc) - self.start_time).total_seconds()
+            
+            # Update app state with metrics
+            self.health_server._app['uptime_seconds'] = uptime
+            self.health_server._app['bets_processed'] = self.bets_processed
+            self.health_server._app['last_processed_at'] = self.last_processed_at
+
 
 # ─── Main ────────────────────────────────────────────────────────────────
 
@@ -408,6 +508,7 @@ async def main():
         api_key=NODE_API_KEY,
         heartbeat_file=HEARTBEAT_FILE,
         heartbeat_interval_seconds=HEARTBEAT_INTERVAL_SECONDS,
+        health_port=HEALTH_PORT,
     )
 
     try:
