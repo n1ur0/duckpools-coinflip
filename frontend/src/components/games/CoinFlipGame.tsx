@@ -237,12 +237,30 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
               />
               {!isFlipping && result && (
                 <div className="coinflip-result-section">
-                  <div className={`coinflip-result ${result}`}>
-                    {result === 'heads' ? 'HEADS' : 'TAILS'}
+                  {/* Enhanced result display with icon */}
+                  <div className={`coinflip-result-wrapper ${result}`}>
+                    <div className={`coinflip-result-icon ${result}`}>
+                      {result === 'heads' ? '◉' : '◎'}
+                    </div>
+                    <div className={`coinflip-result-text ${result}`}>
+                      {result === 'heads' ? 'HEADS' : 'TAILS'}
+                    </div>
                   </div>
+                  
+                  {/* Enhanced win/loss outcome with bet amount */}
                   {winOutcome && (
                     <div className={`coinflip-outcome ${winOutcome}`}>
-                      {winOutcome === 'win' ? 'YOU WIN!' : 'YOU LOSE'}
+                      <div className="coinflip-outcome-icon">
+                        {winOutcome === 'win' ? '✦' : '✕'}
+                      </div>
+                      <div className="coinflip-outcome-text">
+                        {winOutcome === 'win' ? 'YOU WIN!' : 'YOU LOSE'}
+                      </div>
+                      {pendingBet && (
+                        <div className="coinflip-bet-amount">
+                          Bet: {pendingBet.amount} ERG
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
