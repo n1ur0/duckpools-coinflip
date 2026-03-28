@@ -228,6 +228,10 @@ build/
 .dockerignore
 docker-compose.override.yml
 .docker/
+# But allow .dockerignore files in service directories
+!backend/.dockerignore
+!frontend/.dockerignore
+!off-chain-bot/.dockerignore
 
 # -----------------------------------------------------------------------------
 # OS / Temporary Files
