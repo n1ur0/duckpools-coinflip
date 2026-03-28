@@ -1,24 +1,31 @@
 """
 DuckPools RNG Module - Implements provably-fair random number generation
 
-This module implements the ACTUAL protocol RNG scheme as documented in:
-- docs/ARCHITECTURE.md
-- smart-contracts/SECURITY_AUDIT_PREPARATION.md
-- sdk/README.md
+This module implements the ACTUAL protocol RNG scheme matching the
+compiled on-chain contract (coinflip_v2.es):
 
-Protocol RNG Formula:
-    blake2b256(blockHash_as_utf8 || secret_bytes)[0] % 2
+On-chain contract (coinflip_v2.es lines 51-53):
+    val blockSeed  = CONTEXT.preHeader.parentId      // Coll[Byte] — raw 32 bytes
+    val rngHash    = blake2b256(blockSeed ++ playerSecret)
+    val flipResult = rngHash(0) % 2
+
+OFF-CHAIN MUST MATCH ON-CHAIN EXACTLY:
+    blake2b256(blockId_raw_bytes || playerSecret_raw_bytes)[0] % 2
 
 Where:
-    - blockHash: UTF-8 encoded hex string (NOT "||" literal separator)
-    - secret_bytes: Raw 8-byte secret
+    - blockId: Raw 32-byte block ID (hex-decoded, NOT UTF-8 encoded hex string)
+    - playerSecret: Raw secret bytes (same bytes stored in R9)
     - Outcome: First byte of blake2b256 hash, modulo 2 for coinflip
 
-CRITICAL (SEC-CRITICAL-1): blake2b256 is the native hash on Ergo.
+SECURITY (SEC-CRITICAL-1): blake2b256 is the native hash on Ergo.
 The on-chain contracts use the blake2b256 opcode. Using SHA-256 would
 cause every single reveal to fail verification, making the protocol unusable.
 
-MAT-252: Fix RNG module to match actual protocol implementation
+SECURITY (SEC-CRITICAL-3): Previous version UTF-8 encoded the block hash hex
+string before hashing. This produced DIFFERENT results than the on-chain
+contract which uses raw bytes from CONTEXT.preHeader.parentId. Fixed 2026-03-28.
+
+MAT-328: Fix incomplete RNG code in smart contract and backend
 """
 
 import hashlib
@@ -32,25 +39,29 @@ from dataclasses import dataclass
 
 def compute_rng(block_hash: str, secret_bytes: bytes) -> int:
     """
-    Compute RNG outcome using ACTUAL protocol scheme.
+    Compute RNG outcome matching on-chain contract exactly.
 
-    Formula: blake2b256(blockHash_as_utf8 || secret_bytes)[0] % 2
+    Formula: blake2b256(blockId_raw_bytes || playerSecret_raw_bytes)[0] % 2
 
     Args:
-        block_hash: Block hash as hex string (e.g., "abcd1234...")
-        secret_bytes: 8-byte secret from player commitment
+        block_hash: Block ID as 64-character hex string (e.g., "abcd1234...")
+                      Will be hex-decoded to raw 32 bytes to match
+                      CONTEXT.preHeader.parentId (Coll[Byte]) on-chain.
+        secret_bytes: Raw secret bytes (same bytes stored in contract R9)
 
     Returns:
         int: 0 (tails) or 1 (heads)
 
     Examples:
-        >>> compute_rng("abcd1234", bytes([1,2,3,4,5,6,7,8]))
+        >>> compute_rng("abcd1234" + "0" * 56, bytes([1,2,3,4,5,6,7,8]))
         0  # or 1
     """
-    # UTF-8 encode the block hash string
-    block_hash_bytes = block_hash.encode('utf-8')
+    # CRITICAL: Hex-decode the block hash to raw bytes.
+    # The on-chain contract uses CONTEXT.preHeader.parentId which is
+    # Coll[Byte] (raw 32 bytes), NOT a UTF-8 encoded hex string.
+    block_hash_bytes = bytes.fromhex(block_hash)
 
-    # Raw byte concatenation (no "||" separator)
+    # Raw byte concatenation (no separator) — matches on-chain
     rng_data = block_hash_bytes + secret_bytes
 
     # Compute blake2b256 hash (native Ergo hash — MUST match on-chain)
@@ -215,6 +226,7 @@ def simulate_coinflip(num_bets: int, block_hashes: List[str] = None) -> RNGTestR
 
     for i in range(num_bets):
         block_hash = block_hashes[i % len(block_hashes)]
+        # Use different random secret per bet for valid statistical test
         secret_bytes = os.urandom(8)
         outcome = compute_rng(block_hash, secret_bytes)
         counts[outcome] += 1
