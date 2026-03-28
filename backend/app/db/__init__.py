@@ -1,6 +1,8 @@
 """Database module for DuckPools bankroll management."""
 
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+import os
+
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import String, Numeric, BigInteger, DateTime, Boolean, Integer, Index, Text
 from datetime import datetime
@@ -16,8 +18,15 @@ class Base(DeclarativeBase):
 
 
 # Async engine configuration
+# DATABASE_URL must be set via environment variable or .env file.
+# Fallback is a local dev default (PostgreSQL on standard port).
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql+asyncpg://duckpools:duckpools@localhost:5432/duckpools",
+)
+
 engine = create_async_engine(
-    "postgresql+asyncpg://user:password@localhost:5432/duckpools",
+    DATABASE_URL,
     echo=False,
     pool_pre_ping=True,
     pool_size=10,
@@ -26,7 +35,7 @@ engine = create_async_engine(
 
 AsyncSessionLocal = async_sessionmaker(
     engine,
-    class_=async_sessionmaker,
+    class_=AsyncSession,
     expire_on_commit=False,
 )
 
