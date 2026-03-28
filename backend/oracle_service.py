@@ -5,6 +5,7 @@ Service for managing Ergo Oracle Pool integrations with health monitoring,
 stale feed detection, failover logic, and alerting.
 
 MAT-31: Oracle health monitoring and failover
+MAT-XXX: Oracle price feed integration module with Ergo oracle pool adapter
 """
 
 import asyncio
@@ -16,6 +17,12 @@ from typing import Dict, List, Optional, Tuple
 
 import httpx
 from pydantic import BaseModel, Field
+
+from .ergo_oracle_adapter import (
+    ErgoOraclePoolAdapter,
+    OracleFeed,
+    OracleDataType
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -86,6 +93,19 @@ class OracleConfig(BaseModel):
         default=True,
         description="Log alerts when oracles fail"
     )
+    # Ergo oracle pool configuration
+    ergo_node_url: str = Field(
+        default="http://localhost:9052",
+        description="Ergo node API URL for on-chain oracle data"
+    )
+    ergo_node_api_key: Optional[str] = Field(
+        default=None,
+        description="API key for Ergo node (if required)"
+    )
+    enable_on_chain_oracles: bool = Field(
+        default=True,
+        description="Enable fetching data from on-chain oracle pools"
+    )
 
 
 class OracleService:
@@ -102,6 +122,10 @@ class OracleService:
         self._health_check_task: Optional[asyncio.Task] = None
         self._client: Optional[httpx.AsyncClient] = None
         self._lock = asyncio.Lock()
+        
+        # Ergo oracle pool adapter
+        self._ergo_adapter: Optional[ErgoOraclePoolAdapter] = None
+        self._configured_feeds: List[OracleFeed] = []
 
     def _init_endpoints(self) -> List[OracleEndpoint]:
         """Initialize oracle endpoints with priority."""
@@ -133,6 +157,16 @@ class OracleService:
             return  # Already started
 
         self._client = httpx.AsyncClient(timeout=self.config.request_timeout_seconds)
+        
+        # Initialize Ergo oracle pool adapter if enabled
+        if self.config.enable_on_chain_oracles:
+            self._ergo_adapter = ErgoOraclePoolAdapter(
+                node_url=self.config.ergo_node_url,
+                api_key=self.config.ergo_node_api_key
+            )
+            await self._ergo_adapter.start()
+            logger.info("Ergo oracle pool adapter initialized")
+        
         self._health_check_task = asyncio.create_task(self._health_check_loop())
         logger.info(f"Oracle service started with {len(self._endpoints)} endpoint(s)")
 
