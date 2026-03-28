@@ -49,7 +49,7 @@ COPY . .
 RUN mkdir -p /app/logs
 
 # Health check - check if process is running
-HEALTHCHECK --interval=30s --timeout=10s --start-period:30s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD pgrep -f "main.py" || exit 1
 
 # Run with development settings
@@ -78,7 +78,7 @@ RUN mkdir -p /app/logs && chown -R appuser:appuser /app/logs
 USER appuser
 
 # Health check - check if process is running
-HEALTHCHECK --interval=30s --timeout=10s --start-period:30s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD pgrep -f "main.py" || exit 1
 
 # Run with production settings
