@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, TouchEvent } from 'react';
 import { useWallet } from '../../contexts/WalletContext';
 import CoinFlip from '../../components/animations/CoinFlip';
+import { Button, Input } from '../../components/ui';
 import { generateSecret, bytesToHex, blake2b256 } from '../../utils/crypto';
 import { ergToNanoErg, formatErg } from '../../utils/ergo';
 import { buildApiUrl } from '../../utils/network';
@@ -203,9 +204,14 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
       <div className={`coinflip-game-container ${className}`}>
         <div className="coinflip-connect-prompt">
           <p>Connect your wallet to start flipping</p>
-          <button className="coinflip-connect-btn" onClick={connect}>
+          <Button 
+            className="coinflip-connect-btn" 
+            onClick={connect}
+            variant="primary"
+            size="lg"
+          >
             Connect Wallet
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -248,30 +254,34 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
           <div className="coinflip-choice-section">
             <span className="coinflip-choice-label">Pick Your Side</span>
             <div className="coinflip-choice-buttons">
-              <button
+              <Button
                 className={`coinflip-choice-btn coinflip-choice-btn--heads${
                   choice === 0 ? ' coinflip-choice-btn--selected' : ''
                 }`}
+                variant={choice === 0 ? "primary" : "secondary"}
                 onClick={() => {
                   setChoice(0);
                   setError(null);
                 }}
                 disabled={isSubmitting}
+                fullWidth
               >
                 Heads
-              </button>
-              <button
+              </Button>
+              <Button
                 className={`coinflip-choice-btn coinflip-choice-btn--tails${
                   choice === 1 ? ' coinflip-choice-btn--selected' : ''
                 }`}
+                variant={choice === 1 ? "primary" : "secondary"}
                 onClick={() => {
                   setChoice(1);
                   setError(null);
                 }}
                 disabled={isSubmitting}
+                fullWidth
               >
                 Tails
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -290,28 +300,29 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
                 Swipe ↑↓ to adjust
               </span>
             </label>
-            <div className="coinflip-amount-input-row">
-              <input
-                className="coinflip-amount-input"
-                type="text"
-                inputMode="decimal"
-                placeholder="0.0"
-                value={amount}
-                onChange={(e) => handleAmountChange(e.target.value)}
-                disabled={isSubmitting}
-              />
-              <span className="coinflip-amount-suffix">ERG</span>
-            </div>
+            <Input
+              className="coinflip-amount-input"
+              type="text"
+              inputMode="decimal"
+              placeholder="0.0"
+              value={amount}
+              onChange={(e) => handleAmountChange(e.target.value)}
+              disabled={isSubmitting}
+              suffix="ERG"
+              error={error || undefined}
+            />
             <div className="coinflip-quick-picks">
               {QUICK_PICK_VALUES.map((val) => (
-                <button
+                <Button
                   key={val}
                   className="coinflip-quick-pick"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => handleQuickPick(val.toString())}
                   disabled={isSubmitting}
                 >
                   {val} ERG
-                </button>
+                </Button>
               ))}
             </div>
             {isValidAmount && (
@@ -322,20 +333,17 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
           </div>
 
           {/* ── Submit ─────────────────────────────────────────────── */}
-          <button
+          <Button
             className={`coinflip-submit-btn${isSubmitting ? ' coinflip-submit-btn--loading' : ''}`}
+            variant="primary"
+            size="lg"
             onClick={handleSubmit}
             disabled={!canSubmit}
+            loading={isSubmitting}
+            fullWidth
           >
-            {isSubmitting ? (
-              <>
-                <span className="coinflip-spinner" />
-                Flipping...
-              </>
-            ) : (
-              'Flip!'
-            )}
-          </button>
+            {isSubmitting ? 'Flipping...' : 'Flip!'}
+          </Button>
 
           {/* ── Info ─────────────────────────────────────────────── */}
           <div className="coinflip-info">
