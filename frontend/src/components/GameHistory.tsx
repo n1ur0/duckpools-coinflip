@@ -3,13 +3,11 @@ import { RefreshCw } from 'lucide-react';
 import { useWallet } from '../contexts/WalletContext';
 import { buildApiUrl } from '../utils/network';
 import { formatErg } from '../utils/ergo';
-import type { BetRecord, GameType } from '../types/Game';
+import type { BetRecord } from '../types/Game';
 import { formatChoiceLabel } from '../types/Game';
 import './GameHistory.css';
 
 const REFRESH_INTERVAL = 30_000;
-
-type GameTypeFilter = 'All' | 'Coinflip' | 'Dice' | 'Plinko';
 
 function getExplorerTxUrl(txId: string): string {
   return `https://explorer.ergoplatform.com/en/transactions/${txId}`;
@@ -35,7 +33,6 @@ export default function GameHistory() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<GameTypeFilter>('All');
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchHistory = useCallback(async (showSpinner = true) => {
@@ -76,19 +73,6 @@ export default function GameHistory() {
     };
   }, [isConnected, walletAddress, fetchHistory]);
 
-  // Filter bets based on selected game type
-  const filteredBets = bets.filter((bet) => {
-    if (activeFilter === 'All') return true;
-    const gameTypeMap: Record<GameTypeFilter, GameType | null> = {
-      All: null,
-      Coinflip: 'coinflip',
-      Dice: 'dice',
-      Plinko: 'plinko',
-    };
-    const target = gameTypeMap[activeFilter];
-    return target ? bet.gameType === target : true;
-  });
-
   // ── Not connected ───────────────────────────────────────────────
 
   if (!isConnected) {
@@ -113,19 +97,6 @@ export default function GameHistory() {
         </button>
       </div>
 
-      {/* Filter tabs */}
-      <div className="gh-filters">
-        {(['All', 'Coinflip', 'Dice', 'Plinko'] as GameTypeFilter[]).map((filter) => (
-          <button
-            key={filter}
-            className={`gh-filter-btn${activeFilter === filter ? ' gh-filter-btn--active' : ''}`}
-            onClick={() => setActiveFilter(filter)}
-          >
-            {filter}
-          </button>
-        ))}
-      </div>
-
       {error && <div className="gh-error">{error}</div>}
 
       {loading ? (
@@ -140,10 +111,8 @@ export default function GameHistory() {
             </div>
           ))}
         </div>
-      ) : filteredBets.length === 0 ? (
-        <div className="gh-empty">
-          {activeFilter === 'All' ? 'No bets yet. Place your first flip!' : `No ${activeFilter.toLowerCase()} bets yet.`}
-        </div>
+      ) : bets.length === 0 ? (
+        <div className="gh-empty">No bets yet. Place your first flip!</div>
       ) : (
         <div className="gh-table-wrap">
           <table className="gh-table">
@@ -158,7 +127,7 @@ export default function GameHistory() {
               </tr>
             </thead>
             <tbody>
-              {filteredBets.map((bet) => (
+              {bets.map((bet) => (
                 <tr key={bet.betId}>
                   <td className="gh-date">{formatDate(bet.timestamp)}</td>
                   <td>

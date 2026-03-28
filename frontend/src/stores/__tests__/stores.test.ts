@@ -1,60 +1,13 @@
 /**
  * DuckPools — Store unit tests
  *
- * ARCH-2: Zustand stores for game state, bets, and user preferences
+ * ARCH-2: Zustand stores for bets and user preferences
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useGameStore } from '../gameStore';
 import { useBetStore } from '../betStore';
 import { usePreferencesStore } from '../preferencesStore';
 import type { PendingBet } from '../betStore';
-
-// ─── Game Store ────────────────────────────────────────────────
-
-describe('useGameStore', () => {
-  beforeEach(() => {
-    useGameStore.setState({
-      activeGame: 'coinflip',
-      plinkoRows: 12,
-      diceTarget: 50,
-    });
-  });
-
-  it('has correct defaults', () => {
-    const state = useGameStore.getState();
-    expect(state.activeGame).toBe('coinflip');
-    expect(state.plinkoRows).toBe(12);
-    expect(state.diceTarget).toBe(50);
-  });
-
-  it('setActiveGame changes the active game', () => {
-    useGameStore.getState().setActiveGame('dice');
-    expect(useGameStore.getState().activeGame).toBe('dice');
-  });
-
-  it('setPlinkoRows clamps to valid range [8, 16]', () => {
-    useGameStore.getState().setPlinkoRows(4);
-    expect(useGameStore.getState().plinkoRows).toBe(8);
-
-    useGameStore.getState().setPlinkoRows(20);
-    expect(useGameStore.getState().plinkoRows).toBe(16);
-
-    useGameStore.getState().setPlinkoRows(10);
-    expect(useGameStore.getState().plinkoRows).toBe(10);
-  });
-
-  it('setDiceTarget clamps to valid range [2, 98]', () => {
-    useGameStore.getState().setDiceTarget(1);
-    expect(useGameStore.getState().diceTarget).toBe(2);
-
-    useGameStore.getState().setDiceTarget(99);
-    expect(useGameStore.getState().diceTarget).toBe(98);
-
-    useGameStore.getState().setDiceTarget(75);
-    expect(useGameStore.getState().diceTarget).toBe(75);
-  });
-});
 
 // ─── Bet Store ─────────────────────────────────────────────────
 

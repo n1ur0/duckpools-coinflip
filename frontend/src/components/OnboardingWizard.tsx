@@ -144,7 +144,7 @@ const STEPS: Step[] = [
         <br />
         \u2022 Check your bet history and stats anytime
         <br />
-        \u2022 Earn comp points with every bet to unlock tier benefits
+        \u2022 Check the leaderboard to see how you stack up
         <br />
         \u2022 Only bet what you can afford to lose
       </>
