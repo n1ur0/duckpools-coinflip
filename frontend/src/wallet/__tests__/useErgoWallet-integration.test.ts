@@ -3,13 +3,14 @@
  */
 
 import { renderHook, act } from '@testing-library/react';
+import { vi } from 'vitest';
 import { useErgoWallet } from '../useErgoWallet';
 
 // Mock dependencies
-jest.mock('../adapters', () => ({
-  getWalletConnection: jest.fn(),
-  waitForConnector: jest.fn(() => Promise.resolve(true)),
-  getWalletInfo: jest.fn(() => ({
+vi.mock('../adapters', () => ({
+  getWalletConnection: vi.fn(),
+  waitForConnector: vi.fn(() => Promise.resolve(true)),
+  getWalletInfo: vi.fn(() => ({
     key: 'nautilus',
     name: 'Nautilus',
     shortName: 'Naut',
@@ -20,18 +21,18 @@ jest.mock('../adapters', () => ({
   })),
 }));
 
-jest.mock('../utils/network', () => ({
-  getExpectedNetworkType: jest.fn(() => 'testnet'),
-  getNetworkFromAddress: jest.fn(() => 'testnet'),
+vi.mock('../utils/network', () => ({
+  getExpectedNetworkType: vi.fn(() => 'testnet'),
+  getNetworkFromAddress: vi.fn(() => 'testnet'),
 }));
 
 // Mock window.ergoConnector
 const mockNautilusConnector = {
-  isConnected: jest.fn(() => Promise.resolve(true)),
-  getContext: jest.fn(() => Promise.resolve({
-    get_change_address: jest.fn(() => Promise.resolve('test-address')),
-    get_balance: jest.fn(() => Promise.resolve('1000000')),
-    get_utxos: jest.fn(() => Promise.resolve([
+  isConnected: vi.fn(() => Promise.resolve(true)),
+  getContext: vi.fn(() => Promise.resolve({
+    get_change_address: vi.fn(() => Promise.resolve('test-address')),
+    get_balance: vi.fn(() => Promise.resolve('1000000')),
+    get_utxos: vi.fn(() => Promise.resolve([
       {
         boxId: 'test-box-id',
         transactionId: 'test-tx-id',
@@ -56,14 +57,14 @@ Object.defineProperty(window, 'ergoConnector', {
 // Mock localStorage
 const mockLocalStorage = {
   store: {} as Record<string, string>,
-  getItem: jest.fn((key: string) => mockLocalStorage.store[key] || null),
-  setItem: jest.fn((key: string, value: string) => {
+  getItem: vi.fn((key: string) => mockLocalStorage.store[key] || null),
+  setItem: vi.fn((key: string, value: string) => {
     mockLocalStorage.store[key] = value;
   }),
-  removeItem: jest.fn((key: string) => {
+  removeItem: vi.fn((key: string) => {
     delete mockLocalStorage.store[key];
   }),
-  clear: jest.fn(() => {
+  clear: vi.fn(() => {
     mockLocalStorage.store = {};
   }),
 };
@@ -73,7 +74,7 @@ Object.defineProperty(window, 'localStorage', {
 });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockLocalStorage.clear();
   mockLocalStorage.store = {};
 });
@@ -94,7 +95,7 @@ describe('useErgoWallet with session persistence', () => {
       },
     ]);
 
-    const { result } = renderHook(() => useErgoWallet({ walletKey: 'nautilus' }));
+    renderHook(() => useErgoWallet({ walletKey: 'nautilus' }));
 
     // Wait for async operations to complete
     await act(async () => {
@@ -147,7 +148,7 @@ describe('useErgoWallet with session persistence', () => {
       throw new Error('localStorage error');
     });
 
-    const { result } = renderHook(() => useErgoWallet({ walletKey: 'nautilus' }));
+    renderHook(() => useErgoWallet({ walletKey: 'nautilus' }));
 
     // Should not throw error
     expect(() => {
@@ -173,9 +174,9 @@ describe('useErgoWallet with session persistence', () => {
       },
     ]);
 
-    const { result } = renderHook(() => useErgoWallet({ walletKey: 'nautilus' }));
+    renderHook(() => useErgoWallet({ walletKey: 'nautilus' }));
 
-    // Wait for async operations
+    // Wait for async operations to complete
     await act(async () => {
       await new Promise(resolve => setTimeout(resolve, 0));
     });

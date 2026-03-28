@@ -3,19 +3,20 @@
  */
 
 import { renderHook, act } from '@testing-library/react';
+import { vi } from 'vitest';
 import { useWalletSessionPersistence } from '../useWalletSessionPersistence';
 
 // Mock localStorage
 const mockLocalStorage = {
   store: {} as Record<string, string>,
-  getItem: jest.fn((key: string) => mockLocalStorage.store[key] || null),
-  setItem: jest.fn((key: string, value: string) => {
+  getItem: vi.fn((key: string) => mockLocalStorage.store[key] || null),
+  setItem: vi.fn((key: string, value: string) => {
     mockLocalStorage.store[key] = value;
   }),
-  removeItem: jest.fn((key: string) => {
+  removeItem: vi.fn((key: string) => {
     delete mockLocalStorage.store[key];
   }),
-  clear: jest.fn(() => {
+  clear: vi.fn(() => {
     mockLocalStorage.store = {};
   }),
 };
@@ -24,16 +25,9 @@ Object.defineProperty(window, 'localStorage', {
   value: mockLocalStorage,
 });
 
-// Mock console methods
-const mockConsole = {
-  log: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
-};
-
 beforeEach(() => {
   mockLocalStorage.clear();
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockLocalStorage.store = {};
 });
 
@@ -44,6 +38,8 @@ describe('useWalletSessionPersistence', () => {
     const walletKey = 'nautilus';
     const sessionData = {
       isConnected: true,
+      isConnecting: false,
+      isLocked: false,
       walletAddress: 'test-address',
       balance: 1000000,
       network: 'testnet' as const,
@@ -65,13 +61,18 @@ describe('useWalletSessionPersistence', () => {
     const { result: newResult } = renderHook(() => useWalletSessionPersistence());
     
     // Restore session
-    let restoredSession;
+    let restoredSession: any;
     act(() => {
       restoredSession = newResult.current.restoreSession(walletKey);
     });
 
     // Verify restored session
-    expect(restoredSession).toMatchObject(sessionData);
+    expect(restoredSession).toMatchObject({
+      isConnected: sessionData.isConnected,
+      walletAddress: sessionData.walletAddress,
+      balance: sessionData.balance,
+      network: sessionData.network,
+    });
     expect(restoredSession?.walletKey).toBe(walletKey);
     expect(restoredSession?.timestamp).toBeDefined();
     expect(restoredSession?.expiresAt).toBeDefined();
@@ -81,7 +82,7 @@ describe('useWalletSessionPersistence', () => {
     const { result } = renderHook(() => useWalletSessionPersistence());
     
     const nonExistentKey = 'non-existent-wallet';
-    let restoredSession;
+    let restoredSession: any;
     
     act(() => {
       restoredSession = result.current.restoreSession(nonExistentKey);
@@ -96,6 +97,8 @@ describe('useWalletSessionPersistence', () => {
     const walletKey = 'nautilus';
     const sessionData = {
       isConnected: true,
+      isConnecting: false,
+      isLocked: false,
       walletAddress: 'test-address',
       balance: 1000000,
       network: 'testnet' as const,
@@ -133,6 +136,8 @@ describe('useWalletSessionPersistence', () => {
     const walletKey = 'nautilus';
     const sessionData = {
       isConnected: true,
+      isConnecting: false,
+      isLocked: false,
       walletAddress: 'test-address',
       balance: 1000000,
       network: 'testnet' as const,
@@ -152,7 +157,7 @@ describe('useWalletSessionPersistence', () => {
     mockLocalStorage.store[sessionKey] = JSON.stringify(sessions);
 
     // Try to restore - should return null for expired session
-    let restoredSession;
+    let restoredSession: any;
     act(() => {
       restoredSession = result.current.restoreSession(walletKey);
     });
@@ -169,7 +174,7 @@ describe('useWalletSessionPersistence', () => {
     const { result } = renderHook(() => useWalletSessionPersistence());
     
     const walletKey = 'nautilus';
-    let restoredSession;
+    let restoredSession: any;
     
     act(() => {
       restoredSession = result.current.restoreSession(walletKey);

@@ -7,7 +7,7 @@
  * @see https://github.com/nautls/nautilus-wallet
  */
 import type { EIP12ContextAPI, ErgoBox, SignedTransaction, UnsignedTransaction } from '../../types/eip12';
-import { createWalletError, type WalletError } from '../../types/walletErrors';
+import { createWalletError } from '../../types/walletErrors';
 import type { WalletAdapter, WalletInfo, WalletId } from './types';
 
 const CONNECT_TIMEOUT = 10_000;

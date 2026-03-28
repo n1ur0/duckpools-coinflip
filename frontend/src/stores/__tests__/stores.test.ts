@@ -55,10 +55,10 @@ describe('useBetStore', () => {
       boxId: 'box-001',
       playerAddress: 'addr',
       gameType: 'coinflip' as const,
-      choice: { gameType: 'coinflip', side: 'heads' },
+      choice: { gameType: 'coinflip' as const, side: 'heads' as const },
       betAmount: '1000000000',
       outcome: 'win' as const,
-      actualOutcome: { gameType: 'coinflip', result: 'heads' },
+      actualOutcome: { gameType: 'coinflip' as const, result: 'heads' as const },
       payout: '970000000',
       payoutMultiplier: 0.97,
       timestamp: new Date().toISOString(),
@@ -95,7 +95,6 @@ describe('useBetStore', () => {
   });
 
   it('trimRecentResults caps the array', () => {
-    const state = useBetStore.getState();
     // Add 60 results
     for (let i = 0; i < 60; i++) {
       useBetStore.setState({
@@ -107,10 +106,10 @@ describe('useBetStore', () => {
             boxId: `box-${i}`,
             playerAddress: 'addr',
             gameType: 'coinflip' as const,
-            choice: { gameType: 'coinflip', side: 'heads' },
+            choice: { gameType: 'coinflip' as const, side: 'heads' as const },
             betAmount: '1000000000',
             outcome: 'win' as const,
-            actualOutcome: { gameType: 'coinflip', result: 'heads' },
+            actualOutcome: { gameType: 'coinflip' as const, result: 'heads' as const },
             payout: '970000000',
             payoutMultiplier: 0.97,
             timestamp: new Date().toISOString(),
