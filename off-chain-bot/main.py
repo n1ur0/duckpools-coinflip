@@ -23,9 +23,8 @@ from typing import Optional
 
 import httpx
 from tenacity import (
-    before_sleep_log,
     retry,
-    retry_if_exception_type,
+    retry_if_exception,
     stop_after_attempt,
     wait_exponential,
 )
@@ -83,14 +82,24 @@ def get_retry_decorator():
     Returns:
         Configured retry decorator
     """
+
+    def log_retry_attempt(retry_state):
+        """Log retry attempt using structlog."""
+        logger.warning(
+            "api_retry_attempt",
+            attempt_number=retry_state.attempt_number,
+            exception=str(retry_state.outcome.exception()),
+            seconds_since_start=retry_state.seconds_since_start,
+        )
+
     return retry(
         stop=stop_after_attempt(RETRY_MAX_ATTEMPTS),
         wait=wait_exponential(
             multiplier=RETRY_MIN_WAIT_SECONDS,
             max=RETRY_MAX_WAIT_SECONDS,
         ),
-        retry=retry_if_exception_type((httpx.ConnectError, httpx.ConnectTimeout, httpx.TimeoutException, httpx.HTTPStatusError)),
-        before_sleep=before_sleep_log(logger, logging.WARNING),
+        retry=retry_if_exception(is_retryable_error),
+        before_sleep=log_retry_attempt,
         reraise=True,
     )
 
