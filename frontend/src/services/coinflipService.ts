@@ -252,12 +252,12 @@ export interface RefundResult {
 async function fetchBlockHeaderId(height: number): Promise<string> {
   const resp = await fetch(`${NODE_URL}/blocks/at/${height}`);
   if (!resp.ok) throw new Error(`Failed to fetch block at height ${height}: ${resp.status}`);
-  const block = await resp.json();
-  // block.headerId is the ID of the block AT this height.
-  // CONTEXT.preHeader.parentId is the PREVIOUS block's ID.
-  // So for RNG seed we need the header of the block BEFORE the reveal height.
-  // The contract uses CONTEXT.preHeader.parentId which is the block at (height-1).
-  return block.headerId as string;
+  const headerIds: string[] = await resp.json();
+  if (!headerIds.length) throw new Error(`No block header found at height ${height}`);
+  // /blocks/at/{height} returns an array of header ID strings.
+  // CONTEXT.preHeader.parentId = header ID of block at (height-1).
+  // Caller passes (currentHeight - 1) so this returns the correct parent block.
+  return headerIds[0];
 }
 
 /**
@@ -512,10 +512,14 @@ export async function buildRefundTx(params: RefundParams): Promise<RefundResult>
  */
 function decodeCollByte(encoded: string): Uint8Array {
   const bytes = hexToBytes(encoded);
-  // bytes[0] = 0x0e (Coll constant), bytes[1] = element type
-  let offset = 2; // skip 0x0e + element type byte
+  // bytes[0] = 0x0e (Coll constant)
+  // Two formats exist:
+  //   (A) 0e 01 VLQ(len) data — with SByte 0x01 element type tag (spec/encoder)
+  //   (B) 0e VLQ(len) data    — without SByte tag (node API returns this)
+  // Auto-detect: if bytes[1] == 0x01 -> format A, VLQ at offset 2
+  //              else -> format B, VLQ at offset 1
+  let offset = 1;
   if (bytes[1] === 0x01) {
-    // SByte element type — offset stays at 2 (type byte is separate from length)
     offset = 2;
   }
   // Decode VLQ length
