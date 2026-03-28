@@ -23,11 +23,11 @@ version: '3.8'
 
 services:
   # Backend API Service (FastAPI)
-  backend:
+  backend-api:
     build:
       context: ./backend
       target: development  # Use development stage with hot-reload
-    container_name: duckpools-backend-dev
+    container_name: duckpools-backend-api-dev
     ports:
       - "8000:8000"  # API port
     environment:
@@ -85,7 +85,7 @@ services:
       start_period: 30s
       retries: 3
     depends_on:
-      - backend  # Start backend first
+      - backend-api  # Start backend first
 
   # Off-chain Bot Service
   off-chain-bot:
@@ -114,7 +114,7 @@ services:
       start_period: 30s
       retries: 3
     depends_on:
-      - backend  # Start backend first
+      - backend-api  # Start backend first
 
 # Network configuration
 networks:

@@ -86,7 +86,31 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 
 ## 🐳 Docker Development
 
-### Available Commands
+### Quick Start with Management Script (Recommended)
+
+```bash
+# Start development environment
+./docker-manage.sh dev up
+
+# Stop development environment
+./docker-manage.sh dev down
+
+# View logs
+./docker-manage.sh dev logs
+
+# View specific service logs
+./docker-manage.sh dev logs backend-api
+./docker-manage.sh dev logs frontend
+./docker-manage.sh dev logs off-chain-bot
+
+# Rebuild development images
+./docker-manage.sh dev build
+
+# Check status
+./docker-manage.sh status
+```
+
+### Using Docker Compose Directly
 
 ```bash
 # Start development environment
@@ -99,7 +123,7 @@ docker-compose up -d
 docker-compose logs -f
 
 # View specific service logs
-docker-compose logs -f backend
+docker-compose logs -f backend-api
 docker-compose logs -f frontend
 docker-compose logs -f off-chain-bot
 
@@ -113,9 +137,11 @@ docker-compose up --build
 docker-compose down -v
 ```
 
+For detailed Docker documentation, including troubleshooting and production deployment, see [DOCKER.md](DOCKER.md).
+
 ### Service Details
 
-#### Backend Service
+#### Backend API Service
 
 - **Port**: 8000
 - **Health Check**: http://localhost:8000/health
@@ -178,7 +204,7 @@ To configure a different Ergo node:
 
 ### Environment Variables
 
-#### Backend
+#### Backend API
 
 | Variable | Default | Description |
 |----------|---------|-------------|
