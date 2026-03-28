@@ -14,6 +14,7 @@
     "@fleet-sdk/crypto": "^0.11.0",
     "@fleet-sdk/serializer": "^0.11.0",
     "@nautilus-js/eip12-types": "^0.1.11",
+    "@noble/hashes": "^1.7.0",
     "framer-motion": "^11.15.0",
     "lucide-react": "^0.468.0",
     "react": "^18.2.0",
