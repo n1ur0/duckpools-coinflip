@@ -56,7 +56,7 @@ async def lifespan(app: FastAPI):
     # Pool manager
     config = PoolConfig(
         pool_nft_id=POOL_NFT_ID or None,
-        lp_token_id=*** or None,
+        lp_token_id=LP_TOKEN_ID or None,
         bankroll_tree_hex=BANKROLL_TREE_HEX or None,
         withdraw_request_tree_hex=WITHDRAW_REQUEST_TREE_HEX or None,
         house_edge_bps=HOUSE_EDGE_BPS,
@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI):
     )
     app.state.pool_manager = PoolStateManager(
         node_url=NODE_URL,
-        api_key=***
+        api_key=API_KEY,
         config=config,
     )
 
