@@ -118,18 +118,29 @@ export class TransactionBuilder {
    * Build bet placement transaction
    * Creates a PendingBetBox with commitment and other registers
    *
-   * R7 stores the player's secret as Int (8-byte big-endian unsigned integer).
-   * This matches the security audit spec (Section 2.1).
+   * Register layout MUST match smart contracts (coinflip_v1.es, dice_v1.es, plinko_v1.es):
+   *   R4:  housePubKey    (Coll[Byte]) — house's compressed public key (33 bytes)
+   *   R5:  playerPubKey   (Coll[Byte]) — player's compressed public key
+   *   R6:  commitmentHash (Coll[Byte]) — blake2b256(secret || choice)
+   *   R7:  playerChoice   (Int)        — 0=heads/1=tails for coinflip
+   *   R8:  playerSecret   (Int)        — player's random secret
+   *   R9:  betId          (Coll[Byte]) — unique bet identifier
+   *   R10: timeoutHeight  (Int)        — block height for timeout/refund
+   *
+   * CRITICAL (SEC-CRITICAL-6): This layout was fixed to match on-chain contracts.
+   * Previous SDK layout was completely different — see GitHub issue #211.
    */
   buildPlaceBetTransaction(params: {
     playerAddress: string;
     pendingBetAddress: string;
     amount: bigint;
-    commitment: string;
-    choice: number;
-    secret: string;
-    betId: string;
-    timeoutHeight?: number;
+    housePubKey: string;       // House's compressed public key (hex, 33 bytes)
+    playerPubKey: string;      // Player's compressed public key (hex)
+    commitment: string;        // blake2b256 hash (hex)
+    choice: number;            // Player's choice (game-specific)
+    secret: number;            // Player's random secret as Int
+    betId: string;             // Unique bet identifier (hex)
+    timeoutHeight: number;     // Block height for timeout
     inputBoxId: string;
     inputBoxValue: bigint;
   }): ErgoTransaction {
@@ -137,14 +148,13 @@ export class TransactionBuilder {
       address: params.pendingBetAddress,
       value: params.amount,
       additionalRegisters: {
-        R4: { type: 'Coll[Byte]' as const, value: '' }, // Player's ErgoTree - will be filled
-        R5: { type: 'Coll[Byte]' as const, value: params.commitment },
-        R6: { type: 'Int' as const, value: params.choice },
-        R7: { type: 'Int' as const, value: Number(Buffer.from(params.secret, 'hex').readBigUInt64BE()) },
-        R8: { type: 'Coll[Byte]' as const, value: params.betId },
-        ...(params.timeoutHeight !== undefined ? {
-          R9: { type: 'Int' as const, value: params.timeoutHeight },
-        } : {}),
+        R4: { type: 'Coll[Byte]' as const, value: params.housePubKey },
+        R5: { type: 'Coll[Byte]' as const, value: params.playerPubKey },
+        R6: { type: 'Coll[Byte]' as const, value: params.commitment },
+        R7: { type: 'Int' as const, value: params.choice },
+        R8: { type: 'Int' as const, value: params.secret },
+        R9: { type: 'Coll[Byte]' as const, value: params.betId },
+        R10: { type: 'Int' as const, value: params.timeoutHeight },
       } as Record<string, SValue>,
     }
 
