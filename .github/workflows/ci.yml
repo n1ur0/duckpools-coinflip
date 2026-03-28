@@ -29,11 +29,15 @@ jobs:
           pip install -r backend/requirements.txt
           pip install pytest
 
-      - name: Run backend tests
+      - name: Run backend unit tests (no external services)
         run: |
-          pytest tests/ -v --tb=short --ignore=tests/utils 2>/dev/null || \
-          pytest backend/tests/ -v --tb=short 2>/dev/null || \
-          echo "No backend tests discovered — skipping"
+          pytest tests/ -v --tb=short --ignore=tests/utils -m "not integration" 2>/dev/null || \
+          echo "No unit tests discovered — skipping"
+
+      - name: Run backend integration tests (requires services)
+        run: |
+          pytest tests/ -v --tb=short --ignore=tests/utils -m "integration" 2>/dev/null || \
+          echo "No integration tests discovered — skipping"
 
   # ── Security regression tests ────────────────────────────────────
   security-regression:
@@ -253,11 +257,10 @@ jobs:
           pip install -r backend/requirements.txt 2>/dev/null || true
           pip install pytest
 
-      - name: Run backend tests
+      - name: Run backend unit tests
         run: |
-          pytest tests/ -v --tb=short --ignore=tests/utils 2>/dev/null || \
-          pytest backend/tests/ -v --tb=short 2>/dev/null || \
-          echo "No backend tests discovered — skipping"
+          pytest tests/ -v --tb=short --ignore=tests/utils -m "not integration" 2>/dev/null || \
+          echo "No unit tests discovered — skipping"
 
       - name: Run security regression tests
         working-directory: security/scripts/regression

@@ -1,0 +1,28 @@
+[project]
+name = "duckpools"
+version = "0.1.0"
+description = "DuckPools — Provably-fair gambling protocol on Ergo"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests", "security/scripts/regression"]
+markers = [
+    "integration: marks tests requiring a running backend or external services (deselect with '-m \"not integration\"')",
+    "depends: marks test dependencies (requires pytest-dependency plugin)",
+    "security: marks security-focused tests",
+    "slow: marks tests that take >5s to run",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+addopts = "-v --tb=short"
+asyncio_mode = "auto"
+
+[tool.pytest.coverage.run]
+source = ["backend", "sdk"]
+omit = ["tests/*", "*/node_modules/*", "*/__pycache__/*"]
+
+[tool.pytest.coverage.report]
+fail_under = 50
+show_missing = true
