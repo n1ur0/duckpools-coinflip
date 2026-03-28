@@ -1,0 +1,185 @@
+# =============================================================================#
+# DuckPools Coinflip - Development Docker Compose Override
+# =============================================================================#
+# This file extends docker-compose.yml with development-specific configurations.
+# It automatically applies when running: docker compose up
+#
+# Development Features:
+# - Enhanced hot-reload with better file watching
+# - Debug ports and profiling
+# - Resource limits for development
+# - Enhanced logging and debugging
+# - Development-specific environment variables
+# =============================================================================#
+
+version: '3.8'
+
+services:
+  # Backend Development Override
+  backend:
+    # Development-specific environment variables
+    environment:
+      # Enhanced debugging
+      - NODE_ENV=development
+      - LOG_LEVEL=DEBUG
+      - PYTHONPATH=/app
+      - PYTHONASYNCIODEBUG=1
+      # CORS for development (allow multiple origins)
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000
+      # Development-specific timeouts
+      - API_TIMEOUT=30
+      # Development database/redis if needed
+      - REDIS_URL=redis://redis:6379/0
+    # Enhanced volume mounts for better hot-reload
+    volumes:
+      - ./backend:/app
+      - ./.env:/app/.env:ro
+      - backend_logs:/app/logs
+      # Add Python cache volume for faster reloads
+      - backend_cache:/root/.cache
+      # Mount development tools if they exist
+      - ./backend/.pytest_cache:/app/.pytest_cache
+    # Debug ports
+    ports:
+      - "8000:8000"  # Main API
+      - "5678:5678"  # Debugpy debugger (for VS Code)
+    # Resource limits for development (prevent overwhelming the system)
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    # Development-specific health check (more frequent)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+    depends_on:
+      - redis
+
+  # Frontend Development Override
+  frontend:
+    # Development-specific environment variables
+    environment:
+      # Enhanced hot-reload
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=100
+      - VITE_DEBUG_MODE=true
+      - VITE_HMR_OVERLAY=true
+      # API endpoints (can point to different backend for testing)
+      - VITE_API_ENDPOINT=http://localhost:8000
+      - VITE_WS_ENDPOINT=ws://localhost:8000/ws
+      # Development features
+      - VITE_MOCK_API=false
+      - VITE_SHOW_DEV_TOOLS=true
+    # Enhanced volume mounts for better hot-reload
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+      - frontend_vite:/app/.vite
+      # Mount development tools
+      - ./frontend/.vscode:/app/.vscode:ro
+    # Additional HMR ports
+    ports:
+      - "3000:3000"    # Main dev server
+      - "24678:24678"  # Vite HMR
+      - "9229:9229"    # Node.js debugger
+    # Resource limits for development
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    # Development-specific health check
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+
+  # Off-chain Bot Development Override
+  off-chain-bot:
+    # Development-specific environment variables
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=DEBUG
+      - PYTHONPATH=/app
+      - PYTHONASYNCIODEBUG=1
+      # Development bot settings
+      - ENABLE_BOT=true
+      - SETUP_MODE=false
+      - DEBUG_MODE=true
+      - DRY_RUN=false  # Can be set to true for testing
+    # Enhanced volume mounts
+    volumes:
+      - ./off-chain-bot:/app
+      - ./.env:/app/.env:ro
+      - bot_logs:/app/logs
+      - bot_cache:/root/.cache
+    # Debug ports
+    ports:
+      - "5679:5678"  # Debugpy debugger (for VS Code)
+    # Resource limits for development
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: '0.3'
+        reservations:
+          memory: 192M
+          cpus: '0.15'
+    # Development-specific health check
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "main.py"]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+
+  # Redis for Development (optional caching/session storage)
+  redis:
+    image: redis:7-alpine
+    container_name: duckpools-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+
+# Development-specific volumes
+volumes:
+  backend_cache:
+    name: duckpools-backend-cache-dev
+  frontend_node_modules:
+    name: duckpools-frontend-node-modules-dev
+  frontend_vite:
+    name: duckpools-frontend-vite-dev
+  bot_cache:
+    name: duckpools-bot-cache-dev
+  redis_data:
+    name: duckpools-redis-data-dev
+
+# Use the existing network
+networks:
+  default:
+    external:
+      name: duckpools-network

@@ -1,7 +1,7 @@
 # =============================================================================#
-# DuckPools Coinflip - Backend .dockerignore
+# DuckPools Coinflip - Off-chain Bot .dockerignore
 # =============================================================================#
-# This file tells Docker which files to exclude when building the backend image.
+# This file tells Docker which files to exclude when building the bot image.
 # This reduces build time and image size.
 # =============================================================================#
 
@@ -85,7 +85,13 @@ Dockerfile
 development/
 tests/
 integration_tests/
-load_tests/
+
+# Other project directories
+backend/
+frontend/
+scripts/
+tools/
+docs/
 
 # Node.js (if any frontend components)
 node_modules/
@@ -101,6 +107,22 @@ yarn-error.log*
 # Docker compose files
 docker-compose*.yml
 
-# Scripts and tools
-scripts/
-tools/
+# Data files
+data/
+*.json
+*.csv
+*.xlsx
+# Keep sample data if needed
+!sample_data/
+
+# Model files (if any ML components)
+models/
+*.pkl
+*.h5
+*.pt
+*.onnx
+
+# Temporary bot state
+state/
+bot_state.json
+*.state
