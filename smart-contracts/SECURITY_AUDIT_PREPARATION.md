@@ -407,7 +407,7 @@ Phase 2 (Reveal):
 
 | ID | Severity | Finding | Status |
 |----|----------|---------|--------|
-| BP-01 | HIGH | **Withdraw path does not verify WithdrawRequest box is also being spent**. The contract only checks `lpSupplyDelta < 0L` and `poolOut.value < SELF.value`. A transaction could reduce LP supply without a corresponding WithdrawRequest box. | The off-chain builder enforces this. Consider adding explicit data-input or input check for WithdrawRequest |
+| BP-01 | HIGH | **Withdraw path does not verify WithdrawRequest box is also being spent**. The contract only checks `lpSupplyDelta < 0L` and `poolOut.value < SELF.value`. A transaction could reduce LP supply without a corresponding WithdrawRequest box. | **FIXED in BP-01 branch**: Added `hasValidWithdrawRequest` check using `INPUTS.exists` to verify a WithdrawRequest box with valid cooldown is being spent. See `fix/BP-01-withdraw-request-verification`. |
 | BP-02 | MEDIUM | **No anti-drain protection**. Multiple withdrawals in rapid succession could drain the pool below a safe threshold. Only `poolOut.value >= minDeposit` is checked. | Add a `maxWithdraw` or `reserveRatio` check to prevent pool from being drained below operational minimum |
 | BP-03 | MEDIUM | **Collect path overlaps with Update path**. Both require `lpSupplyDelta == 0L` and `proveDlog(housePk)`. The only difference is `poolOut.value > SELF.value` vs `==`. An update transaction that accidentally increases ERG would be treated as a collect. | Consider using a separate flag or context variable to distinguish paths |
 | BP-04 | LOW | **R4 (housePk) accessed as GroupElement**. If the encoded bytes in R4 represent the point at infinity, `proveDlog` is trivially satisfiable. | Validate PK is not point at infinity during deployment |

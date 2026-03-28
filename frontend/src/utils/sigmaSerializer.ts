@@ -11,6 +11,20 @@ function encodeVLQ(value: number): string {
   return bytes.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// BigInt VLQ encoding — avoids precision loss for values > 2^53 (PROTO-1)
+function encodeVLQBigInt(value: bigint): string {
+  if (value === 0n) return '00';
+  const bytes: number[] = [];
+  let remaining = value;
+  while (remaining > 0n) {
+    let byte = Number(remaining & 0x7fn);
+    remaining >>= 7n;
+    if (remaining > 0n) byte |= 0x80;
+    bytes.push(byte);
+  }
+  return bytes.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 function zigzagEncode32(value: number): number {
   return (value << 1) ^ (value >> 31);
 }
@@ -27,9 +41,10 @@ export function encodeIntConstant(value: number): string {
 // LongConstant: type_tag(0x04) + VLQ(zigzag_i64)
 export function encodeLongConstant(value: number | bigint): string {
   const bigValue = typeof value === 'bigint' ? value : BigInt(value);
-  // Simple approach: use the positive encoding
-  const zigzag = Number((bigValue << 1n) ^ (bigValue >> 63n));
-  return '04' + encodeVLQ(zigzag);
+  // Zigzag-encode as BigInt to avoid precision loss for values > 2^53 (PROTO-1)
+  const zigzag = (bigValue << 1n) ^ (bigValue >> 63n);
+  const unsigned = BigInt.asUintN(64, zigzag);
+  return '04' + encodeVLQBigInt(unsigned);
 }
 
 // Coll[Byte]: type_tag(0x0E) + element_type(0x01) + VLQ(length) + raw_bytes

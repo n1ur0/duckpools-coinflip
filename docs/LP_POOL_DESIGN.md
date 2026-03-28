@@ -76,7 +76,10 @@ Conditions:
 - Output ERG = SELF.value - withdrawn ERG - fee
 - Withdrawn ERG = burned_tokens * totalValue / totalSupply (before withdraw)
 - Cooldown: HEIGHT >= request.creationHeight + SELF.R6
-- A withdrawal request box exists as data input
+- A valid WithdrawRequest box MUST be spent as an INPUT (BP-01 fix):
+  - Holds LP tokens (same tokenId as pool)
+  - Has R6 (creation height) + R7 (cooldown delta) where HEIGHT >= R6 + R7
+  - This prevents bypassing the cooldown mechanism
 ```
 
 #### 3. Profit Collection (house only)
@@ -133,14 +136,24 @@ Conditions:
 
   // --- Path 2: Withdraw ---
   // LP tokens burned, ERG removed from pool
-  // Requires withdrawal request box created earlier (cooldown)
+  // SECURITY: Must spend a WithdrawRequest box that has passed cooldown
+  val hasValidWithdrawRequest = INPUTS.exists { (inp: Box) =>
+    inp != SELF &&
+    inp.tokens.size >= 1 &&
+    inp.tokens(0)._1 == lpTokenId &&
+    inp.R6[Int].isDefined &&
+    inp.R7[Int].isDefined &&
+    HEIGHT >= inp.R6[Int].get + inp.R7[Int].get
+  }
+
   val isWithdraw = lpSupplyDelta < 0L &&
     poolOut.value < SELF.value &&       // ERG decreased
     poolOut.R4[Coll[Byte]].get == SELF.R4[Coll[Byte]].get &&
     poolOut.R5[Long].get == SELF.R5[Long].get &&
     poolOut.R6[Int].get == SELF.R6[Int].get &&
     poolOut.R7[Int].get == SELF.R7[Int].get &&
-    poolOut.value >= minDeposit         // can't drain below min
+    poolOut.value >= minDeposit &&       // can't drain below min
+    hasValidWithdrawRequest              // BP-01: must have valid request
 
   // --- Path 3: Profit Collection (house only) ---
   // No token supply change, ERG increases from house edge profits

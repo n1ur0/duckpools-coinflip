@@ -65,16 +65,31 @@ export const BANKROLL_POOL_SCRIPT = `{
 
   // --- Path 2: Withdraw ---
   // LP tokens are burned (supply decreases), ERG is removed from pool.
-  // Requires a WithdrawRequest box in the same transaction that has passed
-  // its cooldown period.
-  // Burn amount and ERG withdrawal calculated off-chain.
+  // SECURITY (BP-01 fix): Must spend a WithdrawRequest box that has
+  // passed its cooldown. This prevents bypassing the cooldown by
+  // directly burning LP tokens without a prior request.
+  //
+  // The WithdrawRequest box is identified by:
+  //   - Holds LP tokens (same tokenId)
+  //   - Has R6 (creation height) + R7 (cooldown delta) where cooldown expired
+  //   - Is not SELF (the pool box)
+  val hasValidWithdrawRequest = INPUTS.exists { (inp: Box) =>
+    inp != SELF &&
+    inp.tokens.size >= 1 &&
+    inp.tokens(0)._1 == lpTokenId &&
+    inp.R6[Int].isDefined &&
+    inp.R7[Int].isDefined &&
+    HEIGHT >= inp.R6[Int].get + inp.R7[Int].get
+  }
+
   val isWithdraw = lpSupplyDelta < 0L &&
     poolOut.value < SELF.value &&
     poolOut.R4[Coll[Byte]].get == SELF.R4[Coll[Byte]].get &&
     poolOut.R5[Long].get == SELF.R5[Long].get &&
     poolOut.R6[Int].get == SELF.R6[Int].get &&
     poolOut.R7[Int].get == SELF.R7[Int].get &&
-    poolOut.value >= minDeposit
+    poolOut.value >= minDeposit &&
+    hasValidWithdrawRequest
 
   // --- Path 3: Profit Collection (house only) ---
   // No LP token supply change. ERG increases from house edge profits.
