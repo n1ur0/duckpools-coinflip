@@ -1,0 +1,157 @@
+# Gitleaks configuration for DuckPools
+title = "DuckPools Gitleaks Configuration"
+
+# Allowlist for known non-sensitive patterns
+[[allowlist]]
+description = "Global allowlist for non-sensitive patterns"
+regex = '''^(?i)(test|example|demo|placeholder|fake|mock|sample|localhost|127\.0\.0\.1|0\.0\.0\.0|\{\{.*\}\}|__.*__)$'''
+
+# Allow specific test files
+[[allowlist]]
+description = "Allow test files and fixtures"
+files = ['''.*test.*''', '''.*spec.*''', '''.*fixture.*''', '''\.lock$''', '''package-lock\.json$''', '''Cargo\.lock$''']
+
+# Rule for AWS Access Key ID
+[[rules]]
+id = "aws-access-key-id"
+description = "AWS Access Key ID"
+regex = '''(A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}'''
+secretGroup = 1
+keywords = [
+    "akia","agpa","aida","aroa","aipa","anpa","anva","asia",
+]
+
+# Rule for AWS Secret Access Key
+[[rules]]
+id = "aws-secret-access-key"
+description = "AWS Secret Access Key"
+regex = '''[\w/+=]{40}'''
+secretGroup = 1
+keywords = [
+    "aws","secret","access","key",
+]
+
+# Rule for AWS Account ID
+[[rules]]
+id = "aws-account-id"
+description = "AWS Account ID"
+regex = '''\b\d{12}\b'''
+keywords = [
+    "account","id","aws",
+]
+
+# Rule for Private Key
+[[rules]]
+id = "private-key"
+description = "Private Key"
+regex = '''-----BEGIN(?: RSA| EC| DSA)? PRIVATE KEY-----'''
+secretGroup = 1
+keywords = [
+    "-----begin",
+]
+
+# Rule for Ergo Address
+[[rules]]
+id = "ergo-address"
+description = "Ergo Address"
+regex = '''\b9[0-9a-zA-Z]{95}\b'''
+secretGroup = 1
+keywords = [
+    "ergo","address",
+]
+
+# Rule for Ergo Mnemonic
+[[rules]]
+id = "ergo-mnemonic"
+description = "Ergo Mnemonic Phrase"
+regex = '''(?:abandon|ability|able|about|above|absent|absorb|abstract|absurd|abuse|access|accident|account|accuse|achieve|acid|acoustic|acquire|across|act|action|actor|actress|actual|adapt|add|addict|address|adjust|admit|adult|advance|advice|aerobic|affair|afford|afraid|again|age|agent|agree|ahead|aim|air|airport|aisle|alarm|album|alcohol|alert|alien|all|alley|allow|almost|alone|alpha|already|also|alter|always|amateur|amazing|among|amount|amused|analyst|anchor|ancient|anger|angle|angry|apart|apartment|apparent|appeal|apple|approve|april|arbitrary|arch|architect|area|arena|argue|arm|armed|armor|army|around|arrange|arrest|arrive|arrow|art|artefact|artist|artwork|ask|aspect|assault|asset|assist|assume|asthma|athlete|atom|attack|attend|attitude|attract|auction|audit|august|aunt|author|auto|autumn|average|avocado|avoid|awake|aware|away|awesome|awful|awkward|axis){12,24}'''
+secretGroup = 1
+keywords = [
+    "mnemonic","seed","phrase",
+]
+
+# Rule for API Keys
+[[rules]]
+id = "api-key"
+description = "Generic API Key"
+regex = '''(?i)(api[_-]?key|api[_-]?secret|apikey|api_secret)[\s\'":=]+([a-zA-Z0-9_\-]{16,64})'''
+secretGroup = 2
+keywords = [
+    "api","key","secret",
+]
+
+# Rule for Passwords in config files
+[[rules]]
+id = "password"
+description = "Password in configuration"
+regex = '''(?i)(password|passwd|pwd)[\s\'":=]+([^\s\'":<>]{8,64})'''
+secretGroup = 2
+keywords = [
+    "password","passwd","pwd",
+]
+
+# Rule for Database URLs
+[[rules]]
+id = "database-url"
+description = "Database Connection URL"
+regex = '''(?i)(postgresql|mysql|mongodb|redis):\/\/[^\s:]+:[^\s@]+@[^\/\s]+'''
+secretGroup = 1
+keywords = [
+    "postgresql","mysql","mongodb","redis",
+]
+
+# Rule for Webhook URLs
+[[rules]]
+id = "webhook-url"
+description = "Webhook URL"
+regex = '''(?i)(webhook|slack|discord)[\s\'":=]+(https:\/\/hooks\.[^\s\'"<>]+)'''
+secretGroup = 2
+keywords = [
+    "webhook","slack","discord",
+]
+
+# Rule for JWT tokens
+[[rules]]
+id = "jwt-token"
+description = "JWT Token"
+regex = '''eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*'''
+secretGroup = 1
+keywords = [
+    "eyJ",
+]
+
+# Rule for Private Key variations
+[[rules]]
+id = "private-key-variations"
+description = "Private Key variations"
+regex = '''(?i)-----BEGIN((?:.*?(?:EC|RSA|DSA|OPENSSH|PGP))?) PRIVATE KEY-----'''
+secretGroup = 1
+keywords = [
+    "private","key",
+]
+
+# Rule for Generic Token
+[[rules]]
+id = "generic-token"
+description = "Generic token/secret"
+regex = '''(?i)(token|secret|auth)[\s\'":=]+([a-f0-9]{32,})'''
+secretGroup = 2
+keywords = [
+    "token","secret","auth",
+]
+
+# Rule for Ergo Token ID
+[[rules]]
+id = "ergo-token-id"
+description = "Ergo Token ID"
+regex = '''\b[0-9a-fA-F]{64}\b'''
+secretGroup = 1
+keywords = [
+    "token","id",
+]
+
+# Allowlist for common non-sensitive IDs in test files
+[[rules.allowlists]]
+regexes = ['''[0-9a-fA-F]{64}''']
+description = "Allow hex strings in test files"
+files = ['''.*test.*''', '''.*spec.*''', '''\.md$''']
