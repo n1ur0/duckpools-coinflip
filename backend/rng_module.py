@@ -134,8 +134,18 @@ def dice_rng(block_hash: str, secret_bytes: bytes) -> int:
         if byte_val < 200:  # 200 = 2 * 100
             return byte_val % 100
 
-    # Fallback (astronomically unlikely to reach)
-    return int.from_bytes(rng_hash[:2], 'big') % 100
+    # Fallback (astronomically unlikely to reach) - also use rejection sampling
+    # Use 16-bit value but reject >= 65500 to avoid modulo bias
+    sixteen_bit_value = int.from_bytes(rng_hash[:2], 'big')
+    if sixteen_bit_value < 65500:  # 65500 = 655 * 100
+        return sixteen_bit_value % 100
+    else:
+        # If somehow still in rejection territory, use single byte with rejection
+        for byte_val in rng_hash[2:]:
+            if byte_val < 200:
+                return byte_val % 100
+        # Ultimate fallback - just use first byte mod 100 (extremely biased but virtually impossible)
+        return rng_hash[0] % 100
 
 
 # ─── Statistical Analysis ────────────────────────────────────────────

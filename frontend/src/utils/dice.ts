@@ -168,8 +168,21 @@ export async function computeDiceRng(
   }
 
   // Fallback — astronomically unlikely (all 32 bytes >= 200: probability ~10^-7)
-  // Use two bytes for a wider range
-  return (rngHash[0] * 256 + rngHash[1]) % 100;
+  // Use two bytes for a wider range, but still apply rejection sampling to avoid bias
+  const sixteenBitValue = rngHash[0] * 256 + rngHash[1];
+  if (sixteenBitValue < 65500) {  // 65500 = 655 * 100
+    return sixteenBitValue % 100;
+  } else {
+    // If somehow still in rejection territory, try remaining bytes
+    for (let i = 2; i < rngHash.length; i++) {
+      const byte = rngHash[i];
+      if (byte < 200) {
+        return byte % 100;
+      }
+    }
+    // Ultimate fallback - just use first byte mod 100 (extremely biased but virtually impossible)
+    return rngHash[0] % 100;
+  }
 }
 
 /**
