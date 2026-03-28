@@ -13,3 +13,7 @@ httpx>=0.25.0
 
 # Retry with exponential backoff
 tenacity>=8.2.0
+
+# Health endpoint server
+fastapi>=0.104.0
+uvicorn>=0.24.0

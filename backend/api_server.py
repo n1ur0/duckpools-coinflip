@@ -144,12 +144,33 @@ async def root():
     }
 
 
+async def get_bot_health() -> dict:
+    """Get off-chain bot health status if available."""
+    try:
+        # Try to get bot health from localhost:8001
+        async with httpx.AsyncClient(timeout=2) as client:
+            resp = await client.get("http://localhost:8001/health")
+            if resp.status_code == 200:
+                return resp.json()
+    except Exception:
+        # Bot health endpoint not available - return None
+        pass
+    return None
+
 @app.get("/health")
 async def health():
     """Health check: verify node connectivity, pool state, and oracle status."""
     import httpx
 
     health_data = {"status": "ok", "node": NODE_URL, "pool_configured": bool(POOL_NFT_ID)}
+    
+    # Check bot health
+    bot_health = await get_bot_health()
+    if bot_health:
+        health_data["bot_health"] = bot_health
+        # Update overall status if bot is not alive
+        if bot_health.get("status") != "alive":
+            health_data["status"] = "degraded"
 
     # Check node connectivity
     try:

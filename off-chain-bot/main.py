@@ -24,6 +24,8 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 # Import local logger
 from logger import configure_structured_logging, get_logger
@@ -38,7 +40,7 @@ logger = get_logger(__name__)
 
 # Bot configuration
 NODE_URL = os.getenv("NODE_URL", "http://localhost:9052")
-API_KEY = os.getenv("API_KEY", "")
+API_KEY=os.getenv("API_KEY", "")
 HEARTBEAT_FILE = Path("/tmp/off-chain-bot.heartbeat")
 
 # Shutdown flag
@@ -207,6 +209,68 @@ class OffChainBot:
         self.client = ErgoNodeClient(config)
         self.running = False
         self.heartbeat_task: Optional[asyncio.Task] = None
+        
+        # Health server and metrics
+        self.health_app = FastAPI(title="Off-Chain Bot Health")
+        self.health_server: Optional[any] = None
+        self.start_time = datetime.now(timezone.utc)
+        self.bets_processed = 0
+        self.last_processed_at: Optional[datetime] = None
+        self.health_port = 8001
+        
+        # Setup health endpoint
+        self._setup_health_endpoint()
+
+    def _setup_health_endpoint(self) -> None:
+        """Setup the health endpoint."""
+        
+        @self.health_app.get("/health")
+        async def health_check():
+            """Health check endpoint with bot metrics."""
+            uptime_seconds = (datetime.now(timezone.utc) - self.start_time).total_seconds()
+            
+            health_data = {
+                "status": "alive" if self.running else "stopped",
+                "uptime_seconds": round(uptime_seconds, 2),
+                "bets_processed": self.bets_processed,
+                "last_processed_at": self.last_processed_at.isoformat() if self.last_processed_at else None,
+                "start_time": self.start_time.isoformat(),
+            }
+            
+            return JSONResponse(content=health_data)
+
+    async def start_health_server(self) -> None:
+        """Start the health server on port 8001."""
+        import uvicorn
+        
+        logger.info("health_server_starting", port=self.health_port)
+        
+        # Configure uvicorn
+        config = uvicorn.Config(
+            app=self.health_app,
+            host="127.0.0.1",
+            port=self.health_port,
+            log_level="warning",  # Reduce log noise
+            access_log=False,  # Disable access logs for cleaner output
+        )
+        
+        # Create and start server
+        server = uvicorn.Server(config)
+        self.health_server = server
+        
+        # Start server in background
+        asyncio.create_task(server.serve())
+        logger.info("health_server_started", port=self.health_port)
+
+    async def stop_health_server(self) -> None:
+        """Stop the health server."""
+        if self.health_server:
+            logger.info("health_server_stopping")
+            self.health_server.should_exit = True
+            # Give it a moment to shut down gracefully
+            await asyncio.sleep(0.1)
+            self.health_server = None
+            logger.info("health_server_stopped")
 
     def write_heartbeat(self) -> None:
         """
@@ -254,6 +318,10 @@ class OffChainBot:
                 # This is a placeholder - replace with actual game logic
                 logger.debug("processing_bet_batch")
 
+                # Increment bets processed counter
+                self.bets_processed += 1
+                self.last_processed_at = datetime.now(timezone.utc)
+
                 # Get node info as example API call
                 try:
                     node_info = await self.client.get_node_info_async()
@@ -284,6 +352,9 @@ class OffChainBot:
         # Start heartbeat task
         self.heartbeat_task = asyncio.create_task(self.heartbeat_loop())
 
+        # Start health server
+        await self.start_health_server()
+
         # Start bet processing
         await self.process_bets()
 
@@ -304,6 +375,9 @@ class OffChainBot:
                 await self.heartbeat_task
             except asyncio.CancelledError:
                 pass
+
+        # Stop health server
+        await self.stop_health_server()
 
         # Close client
         await self.client.close_async()
