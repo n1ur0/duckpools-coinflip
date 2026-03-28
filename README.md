@@ -2,6 +2,40 @@
 
 A provably-fair gambling protocol on Ergo blockchain using a commit-reveal scheme for fair randomness.
 
+## ⚠️ SECURITY NOTICES
+
+### 🚨 CRITICAL: WebSocket Authentication Vulnerability
+
+**This is a Proof of Concept (PoC) implementation with known security limitations.**
+
+#### Issue: WebSocket Authentication Bypass
+The WebSocket authentication endpoint (`POST /ws/auth`) currently accepts **ANY non-empty signature** without cryptographic verification. This means:
+
+- **Anyone can obtain a WebSocket token for ANY Ergo address**
+- **An attacker can subscribe to real-time bet events for any player**
+- **Privacy of all bet activity is compromised**
+- **This connection is "authenticated" but the authentication is theater**
+
+#### Impact
+- Players can be tracked in real-time by any third party
+- Bet patterns, amounts, and timing are exposed
+- No privacy protection for WebSocket connections
+
+#### Current Mitigation
+- Documented as known PoC limitation
+- Warning header included in auth responses
+- `ws/stats` endpoint requires ADMIN_API_KEY (returns 403 if not set)
+
+#### Production Hardening Required
+Before mainnet deployment, this MUST be fixed:
+1. Implement proper cryptographic signature verification
+2. Use Ergo node API to verify address → signature mapping
+3. Or implement SigmaProp signature verification
+
+For detailed technical analysis, see: `SECURITY.md` and `backend/ws_routes.py` lines 141-144.
+
+---
+
 ## 🚀 Quick Start
 
 ### Prerequisites
