@@ -2,9 +2,11 @@ import { useState, useCallback, useRef, TouchEvent } from 'react';
 import { useWallet } from '../../contexts/WalletContext';
 import CoinFlip from '../../components/animations/CoinFlip';
 import { Button, Input } from '../../components/ui';
-import { bytesToHex, blake2b256 } from '../../utils/crypto';
+import { bytesToHex, blake2b256, generateSecret } from '../../utils/crypto';
 import { ergToNanoErg, formatErg } from '../../utils/ergo';
 import { buildApiUrl } from '../../utils/network';
+import { isOnChainEnabled } from '../../config/contract';
+import { buildPlaceBetTx, verifyCommitment } from '../../services/coinflipService';
 import './CoinFlipGame.css';
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -45,7 +47,7 @@ interface CoinFlipGameProps {
 }
 
 const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
-  const { isConnected, walletAddress, connect } = useWallet();
+  const { isConnected, walletAddress, connect, signTransaction, submitTransaction, getUtxos, getCurrentHeight, getChangeAddress } = useWallet();
 
   const [amount, setAmount] = useState('');
   const [choice, setChoice] = useState<0 | 1 | null>(null);
@@ -59,6 +61,7 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
     amount: string;
     choiceLabel: string;
     commitment: string;
+    txId?: string;
   } | null>(null);
 
   // Touch gesture state
@@ -134,46 +137,117 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
     setIsSubmitting(true);
     setError(null);
 
-try {
+    try {
       // 1. Generate secret & commitment
-      const secret = crypto.getRandomValues(new Uint8Array(32));
+      const secret = generateSecret();
       const commitment = generateCommitment(secret, choice);
       const betId = generateBetId();
 
-      // 2. Build API request
-      // SECURITY (SEC-HIGH-2): NEVER send the secret to the backend.
-      // The commit-reveal scheme requires the secret to remain private
-      // until the on-chain reveal transaction. Only the commitment hash
-      // is needed for bet placement.
-      const payload = {
-        address: walletAddress,
-        amount: amountNanoErg,
-        choice,
-        commitment,
-        betId,
-      };
-      // 3. Submit to backend
-      const res = await fetch(buildApiUrl('/place-bet'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      // Sanity-check commitment (should always pass)
+      if (!verifyCommitment(secret, choice, commitment)) {
+        throw new Error('Commitment verification failed — internal error');
+      }
 
-      const data = await res.json();
+      let txId = '';
 
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || `Server error ${res.status}`);
+      if (isOnChainEnabled()) {
+        // ── ON-CHAIN FLOW ──────────────────────────────────────
+        // Build unsigned EIP-12 transaction using Fleet SDK,
+        // then sign via Nautilus and broadcast.
+
+        const [utxos, currentHeight, changeAddressRaw] = await Promise.all([
+          getUtxos(),
+          getCurrentHeight(),
+          getChangeAddress(),
+        ]);
+
+        const changeAddress = changeAddressRaw ?? walletAddress;
+        if (!changeAddress) {
+          throw new Error('Could not get change address from wallet');
+        }
+
+        if (utxos.length === 0) {
+          throw new Error('No UTXOs available in wallet. Fund your wallet first.');
+        }
+
+        // TODO: Get player's compressed public key from wallet.
+        //       EIP-12 doesn't expose this directly. Options:
+        //       (a) Derive from first UTXO's ergoTree (P2PK: 0008cd<pk>)
+        //       (b) Backend provides player pub key lookup
+        //       (c) Use sign_data to get a signature, derive pub key
+        // For now, extract from first UTXO's ergoTree if P2PK.
+        const playerPubKey = extractPubKeyFromUtxo(utxos[0]);
+        if (!playerPubKey) {
+          throw new Error(
+            'Could not determine player public key. Ensure your UTXO is a P2PK address.'
+          );
+        }
+
+        const { unsignedTx, timeoutHeight } = await buildPlaceBetTx({
+          changeAddress,
+          amountNanoErg: BigInt(amountNanoErg),
+          playerPubKey,
+          commitment,
+          choice,
+          secret,
+          betId,
+          currentHeight,
+          utxos: utxos as any, // Fleet SDK Box type compat
+        });
+
+        // 2. Sign via Nautilus — THIS triggers the wallet popup
+        const signedTx = await signTransaction(unsignedTx as any);
+        if (!signedTx) {
+          throw new Error('Transaction signing was rejected or failed');
+        }
+
+        // 3. Broadcast to the Ergo network
+        txId = (await submitTransaction(signedTx as any)) ?? '';
+        if (!txId) {
+          throw new Error('Transaction broadcast failed');
+        }
+
+        console.log(`[CoinFlip] On-chain bet placed: txId=${txId}, timeout=${timeoutHeight}`);
+      } else {
+        // ── OFF-CHAIN FALLBACK ─────────────────────────────────
+        // Contract not compiled yet (MAT-344 blocker).
+        // Send to backend for in-memory tracking only.
+        // No real ERG moves — this is frontend theater.
+
+        const payload = {
+          address: walletAddress,
+          amount: amountNanoErg,
+          choice,
+          commitment,
+          betId,
+        };
+
+        const res = await fetch(buildApiUrl('/place-bet'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || `Server error ${res.status}`);
+        }
+
+        console.warn(
+          '[CoinFlip] OFF-CHAIN MODE — contract not compiled yet (MAT-344). ' +
+          'No real ERG was moved. Outcome cannot be determined on-chain.'
+        );
       }
 
       // 4. Show "Bet Placed — Pending On-Chain Reveal" state.
-      // NO Math.random() — the outcome is determined on-chain via
-      // blake2b256(blockHash || secret)[0] % 2 when the house reveals.
-      // The coin flip animation should only trigger after a real outcome.
+      // NO Math.random() — outcomes come from on-chain reveal.
       setBetPlaced({
         betId,
         amount,
         choiceLabel: choice === 0 ? 'Heads' : 'Tails',
         commitment,
+        txId: txId || undefined,
       });
 
       // Reset form
@@ -186,7 +260,7 @@ try {
     } finally {
       setIsSubmitting(false);
     }
-  }, [canSubmit, choice, walletAddress, amountNanoErg, amount]);
+  }, [canSubmit, choice, walletAddress, amountNanoErg, amount, signTransaction, submitTransaction, getUtxos, getCurrentHeight, getChangeAddress]);
 
   // ── Not connected ───────────────────────────────────────────────
 
@@ -213,6 +287,12 @@ try {
   return (
     <div className={`coinflip-game-container ${className}`}>
       <h2 className="coinflip-title">Coin Flip</h2>
+
+      {!isOnChainEnabled() && (
+        <div className="coinflip-offchain-banner">
+          ⚠️ Off-chain mode — contract not yet deployed (MAT-344)
+        </div>
+      )}
 
       <div className="coinflip-game-layout">
         {/* ── Main Game Area ───────────────────────────────────────── */}
@@ -351,7 +431,9 @@ try {
             loading={isSubmitting}
             fullWidth
           >
-            {isSubmitting ? 'Flipping...' : 'Flip!'}
+            {isSubmitting
+              ? isOnChainEnabled() ? 'Signing...' : 'Flipping...'
+              : 'Flip!'}
           </Button>
 
           {/* ── Info ─────────────────────────────────────────────── */}
@@ -412,8 +494,25 @@ try {
             <span className="coinflip-pending-row-label">Commitment</span>
             <span className="coinflip-pending-row-value">{betPlaced.commitment.slice(0, 16)}...</span>
           </div>
+          {betPlaced.txId && (
+            <div className="coinflip-pending-row">
+              <span className="coinflip-pending-row-label">Transaction</span>
+              <span className="coinflip-pending-row-value">
+                <a
+                  href={`https://explorer.ergoplatform.com/en/transactions/${betPlaced.txId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="coinflip-tx-link"
+                >
+                  {betPlaced.txId.slice(0, 16)}...
+                </a>
+              </span>
+            </div>
+          )}
           <div className="coinflip-pending-note">
-            Outcome will be revealed on-chain when the house processes the bet.
+            {isOnChainEnabled()
+              ? 'Outcome will be revealed on-chain when the house processes the bet.'
+              : '⚠️ Off-chain mode — no real transaction was broadcast (MAT-344).'}
           </div>
           <button
             className="coinflip-flip-again-btn"
@@ -429,5 +528,24 @@ try {
     </div>
   );
 };
+
+// ── Utility: Extract player public key from P2PK UTXO ──────────────
+
+/**
+ * Extract the 33-byte compressed public key from a P2PK UTXO's ergoTree.
+ *
+ * P2PK ErgoTree format: 0008cd<33-byte-pk>
+ * The public key is bytes 4..37 of the ergoTree hex string.
+ *
+ * Returns null if the UTXO is not a standard P2PK box.
+ */
+function extractPubKeyFromUtxo(utxo: { ergoTree?: string }): string | null {
+  const tree = utxo.ergoTree;
+  if (!tree || tree.length < 74) return null; // 4 + 66 hex chars minimum
+  if (tree.startsWith('0008cd')) {
+    return tree.slice(4, 4 + 66); // 33 bytes = 66 hex chars
+  }
+  return null;
+}
 
 export default CoinFlipGame;
