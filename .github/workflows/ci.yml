@@ -112,6 +112,68 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+  # ── Docker image build tests ─────────────────────────────────────
+  docker-build:
+    name: Docker Build Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend Docker image (development)
+        run: |
+          docker build \
+            --target development \
+            -t duckpools-backend:dev \
+            ./backend
+
+      - name: Build backend Docker image (production)
+        run: |
+          docker build \
+            --target production \
+            -t duckpools-backend:prod \
+            ./backend
+
+      - name: Build frontend Docker image (development)
+        run: |
+          docker build \
+            --target development \
+            -t duckpools-frontend:dev \
+            ./frontend
+
+      - name: Build frontend Docker image (production)
+        run: |
+          docker build \
+            --target production \
+            -t duckpools-frontend:prod \
+            ./frontend
+
+      - name: Build off-chain-bot Docker image (development)
+        run: |
+          docker build \
+            --target development \
+            -t duckpools-bot:dev \
+            ./off-chain-bot
+
+      - name: Build off-chain-bot Docker image (production)
+        run: |
+          docker build \
+            --target production \
+            -t duckpools-bot:prod \
+            ./off-chain-bot
+
+      - name: Verify Docker Compose configuration
+        run: |
+          # Validate docker-compose.yml syntax
+          docker compose config > /dev/null
+
+      - name: List built images
+        run: |
+          docker images | grep duckpools
+
   # ── ErgoScript contract integrity check ──────────────────────────
   contract-lint:
     name: Contract Integrity
@@ -170,12 +232,12 @@ jobs:
 
   # ── Post-merge regression gate ──────────────────────────────────
   # Runs on every push to main and every PR — no condition gating.
-  # Aggregates backend + frontend + security regression tests.
+  # Aggregates backend + frontend + security regression tests + Docker builds.
   regression-gate:
     name: Regression Gate
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    needs: [backend-test, frontend-build, security-regression]
+    timeout-minutes: 10
+    needs: [backend-test, frontend-build, security-regression, docker-build]
 
     steps:
       - uses: actions/checkout@v4
