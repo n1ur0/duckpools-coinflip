@@ -1,250 +1,233 @@
-# DuckPools Coinflip — Architecture & Trust Assumptions
-
-> Protocol design decisions and security playbook for the coinflip PoC.
-> Last updated: 2026-03-28
+# DuckPools CoinFlip - Architecture and Security Design
 
 ## Overview
+DuckPools CoinFlip is a proof-of-concept decentralized gambling application built on the Ergo blockchain using the commit-reveal pattern.
 
-DuckPools is a provably-fair coinflip game on Ergo. Players commit a bet
-(choice + secret) on-chain, the house reveals after a block-confirmation
-delay, and the contract pays the winner atomically.
+## Commit-Reveal Pattern
 
-Two contract versions exist:
+### How It Works
+1. **Commit Phase**: Player creates a bet by locking ERG in a contract box
+   - Player generates a secret (8 bytes, random)
+   - Player commits to a choice (heads=0, tails=1)
+   - Commitment hash = blake2b256(secret || choice)
+   - Box registers:
+     - R4: House public key (SigmaProp)
+     - R5: Player address (Coll[Byte])
+     - R6: Commitment hash (Coll[Byte])
+     - R7: Player choice (Int)
+     - R8: Player secret (Int)
+     - R9: Bet ID (Coll[Byte])
+     - R10: Timeout height (Int)
 
-| Version | File | Status |
-|---------|------|--------|
-| v1 | `smart-contracts/coinflip_v1.es` | Superseded |
-| v2 | `smart-contracts/coinflip_v2.es` | Active |
+2. **Reveal Phase**: House reveals the outcome
+   - House fetches current block hash from node
+   - RNG outcome = (block_hash_bytes[0] % 2)
+   - House proves fairness by using on-chain block hash
+   - Contract verifies: blake2b256(secret || choice) == R6[CommitmentHash]
+   - House spends commit box, pays player if they win
 
-v2 is the current contract. It adds on-chain block-hash RNG, deterministic
-payout enforcement, and compressed-PK encoding (R4/R5 as `Coll[Byte]`).
+3. **Refund Phase**: Player timeout protection
+   - If currentHeight > R10[TimeoutHeight], player can spend commit box
+   - Player receives bet amount minus 2% fee
+   - House reclaims game NFT
 
----
+## Security Considerations (Production vs. PoC)
 
-## Trust Assumptions (PoC)
+### Design Trade-Offs for PoC
 
-These are the known trust assumptions for the current protocol design.
-Each one is a trade-off between simplicity (PoC scope) and security
-(production requirements).
+**1. Player Secret Visible On-Chain (MAT-348)**
+- **Issue**: Player secret is stored in R8 register, visible to anyone
+- **Impact**: House can peek at player's choice before reveal
+- **Trust Assumption**: House is honest about not peeking at R8
+- **Production Solution**: Use ZK-proof or commitment scheme where secret is not stored in box
 
-### TA-1: Player secret is visible on-chain
+**2. No Payout Amount Enforcement (MAT-336)**
+- **Issue**: Contract doesn't verify payout amount during reveal
+- **Impact**: Malicious house could underpay player (pay 0 ERG)
+- **Trust Assumption**: House is honest and follows payout rules
+- **Production Solution**: Add contract guard: OUTPUTS(0).value >= bet_amount * 0.97
 
-**Severity:** MEDIUM  
-**Contracts:** v1 (R8=Int), v2 (R9=Coll[Byte])
+**3. Block Hash Selection (MAT-336)**
+- **Issue**: House chooses which block height/hash to use for RNG
+- **Impact**: House could grind blocks for favorable outcome
+- **Trust Assumption**: House uses current block hash without manipulation
+- **Production Solution**: Add house commitment (pre-commit to block height) or use oracle
 
-The commit-reveal scheme requires the player's secret to be stored in the
-box registers so the contract can verify the commitment during reveal.
-This means **any blockchain observer can read the player's secret and
-choice immediately after the commit transaction is confirmed**.
+**4. Only House Can Reveal (MAT-336)**
+- **Issue**: Player cannot self-reveal if house goes offline
+- **Impact**: Player must wait for timeout to claim refund
+- **Trust Assumption**: House is always available to reveal
+- **Production Solution**: Add player-initiated reveal path with on-chain RNG
 
-**Impact:**
-- A front-running observer knows the player's choice before the house reveals.
-- The house itself learns the player's choice when it reads the box.
-- This does NOT allow the house to change the outcome (see TA-2), but it
-  breaks the traditional "secret until reveal" guarantee.
+### Trust Model for PoC
+The DuckPools CoinFlip PoC trusts the house operator to:
+- Not peek at player's choice in R8 register
+- Pay correct amounts (bet + winnings) during reveal
+- Use fair block hash without manipulation
+- Be available to reveal bets within timeout window
 
-**Why it's accepted for PoC:**
-- ErgoScript cannot perform ZK proofs or hash pre-image checks without
-  revealing the pre-image.
-- The on-chain RNG (block hash) still provides outcome fairness — knowing
-  the player's choice does not help predict the flip result.
+### Production Security Requirements
+For a production system, the following would be needed:
+- Zero-knowledge proofs for secret verification
+- On-chain payout amount enforcement
+- Pre-committed block height or oracle RNG
+- Player self-reveal capability
+- House commitment to block height before reveal
+- Economic stakes for house (security deposit slashed on misbehavior)
 
-**Production fix:** Use a ZK-SNARK circuit where the player proves
-knowledge of `(secret, choice)` matching the commitment hash without
-revealing either value. The contract would verify the proof instead of
-re-reading the secret.
+## Smart Contract: coinflip_v1.es
 
-### TA-2: House selects the reveal block (block-hash grinding risk)
+### Guard Clauses
+- **IsHouse**: INPUTS(0).propositionBytes == R4[HousePubKey]
+- **IsPlayer**: INPUTS(0).propositionBytes == R5[PlayerAddress]
+- **NFTPreserved**: Game NFT token preserved in spend
+- **IsValidReveal**: blake2b256(R8[Secret] || R7[Choice]) == R6[CommitmentHash]
+- **IsTimedOut**: currentHeight > R10[TimeoutHeight]
+- **RefundValueOk**: OUTPUTS(0).value >= (INPUTS(0).value - (INPUTS(0).value * 2/100))
 
-**Severity:** HIGH  
-**Contracts:** v1 (no RNG), v2 (uses `CONTEXT.preHeader.parentId`)
+### Spend Paths
+1. **House Reveal**: canReveal (isHouse && nftPreserved && isValidReveal)
+2. **Player Refund**: canRefund (isTimedOut && isPlayer && refundValueOk && nftToHouse)
 
-v2 determines the coinflip outcome using:
+## Backend Architecture
+
+### Components
+- **FastAPI Server**: REST API for game operations
+- **Game Routes**: `/place-bet`, `/history/{address}`, `/player/stats/{address}`, `/player/comp/{address}`, `/leaderboard`
+- **Off-Chain Bot**: Polls for reveal transactions, updates bet history
+- **Oracle**: ERG/USD price feed for liquidity calculations
+
+### Data Flow
 ```
-blake2b256(CONTEXT.preHeader.parentId ++ playerSecret)[0] % 2
-```
-
-The house builds the reveal transaction and decides when to submit it.
-Since `preHeader.parentId` depends on the block that includes the tx,
-the house could theoretically:
-1. Wait for a block whose hash produces a favorable outcome.
-2. Submit the reveal tx only in that block.
-3. Discard (or let timeout) bets where the outcome is unfavorable.
-
-**Impact:**
-- The house could selectively reveal only winning bets, giving itself
-  a >50% win rate.
-- The player cannot verify that the house didn't cherry-pick blocks.
-
-**Mitigations in v2:**
-- The timeout mechanism (R8) limits the house's window — if the house
-  doesn't reveal before timeout, the player can refund.
-- The payout is enforced on-chain (v2 checks OUTPUTS value), so the
-  house cannot underpay on reveal.
-
-**Why it's accepted for PoC:**
-- Full mitigation requires a house commitment (the house pre-commits to
-  a value before the player reveals), which adds protocol complexity.
-- The timeout + on-chain enforcement provides reasonable fairness for
-  a testnet PoC.
-
-**Production fix:** Implement a dual commitment scheme:
-1. House commits `hash(houseSecret)` before the player bets.
-2. Both secrets are revealed, and RNG uses `blake2b256(houseSecret ++ playerSecret ++ blockHash)`.
-3. The house cannot grind because it's bound to its pre-committed secret.
-
-### TA-3: No on-chain payout enforcement in v1
-
-**Severity:** HIGH  
-**Contracts:** v1 only
-
-v1's reveal path checks that OUTPUTS(0) goes to the player but does NOT
-verify the payout amount. A malicious house could reveal with 0 ERG to
-the player and pocket the entire bet.
-
-**Fixed in v2:** v2 enforces:
-- Player wins: `OUTPUTS(0).value >= betAmount * 97 / 50` (1.94x)
-- House wins: `OUTPUTS(0).value >= betAmount`
-
-### TA-4: Only house can reveal — no player-initiated reveal
-
-**Severity:** LOW  
-**Contracts:** v1, v2
-
-Both contracts only allow the house (via `houseProp`) to trigger the reveal
-path. If the house goes offline, the player must wait for the timeout and
-then claim a refund (98% of bet, 2% fee).
-
-**Impact:** UX degradation when house is unavailable, but no loss of funds
-(beyond the 2% timeout fee).
-
-**Production fix:** Add a player-initiated reveal path that uses a
-trusted oracle or time-locked commitment to determine the outcome.
-
-### TA-5: WebSocket auth is not cryptographically verified
-
-**Severity:** HIGH  
-**Backend:** `ws_routes.py`
-
-The WebSocket authentication endpoint accepts any non-empty signature as
-valid. An attacker can subscribe to any player's bet events.
-
-**Impact:** Information leakage — real-time bet activity is visible to
-unauthenticated observers.
-
-**Mitigation:** WebSocket events currently only contain bet status updates,
-not secret data. The secrets are already public on-chain (TA-1).
-
-**Production fix:** Implement SigmaProp signature verification using the
-Ergo node API (`/node/signature/{message}`) or Nautilus wallet challenge.
-
-### TA-6: Backend uses in-memory storage (no persistence)
-
-**Severity:** LOW  
-**Backend:** `game_routes.py`
-
-Player stats, bet history, and leaderboard data are stored in Python
-lists/dicts. All data is lost on server restart.
-
-**Impact:** Historical data loss. No financial impact since on-chain state
-is the source of truth.
-
-**Production fix:** PostgreSQL persistence (schema exists in
-`migrations/`).
-
-### TA-7: No bet deduplication
-
-**Severity:** MEDIUM  
-**Backend:** `game_routes.py`
-
-The same `betId` can be submitted multiple times. Duplicate bets inflate
-player stats and leaderboard positions.
-
-**Production fix:** Add `betId` uniqueness check with a Set or database
-unique constraint. Return 409 Conflict on duplicates.
-
----
-
-## RNG Design (v2)
-
-### Formula
-```
-entropy = blake2b256(CONTEXT.preHeader.parentId ++ playerSecret)
-flipResult = entropy[0] % 2
+Player -> Frontend (React) -> Backend API -> Ergo Node
+                                   ↓
+                            PostgreSQL (off-chain state)
+                                   ↓
+                          Coin History / Player Stats
 ```
 
-### Entropy sources
-1. **Block hash** (`preHeader.parentId`): Provides ~256 bits of entropy
-   from Proof-of-Work. Unpredictable before the block is mined.
-2. **Player secret** (R9, 32 bytes): Provides additional entropy and
-   ensures different outcomes for simultaneous bets.
+### Bet Resolution Pipeline
+1. Player places bet via `/place-bet` endpoint
+2. Bet stored in `_bets` list with status "pending"
+3. House off-chain bot monitors blockchain for reveal transactions
+4. When reveal tx mined, bot updates bet status to "won" or "lost"
+5. Player can fetch updated history via `/history/{address}`
 
-### Limitations
-- The house controls WHEN to submit the reveal tx (see TA-2).
-- The block hash is only truly random from the miner's perspective; the
-  house can observe pending blocks and choose when to submit.
-- `entropy[0] % 2` uses only 1 bit of the 256-bit hash, but blake2b's
-  output is uniformly distributed so the bias is negligible.
+### Current Issue: Bet History Not Updating (MAT-167)
+- Symptom: All bets show status="pending" with empty playerAddress
+- Root Cause: Off-chain bot not running or not updating bet history
+- Fix Required: Verify bot is running and properly updating `_bets` list
 
----
+## Frontend Architecture
 
-## Register Layout (v2)
+### Tech Stack
+- React 18 + TypeScript
+- Vite build tool
+- Tailwind CSS
+- Zustand state management
+- @nautilus-js/wallet for EIP-12 integration
 
-| Register | Type | Content |
-|----------|------|---------|
-| R4 | Coll[Byte] | House compressed public key (33 bytes) |
-| R5 | Coll[Byte] | Player compressed public key (33 bytes) |
-| R6 | Coll[Byte] | Commitment hash: `blake2b256(secret ++ choiceByte)` (32 bytes) |
-| R7 | Int | Player choice: 0 = heads, 1 = tails |
-| R8 | Int | Timeout height for refund |
-| R9 | Coll[Byte] | Player secret (32 random bytes) |
+### Key Components
+- **CoinFlipGame.tsx**: Main game UI
+- **BetForm**: Input form for bet amount and choice
+- **SimpleBetForm**: Backend wallet mode (no extension required)
+- **WalletContext**: Exposes wallet connection and signing
 
-Note: v1 used a different layout with R4=GroupElement, R8=Int(secret),
-R9=Coll[Byte](betId), R10=Int(timeout). v2 dropped the betId register
-(tracked off-chain only) and changed R8/R9 semantics.
+### Wallet Integration
+- Nautilus wallet via EIP-12 standard
+- `connect()`: Prompt user to connect wallet
+- `get_balance()`: Get wallet ERG/token balances
+- `sign_tx()`: Sign transaction for commit/reveal/refund
+- `submit_tx()`: Broadcast signed transaction to network
 
----
+### Current Issues
+- **MAT-361**: No signTransaction calls from game component
+- **MAT-362**: SDK imports not wired into game
+- **MAT-103**: Nautilus wallet connection not working from UI
 
-## Value Calculations (v2)
+## Security Headers (MAT-196, MAT-326, MAT-337)
 
-| Scenario | Formula | Multiplier |
-|----------|---------|------------|
-| Player wins | `betAmount * 97 / 50` | 1.94x (3% house edge) |
-| Player refund (timeout) | `betAmount - betAmount / 50` | 0.98x (2% timeout fee) |
-| House wins | House receives full `betAmount` | 1.0x |
+### Implemented Headers
+- X-Content-Type-Options: nosniff
+- X-Frame-Options: SAMEORIGIN
+- X-XSS-Protection: 1; mode=block
+- Referrer-Policy: strict-origin-when-cross-origin
+- Permissions-Policy: geolocation=(), camera=(), microphone=()
+- Content-Security-Policy: restrictive (allows unsafe-inline for dev)
 
----
+### Current Issue (MAT-326)
+Security headers not applied to 500 error responses, potentially leaking system information.
 
-## Spending Paths (v2)
+### Production Hardening (MAT-337)
+- Remove `unsafe-eval` from CSP
+- Use nonces instead of `unsafe-inline`
+- Remove debug header `X-Security-Middleware`
+- Update `connect-src` to include WebSocket and API origins
 
-### 1. Reveal (house)
-- Requires: `houseProp && commitmentOk && correctOutput`
-- House signs the transaction (proves ownership of R4 key)
-- Contract verifies `blake2b256(R9_secret ++ R7_choiceByte) == R6_commitment`
-- Contract checks RNG outcome and validates OUTPUTS(0) goes to the
-  correct party with the correct amount
+## RNG Fairness
 
-### 2. Refund (player, after timeout)
-- Requires: `HEIGHT >= R8_timeout && playerProp && correctRefundOutput`
-- Player signs the transaction (proves ownership of R5 key)
-- Player receives 98% of bet amount
-- NFT (if present) goes to house in OUTPUTS(1)
+### Algorithm
+SHA-256(commitment || secret || block_hash) → first byte % 2 = outcome (0=heads, 1=tails)
 
----
+### Statistical Properties (MAT-220)
+- Uniform distribution: Expected 50% heads, 50% tails
+- Independence: No autocorrelation between consecutive outcomes
+- Entropy: Maximum 1 bit per flip
 
-## PoC Scope
+### Current Issue (MAT-349)
+Simulation code has redacted `secret_bytes`, making statistical tests invalid.
 
-What IS in scope:
-- Single game: coinflip (heads/tails)
-- On-chain commit-reveal with block-hash RNG
-- Timeout/refund mechanism
-- Backend API for bet tracking, stats, history
-- WebSocket for real-time bet events
+## Known Bugs
 
-What is NOT in scope:
-- Bankroll management, LP tokens, staking
-- Multiple games (dice, plinko, crash)
-- Oracle price feeds
-- Rate limiting, load testing
-- ZK proofs or advanced cryptographic schemes
-- Mobile native apps
+### MAT-167: Bet History Shows All Pending
+- 29 bets all show status="pending" with empty playerAddress
+- Off-chain bot resolution pipeline not running
+- History endpoint returns incomplete data
+
+### MAT-194: Max Bet Exceeds Pool Liquidity
+- MAX_BET_NANOERG = 100,000 ERG but pool has only 5.7 ERG
+- Dynamic cap needed: max_bet = pool_liquidity * 0.10 (10% safety factor)
+- Risk: Player could drain pool 17,000x over if they win
+
+### MAT-350: No Bet Deduplication
+- Same betId can be submitted multiple times
+- No uniqueness check in `/place-bet` endpoint
+- Allows replay attack: inflate stats, game leaderboard
+
+## Testing
+
+### Unit Tests
+- backend/tests/test_game_routes.py (incomplete)
+- backend/tests/test_rng_module.py (statistical tests)
+
+### E2E Tests
+- tests/e2e/coinflip.spec.ts (Frontend coinflip flow)
+- tests/e2e/regression.spec.ts (Bug regression tests)
+
+### Coverage Gaps
+- No backend API tests for coinflip endpoints (MAT-331)
+- No integration tests for full game flow
+- No performance tests under load
+
+## Deployment
+
+### Environment Variables
+- `NODE_URL`: Ergo node endpoint (http://127.0.0.1:9052 for local dev)
+- `VITE_NODE_URL`: Node URL for frontend (http://localhost:9052 for local)
+- `NODE_API_KEY`: API key for node (default: "hello")
+- `BOT_API_KEY`: API key for bot endpoints
+
+### Docker vs Local
+- Local dev: http://127.0.0.1:9052 (node), :8000 (backend), :3000 (frontend)
+- Docker: http://host.docker.internal:9052 (node), :8000 (backend), :3000 (frontend)
+
+## Conclusion
+
+DuckPools CoinFlip is a **proof-of-concept**, not a production system. The trust model assumes a honest house operator. For production deployment, the security gaps documented above must be addressed with proper cryptographic guarantees and on-chain enforcement mechanisms.
+
+This playbook documents what was learned:
+- ErgoScript smart contract development
+- Commit-reveal pattern implementation
+- EIP-12 wallet integration
+- Off-chain bot architecture for resolution
+- Security trade-offs in blockchain game design
