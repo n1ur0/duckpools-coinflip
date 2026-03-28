@@ -123,7 +123,7 @@ export class TransactionBuilder {
    *   R5:  playerPubKey   (Coll[Byte]) — player's compressed public key
    *   R6:  commitmentHash (Coll[Byte]) — blake2b256(secret || choice)
    *   R7:  playerChoice   (Int)        — 0=heads/1=tails for coinflip
-   *   R8:  playerSecret   (Int)        — player's random secret
+   *   R8:  playerSecret   (Coll[Byte]) — player's random secret (raw bytes)
    *   R9:  betId          (Coll[Byte]) — unique bet identifier
    *   R10: timeoutHeight  (Int)        — block height for timeout/refund
    *
@@ -138,7 +138,7 @@ export class TransactionBuilder {
     playerPubKey: string;      // Player's compressed public key (hex)
     commitment: string;        // blake2b256 hash (hex)
     choice: number;            // Player's choice (game-specific)
-    secret: number;            // Player's random secret as Int
+    secret: string;            // Player's random secret (hex-encoded raw bytes)
     betId: string;             // Unique bet identifier (hex)
     timeoutHeight: number;     // Block height for timeout
     inputBoxId: string;
@@ -152,7 +152,7 @@ export class TransactionBuilder {
         R5: { type: 'Coll[Byte]' as const, value: params.playerPubKey },
         R6: { type: 'Coll[Byte]' as const, value: params.commitment },
         R7: { type: 'Int' as const, value: params.choice },
-        R8: { type: 'Int' as const, value: params.secret },
+        R8: { type: 'Coll[Byte]' as const, value: params.secret },
         R9: { type: 'Coll[Byte]' as const, value: params.betId },
         R10: { type: 'Int' as const, value: params.timeoutHeight },
       } as Record<string, SValue>,
