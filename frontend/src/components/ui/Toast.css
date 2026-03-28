@@ -1,0 +1,243 @@
+/* Toast - toast- prefix */
+
+/* ── Toast Container ───────────────────────────────── */
+
+.toast {
+  position: fixed;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  min-width: 300px;
+  max-width: 500px;
+  border-radius: 8px;
+  font-family: var(--font-body, 'Inter', system-ui, sans-serif);
+  font-size: 0.875rem;
+  line-height: 1.4;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  z-index: 1002;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ── Position Variants ───────────────────────────── */
+
+.toast--top-right {
+  top: 24px;
+  right: 24px;
+}
+
+.toast--top-left {
+  top: 24px;
+  left: 24px;
+}
+
+.toast--bottom-right {
+  bottom: 24px;
+  right: 24px;
+}
+
+.toast--bottom-left {
+  bottom: 24px;
+  left: 24px;
+}
+
+/* ── Type Variants ───────────────────────────────── */
+
+/* Success - Green theme */
+.toast--success {
+  background: rgba(0, 255, 136, 0.1);
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  color: var(--accent-green, #00ff88);
+}
+
+.toast--success .toast__icon {
+  color: var(--accent-green, #00ff88);
+}
+
+.toast--success .toast__close {
+  color: var(--accent-green, #00ff88);
+  border-color: rgba(0, 255, 136, 0.3);
+}
+
+.toast--success .toast__close:hover {
+  background: rgba(0, 255, 136, 0.2);
+}
+
+/* Error - Red theme */
+.toast--error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--accent-red, #ef4444);
+}
+
+.toast--error .toast__icon {
+  color: var(--accent-red, #ef4444);
+}
+
+.toast--error .toast__close {
+  color: var(--accent-red, #ef4444);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.toast--error .toast__close:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+/* Warning - Yellow/Orange theme */
+.toast--warning {
+  background: rgba(240, 180, 41, 0.1);
+  border: 1px solid rgba(240, 180, 41, 0.3);
+  color: var(--accent-gold, #f0b429);
+}
+
+.toast--warning .toast__icon {
+  color: var(--accent-gold, #f0b429);
+}
+
+.toast--warning .toast__close {
+  color: var(--accent-gold, #f0b429);
+  border-color: rgba(240, 180, 41, 0.3);
+}
+
+.toast--warning .toast__close:hover {
+  background: rgba(240, 180, 41, 0.2);
+}
+
+/* Info - Blue theme */
+.toast--info {
+  background: rgba(99, 179, 237, 0.1);
+  border: 1px solid rgba(99, 179, 237, 0.3);
+  color: #63b3ed;
+}
+
+.toast--info .toast__icon {
+  color: #63b3ed;
+}
+
+.toast--info .toast__close {
+  color: #63b3ed;
+  border-color: rgba(99, 179, 237, 0.3);
+}
+
+.toast--info .toast__close:hover {
+  background: rgba(99, 179, 237, 0.2);
+}
+
+/* ── Icon ─────────────────────────────────────────── */
+
+.toast__icon-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 1.2rem;
+}
+
+/* ── Content ─────────────────────────────────────── */
+
+.toast__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast__message {
+  font-weight: 500;
+}
+
+/* Support multiline text in toast */
+.toast__message > * {
+  margin: 0;
+}
+
+.toast__message > * + * {
+  margin-top: 4px;
+}
+
+/* ── Close Button ────────────────────────────────── */
+
+.toast__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+  flex-shrink: 0;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.toast__close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ── Accessibility ───────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    transition: none;
+  }
+}
+
+/* ── Responsive ─────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .toast {
+    min-width: auto;
+    max-width: calc(100vw - 48px);
+    left: 24px;
+    right: 24px;
+  }
+  
+  .toast--top-right,
+  .toast--top-left,
+  .toast--bottom-right,
+  .toast--bottom-left {
+    left: 24px;
+    right: 24px;
+  }
+  
+  .toast--top-right,
+  .toast--top-left {
+    top: 16px;
+  }
+  
+  .toast--bottom-right,
+  .toast--bottom-left {
+    bottom: 16px;
+  }
+}
+
+/* ── Animation Support ───────────────────────────── */
+
+/* These classes work with framer-motion for smooth animations */
+.toast[data-motion] {
+  will-change: transform, opacity;
+}
+
+/* ── Focus Management ───────────────────────────── */
+
+.toast:focus-within {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+/* ── High Contrast Mode ─────────────────────────── */
+
+@media (prefers-contrast: high) {
+  .toast {
+    border-width: 2px;
+  }
+  
+  .toast__close {
+    border-width: 2px;
+  }
+}
