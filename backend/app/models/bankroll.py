@@ -107,7 +107,7 @@ class BankrollTransaction(Base):
     
     # Metadata
     description: Mapped[str] = mapped_column(Text, nullable=True)
-    metadata: Mapped[dict] = mapped_column(Text, nullable=True)  # JSON string for additional data
+    extra_data: Mapped[dict] = mapped_column(Text, nullable=True)  # JSON string for additional data
     
     # Timestamps
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)

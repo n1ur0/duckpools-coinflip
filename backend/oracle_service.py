@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import httpx
 from pydantic import BaseModel, Field
 
-from .ergo_oracle_adapter import (
+from ergo_oracle_adapter import (
     ErgoOraclePoolAdapter,
     OracleFeed,
     OracleDataType

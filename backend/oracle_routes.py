@@ -15,8 +15,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from .oracle_service import OracleService
-from .ergo_oracle_adapter import OracleFeed, OracleDataType
+from oracle_service import OracleService
+from ergo_oracle_adapter import OracleFeed, OracleDataType
 
 # Request/Response models
 class CreateOracleFeedRequest(BaseModel):
@@ -79,7 +79,7 @@ async def verify_admin_api_key(request: Request):
 
 
 @router.get("/health")
-async def get_oracle_health(oracle_service=Depends(get_oracle_service())):
+async def get_oracle_health(oracle_service=Depends(get_oracle_service)):
     """
     Get health status of all oracle endpoints.
 
@@ -93,7 +93,7 @@ async def get_oracle_health(oracle_service=Depends(get_oracle_service())):
 
 
 @router.get("/status")
-async def get_oracle_status(oracle_service=Depends(get_oracle_service())):
+async def get_oracle_status(oracle_service=Depends(get_oracle_service)):
     """
     Get overall oracle service status.
 
@@ -108,7 +108,7 @@ async def get_oracle_status(oracle_service=Depends(get_oracle_service())):
 
 
 @router.get("/endpoints")
-async def get_oracle_endpoints(oracle_service=Depends(get_oracle_service())):
+async def get_oracle_endpoints(oracle_service=Depends(get_oracle_service)):
     """
     Get list of all configured oracle endpoints.
 
@@ -134,7 +134,7 @@ async def get_oracle_endpoints(oracle_service=Depends(get_oracle_service())):
 async def get_oracle_data(
     oracle_box_id: str,
     feed_name: Optional[str] = None,
-    oracle_service=Depends(get_oracle_service())
+    oracle_service=Depends(get_oracle_service)
 ):
     """
     Fetch data from the oracle with automatic failover.
@@ -163,7 +163,7 @@ async def get_oracle_data(
 @router.post("/switch", dependencies=[Depends(verify_admin_api_key)])
 async def switch_oracle_endpoint(
     target_endpoint_name: str,
-    oracle_service=Depends(get_oracle_service())
+    oracle_service=Depends(get_oracle_service)
 ):
     """
     Manually switch to a different oracle endpoint.
@@ -199,7 +199,7 @@ async def switch_oracle_endpoint(
 @router.post("/feeds", response_model=OracleFeedResponse)
 async def create_oracle_feed(
     feed_request: CreateOracleFeedRequest,
-    oracle_service=Depends(get_oracle_service())
+    oracle_service=Depends(get_oracle_service)
 ):
     """
     Create a new oracle feed configuration.
@@ -248,7 +248,7 @@ async def create_oracle_feed(
 
 
 @router.get("/feeds", response_model=List[OracleFeedResponse])
-async def get_oracle_feeds(oracle_service=Depends(get_oracle_service())):
+async def get_oracle_feeds(oracle_service=Depends(get_oracle_service)):
     """
     Get all configured oracle feeds.
     
@@ -262,7 +262,7 @@ async def get_oracle_feeds(oracle_service=Depends(get_oracle_service())):
 @router.delete("/feeds/{feed_name}")
 async def delete_oracle_feed(
     feed_name: str,
-    oracle_service=Depends(get_oracle_service())
+    oracle_service=Depends(get_oracle_service)
 ):
     """
     Delete an oracle feed configuration.
@@ -286,7 +286,7 @@ async def delete_oracle_feed(
 @router.get("/onchain/{feed_name}")
 async def get_onchain_feed_data(
     feed_name: str,
-    oracle_service=Depends(get_oracle_service())
+    oracle_service=Depends(get_oracle_service)
 ):
     """
     Get data from an on-chain oracle feed.
@@ -311,7 +311,7 @@ async def get_onchain_feed_data(
 @router.get("/onchain/box/{box_id}")
 async def get_onchain_box_data(
     box_id: str,
-    oracle_service=Depends(get_oracle_service())
+    oracle_service=Depends(get_oracle_service)
 ):
     """
     Get data directly from an on-chain oracle box.
@@ -337,7 +337,7 @@ async def get_onchain_box_data(
 async def get_price_feed(
     base_asset: str,
     quote_asset: str,
-    oracle_service=Depends(get_oracle_service())
+    oracle_service=Depends(get_oracle_service)
 ):
     """
     Get the latest price feed for a specific asset pair.
