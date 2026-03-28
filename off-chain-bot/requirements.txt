@@ -6,3 +6,7 @@ ergo-lib-python>=0.28.0
 
 # Environment
 python-dotenv>=1.0.0
+
+# Structured Logging
+structlog>=23.0.0
+httpx>=0.25.0
