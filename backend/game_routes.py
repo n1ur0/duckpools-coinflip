@@ -11,7 +11,9 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from validators import validate_ergo_address, ValidationError as ErgoValidationError
 
 router = APIRouter(tags=["game"])
 
@@ -57,6 +59,57 @@ class PlaceBetRequest(BaseModel):
     choice: int  # 0 = Heads, 1 = Tails
     commitment: str
     betId: str
+
+    @field_validator("address")
+    @classmethod
+    def validate_address(cls, v: str) -> str:
+        try:
+            return validate_ergo_address(v)
+        except ErgoValidationError as e:
+            raise ValueError(str(e))
+
+    @field_validator("amount")
+    @classmethod
+    def validate_amount(cls, v: str) -> str:
+        try:
+            amount = int(v)
+        except (ValueError, TypeError):
+            raise ValueError("amount must be a valid integer string (nanoERG)")
+        if amount <= 0:
+            raise ValueError("amount must be positive (nanoERG)")
+        if amount < 1_000_000:
+            raise ValueError("minimum bet is 0.001 ERG (1,000,000 nanoERG)")
+        if amount > 100_000_000_000:
+            raise ValueError("maximum bet is 100 ERG (100,000,000,000 nanoERG)")
+        return v
+
+    @field_validator("choice")
+    @classmethod
+    def validate_choice(cls, v: int) -> int:
+        if v not in (0, 1):
+            raise ValueError("choice must be 0 (Heads) or 1 (Tails)")
+        return v
+
+    @field_validator("commitment")
+    @classmethod
+    def validate_commitment(cls, v: str) -> str:
+        if not v or not isinstance(v, str):
+            raise ValueError("commitment is required")
+        v = v.strip().lower()
+        if len(v) != 64:
+            raise ValueError("commitment must be a 64-character hex string (blake2b256)")
+        try:
+            int(v, 16)
+        except ValueError:
+            raise ValueError("commitment must be valid hex")
+        return v
+
+    @field_validator("betId")
+    @classmethod
+    def validate_bet_id(cls, v: str) -> str:
+        if not v or not isinstance(v, str):
+            raise ValueError("betId is required")
+        return v.strip()
 
 
 class PlaceBetResponse(BaseModel):

@@ -112,49 +112,6 @@ def verify_commit(commit_hex: str, secret_bytes: bytes, choice: int) -> bool:
     return computed_commit.lower() == commit_hex.lower()
 
 
-# ─── Dice RNG (Future expansion) ───────────────────────────────────
-
-def dice_rng(block_hash: str, secret_bytes: bytes) -> int:
-    """
-    Compute dice roll outcome using rejection sampling.
-
-    Formula: Rejection-sampled from blake2b256(blockHash || secret) to get 0-99
-
-    Rejection sampling prevents modulo bias (MAT-249 fix):
-    - Use first byte < 200 (2 * 100)
-    - Reject bytes >= 200 to ensure uniform distribution
-    - Continue through hash bytes until valid value found
-
-    Args:
-        block_hash: Block hash as hex string
-        secret_bytes: Secret bytes
-
-    Returns:
-        int: Roll value 0-99
-    """
-    block_hash_bytes = block_hash.encode('utf-8')
-    rng_data = block_hash_bytes + secret_bytes
-    rng_hash = hashlib.blake2b(rng_data, digest_size=32).digest()
-
-    # Rejection sampling: only use bytes < 200
-    for byte_val in rng_hash:
-        if byte_val < 200:  # 200 = 2 * 100
-            return byte_val % 100
-
-    # Fallback (astronomically unlikely to reach) - also use rejection sampling
-    # Use 16-bit value but reject >= 65500 to avoid modulo bias
-    sixteen_bit_value = int.from_bytes(rng_hash[:2], 'big')
-    if sixteen_bit_value < 65500:  # 65500 = 655 * 100
-        return sixteen_bit_value % 100
-    else:
-        # If somehow still in rejection territory, use single byte with rejection
-        for byte_val in rng_hash[2:]:
-            if byte_val < 200:
-                return byte_val % 100
-        # Ultimate fallback - just use first byte mod 100 (extremely biased but virtually impossible)
-        return rng_hash[0] % 100
-
-
 # ─── Statistical Analysis ────────────────────────────────────────────
 
 @dataclass
@@ -289,33 +246,6 @@ def simulate_coinflip(num_bets: int, block_hashes: List[str] = None) -> RNGTestR
         entropy_bits=entropy,
         uniform=is_uniform
     )
-
-
-def simulate_dice(num_rolls: int, block_hashes: List[str] = None) -> Dict[int, int]:
-    """
-    Simulate dice rolls to test distribution.
-
-    Args:
-        num_rolls: Number of dice rolls
-        block_hashes: Optional list of block hashes
-
-    Returns:
-        Dictionary mapping roll values (0-99) to their counts
-    """
-    import random
-
-    if block_hashes is None:
-        block_hashes = [f"{random.getrandbits(256):064x}" for _ in range(num_rolls)]
-
-    counts = {i: 0 for i in range(100)}
-
-    for i in range(num_rolls):
-        block_hash = block_hashes[i % len(block_hashes)]
-        secret_bytes = os.urandom(8)
-        roll = dice_rng(block_hash, secret_bytes)
-        counts[roll] += 1
-
-    return counts
 
 
 # ─── Command Line Interface ────────────────────────────────────────────
