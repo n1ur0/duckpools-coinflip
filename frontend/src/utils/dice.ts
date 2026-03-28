@@ -9,7 +9,7 @@
  * - Payout multiplier displayed live as the user adjusts the target
  */
 
-import { sha256, bytesToHex, generateSecret } from './crypto';
+import { blake2b256, bytesToHex, generateSecret } from './crypto';
 
 // ─── Constants ─────────────────────────────────────────────────
 
@@ -85,7 +85,7 @@ export function calculateDicePayout(betNanoErg: number, rollTarget: number): num
 
 /**
  * Generate a commitment for a dice bet.
- * commitment = SHA256(secret_8_bytes || rollTarget_byte)
+ * commitment = blake2b256(secret_8_bytes || rollTarget_byte)
  *
  * @param rollTarget - The number player is betting under (2-98)
  * @returns { secret, commitment } both as hex strings

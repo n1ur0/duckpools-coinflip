@@ -1,7 +1,17 @@
 // Cryptographic utilities
 
+import { blake2b } from '@noble/hashes/blake2b';
+
 /**
- * SHA-256 hash for commitment/reveal scheme
+ * blake2b256 hash — native on Ergo, used for commitment/reveal scheme.
+ * MUST match on-chain verification in all smart contracts.
+ */
+export function blake2b256(message: Uint8Array): Uint8Array {
+  return blake2b(message, { dkLen: 32 });
+}
+
+/**
+ * SHA-256 hash (legacy — do NOT use for new commitment logic)
  */
 export async function sha256(message: Uint8Array): Promise<Uint8Array> {
   const hash = await crypto.subtle.digest('SHA-256', message.buffer as ArrayBuffer);

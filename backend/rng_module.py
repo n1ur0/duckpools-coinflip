@@ -7,12 +7,16 @@ This module implements the ACTUAL protocol RNG scheme as documented in:
 - sdk/README.md
 
 Protocol RNG Formula:
-    SHA256(blockHash_as_utf8 || secret_bytes)[0] % 2
+    blake2b256(blockHash_as_utf8 || secret_bytes)[0] % 2
 
 Where:
     - blockHash: UTF-8 encoded hex string (NOT "||" literal separator)
     - secret_bytes: Raw 8-byte secret
-    - Outcome: First byte of SHA256 hash, modulo 2 for coinflip
+    - Outcome: First byte of blake2b256 hash, modulo 2 for coinflip
+
+CRITICAL (SEC-CRITICAL-1): blake2b256 is the native hash on Ergo.
+The on-chain contracts use the blake2b256 opcode. Using SHA-256 would
+cause every single reveal to fail verification, making the protocol unusable.
 
 MAT-252: Fix RNG module to match actual protocol implementation
 """
@@ -30,7 +34,7 @@ def compute_rng(block_hash: str, secret_bytes: bytes) -> int:
     """
     Compute RNG outcome using ACTUAL protocol scheme.
 
-    Formula: SHA256(blockHash_as_utf8 || secret_bytes)[0] % 2
+    Formula: blake2b256(blockHash_as_utf8 || secret_bytes)[0] % 2
 
     Args:
         block_hash: Block hash as hex string (e.g., "abcd1234...")
@@ -49,8 +53,8 @@ def compute_rng(block_hash: str, secret_bytes: bytes) -> int:
     # Raw byte concatenation (no "||" separator)
     rng_data = block_hash_bytes + secret_bytes
 
-    # Compute SHA256 hash
-    rng_hash = hashlib.sha256(rng_data).digest()
+    # Compute blake2b256 hash (native Ergo hash — MUST match on-chain)
+    rng_hash = hashlib.blake2b(rng_data, digest_size=32).digest()
 
     # Extract first byte and apply modulo 2
     outcome = rng_hash[0] % 2
@@ -62,7 +66,9 @@ def generate_commit(secret_bytes: bytes, choice: int) -> str:
     """
     Generate commitment hash for bet placement.
 
-    Uses SHA256(secret_bytes || choice_byte) for commitment.
+    Uses blake2b256(secret_bytes || choice_byte) for commitment.
+    This MUST match on-chain contract verification which uses the
+    blake2b256 opcode on Ergo.
 
     Args:
         secret_bytes: 8-byte secret
@@ -79,7 +85,7 @@ def generate_commit(secret_bytes: bytes, choice: int) -> str:
 
     choice_byte = bytes([choice])
     commit_data = secret_bytes + choice_byte
-    commit_hash = hashlib.sha256(commit_data).digest()
+    commit_hash = hashlib.blake2b(commit_data, digest_size=32).digest()
 
     return commit_hash.hex()
 
@@ -112,7 +118,7 @@ def dice_rng(block_hash: str, secret_bytes: bytes) -> int:
     """
     Compute dice roll outcome using rejection sampling.
 
-    Formula: Rejection-sampled from SHA256(blockHash || secret) to get 0-99
+    Formula: Rejection-sampled from blake2b256(blockHash || secret) to get 0-99
 
     Rejection sampling prevents modulo bias (MAT-249 fix):
     - Use first byte < 200 (2 * 100)
@@ -128,7 +134,7 @@ def dice_rng(block_hash: str, secret_bytes: bytes) -> int:
     """
     block_hash_bytes = block_hash.encode('utf-8')
     rng_data = block_hash_bytes + secret_bytes
-    rng_hash = hashlib.sha256(rng_data).digest()
+    rng_hash = hashlib.blake2b(rng_data, digest_size=32).digest()
 
     # Rejection sampling: only use bytes < 200
     for byte_val in rng_hash:

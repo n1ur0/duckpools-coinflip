@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, TouchEvent } from 'react';
 import { useWallet } from '../contexts/WalletContext';
-import { generateSecret, bytesToHex, sha256 } from '../utils/crypto';
+import { generateSecret, bytesToHex, blake2b256 } from '../utils/crypto';
 import { ergToNanoErg, formatErg } from '../utils/ergo';
 import { buildApiUrl } from '../utils/network';
 import './BetForm.css';
@@ -11,15 +11,16 @@ function generateBetId(): string {
   return crypto.randomUUID();
 }
 
-async function generateCommitment(
+function generateCommitment(
   secret: Uint8Array,
   choice: number
-): Promise<string> {
-  // commitment = SHA256(secret_8bytes || choice_1byte)
+): string {
+  // commitment = blake2b256(secret_8bytes || choice_1byte)
+  // MUST match on-chain: blake2b256(secretBytes ++ choiceBytes)
   const buf = new Uint8Array(secret.length + 1);
   buf.set(secret, 0);
   buf[secret.length] = choice;
-  const hash = await sha256(buf);
+  const hash = blake2b256(buf);
   return bytesToHex(hash);
 }
 
@@ -130,18 +131,18 @@ export default function BetForm() {
 
     try {
       // 1. Generate secret & commitment
-      const secret = generateSecret();
-      const commitment = await generateCommitment(secret, choice);
+      const secret=***
+      const commitment = generateCommitment(secret, choice);
       const betId = generateBetId();
-      const secretHex = bytesToHex(secret);
 
       // 2. Build API request
+      // SECURITY (SEC-HIGH-2): Do NOT send secret to backend.
+      // The secret is revealed on-chain during the resolution transaction.
       const payload = {
         address: walletAddress,
         amount: amountNanoErg,
         choice,
         commitment,
-        secret: secretHex,
         betId,
       };
 

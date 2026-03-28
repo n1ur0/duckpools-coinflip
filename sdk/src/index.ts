@@ -18,6 +18,7 @@ export { BetManager } from './bet/BetManager';
 
 // Crypto
 export {
+  blake2b256,
   sha256,
   generateSecret,
   generateCommit,

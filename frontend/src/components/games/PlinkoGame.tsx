@@ -7,7 +7,6 @@ import {
   getPlinkoSlotMultiplier,
   getPlinkoMultiplierTable,
   generatePlinkoCommit,
-  computePlinkoRng,
   calculatePlinkoPayout,
 } from '../../utils/plinko';
 import { ergToNanoErg, formatErg } from '../../utils/ergo';
@@ -19,14 +18,8 @@ const QUICK_PICK_VALUES = [0.1, 0.5, 1, 5];
 
 // Physics constants
 const GRAVITY = 0.5;
-const BOUNCE_DAMPING = 0.7;
 const BALL_RADIUS = 8;
 const PEG_RADIUS = 4;
-const BALL_SPEED = 2;
-
-// Animation timing
-const DROP_ANIMATION_DURATION = 3000; // 3 seconds for ball to drop
-const RESULT_DISPLAY_DURATION = 2000; // 2 seconds to show result
 
 function generateBetId(): string {
   return crypto.randomUUID();
@@ -118,7 +111,6 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ className = '' }) => {
     // Generate slot information
     const generateSlots = () => {
       const multiplierTable = getPlinkoMultiplierTable(rows);
-      const slotWidth = boardWidth / (rows + 1);
       
       return multiplierTable.map((multiplier, index) => {
         // Generate color based on multiplier (green for low, yellow for medium, red for high)
@@ -277,20 +269,19 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ className = '' }) => {
       // 1. Generate secret & commitment
       const { secret, commitment } = await generatePlinkoCommit(rows);
       const betId = generateBetId();
-      const secretHex = Array.from(secret)
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
 
       // 2. Build API request
+      // SECURITY (SEC-HIGH-2): NEVER send the secret to the backend.
+      // The commit-reveal scheme requires the secret to remain private
+      // until the on-chain reveal transaction. Only the commitment hash
+      // is needed for bet placement.
       const payload = {
         address: walletAddress,
         amount: amountNanoErg,
         rows,
         commitment,
-        secret: secretHex,
         betId,
       };
-
       // 3. Submit to backend
       const res = await fetch(buildApiUrl('/place-plinko-bet'), {
         method: 'POST',
@@ -308,7 +299,7 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ className = '' }) => {
       // For now, use a random slot - in production this would come from the blockchain
       const simulatedSlot = Math.floor(Math.random() * (rows + 1));
       const multiplier = getPlinkoSlotMultiplier(rows, simulatedSlot);
-      const payout = calculatePlinkoPayout(amountNanoErg, rows, simulatedSlot);
+      const payout = calculatePlinkoPayout(Number(amountNanoErg), rows, simulatedSlot);
       
       setResult({
         slot: simulatedSlot,

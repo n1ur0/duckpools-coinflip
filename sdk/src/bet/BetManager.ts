@@ -47,7 +47,7 @@ export class BetManager {
    *
    * Process:
    * 1. Generate random secret (if not provided)
-   * 2. Compute commitment: SHA256(secret || choice)
+   * 2. Compute commitment: blake2b256(secret || choice)
    * 3. Build transaction creating PendingBetBox
    * 4. Submit transaction
    *
@@ -115,7 +115,7 @@ export class BetManager {
    * 1. Get bet box from blockchain
    * 2. Verify secret and commitment match
    * 3. Get block hash for RNG
-   * 4. Compute outcome: SHA256(blockHash || secret)[0] % 2
+   * 4. Compute outcome: blake2b256(blockHash || secret)[0] % 2
    * 5. Build settlement transaction
    * 6. Submit transaction
    *

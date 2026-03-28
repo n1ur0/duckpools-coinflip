@@ -5,16 +5,13 @@ transactions, alerts, and auto-reload events.
 """
 
 from sqlalchemy import String, Numeric, BigInteger, DateTime, Boolean, Integer, Index, Text, Enum as SQLEnum
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from datetime import datetime
+from sqlalchemy.orm import Mapped, mapped_column
+from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
 import uuid
 
-
-class Base(DeclarativeBase):
-    """Base class for all ORM models."""
-    pass
+from app.db import Base
 
 
 class TransactionType(str, Enum):
@@ -81,8 +78,8 @@ class BankrollState(Base):
     unusual_loss_window_minutes: Mapped[int] = mapped_column(Integer, default=5)
     
     # Timestamps
-    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class BankrollTransaction(Base):
@@ -113,7 +110,7 @@ class BankrollTransaction(Base):
     metadata: Mapped[dict] = mapped_column(Text, nullable=True)  # JSON string for additional data
     
     # Timestamps
-    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, index=True)
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
     
     __table_args__ = (
         Index("idx_tx_type_created", "tx_type", "created_at"),
@@ -151,7 +148,7 @@ class BankrollAlert(Base):
     resolution_notes: Mapped[str] = mapped_column(Text, nullable=True)
     
     # Timestamps
-    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, index=True)
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
     
     __table_args__ = (
         Index("idx_alert_severity_created", "severity", "created_at"),
@@ -188,7 +185,7 @@ class AutoReloadEvent(Base):
     error_code: Mapped[str] = mapped_column(String(50), nullable=True)
     
     # Timestamps
-    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, index=True)
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
     
     __table_args__ = (
         Index("idx_reload_success_created", "success", "created_at"),
@@ -235,7 +232,7 @@ class RiskProjection(Base):
     time_window_hours: Mapped[int] = mapped_column(Integer, nullable=False)
     
     # Timestamps
-    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, index=True)
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
     
     __table_args__ = (
         Index("idx_projection_created", "created_at"),

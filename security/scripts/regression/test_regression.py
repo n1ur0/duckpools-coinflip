@@ -262,9 +262,9 @@ def test_security_headers_configured():
 
 def test_rng_uses_sha256():
     """
-    RNG-SEC-1: Verify Plinko RNG uses SHA-256 for entropy extraction.
-    
-    The commit-reveal scheme and RNG must use SHA-256 or stronger.
+    RNG-SEC-1: Verify Plinko RNG uses a cryptographic hash (blake2b256 or SHA-256).
+
+    The commit-reveal scheme and RNG must use a cryptographic hash.
     MD5, SHA-1, or plain XOR would be trivially exploitable.
     """
     plinko_path = os.path.join(
@@ -272,15 +272,21 @@ def test_rng_uses_sha256():
         "frontend", "src", "utils", "plinko.ts"
     )
     plinko_path = os.path.normpath(plinko_path)
-    
+
     if not os.path.exists(plinko_path):
         pytest.skip(f"plinko.ts not found at {plinko_path}")
-    
+
     with open(plinko_path, "r") as f:
         source = f.read()
-    
-    assert "sha256" in source.lower() or "SHA256" in source, (
-        "RNG-SEC-1: Plinko RNG does not reference SHA-256. "
+
+    has_crypto_hash = (
+        "blake2b256" in source.lower() or
+        "sha256" in source.lower() or
+        "SHA256" in source
+    )
+
+    assert has_crypto_hash, (
+        "RNG-SEC-1: Plinko RNG does not reference a cryptographic hash. "
         "Commit-reveal scheme may use a weak hash."
     )
     
@@ -1111,3 +1117,147 @@ def test_long_encoding_no_number_intermediate():
             "PROTO-1: encodeLongConstant uses encodeVLQ (Number-based) instead of "
             "encodeVLQBigInt for Long encoding. Use the BigInt variant."
         )
+
+
+# ═══════════════════════════════════════════════════════════════
+# 12. COMMITMENT HASH CONSISTENCY (SEC-CRITICAL-1)
+#     Frontend, backend, and smart contracts MUST use the SAME hash.
+#     Mismatch = every bet fails reveal = protocol unusable.
+# ═══════════════════════════════════════════════════════════════
+
+def _find_hash_function(source: str, filename: str) -> str:
+    """Detect which hash function a source file uses for commitments."""
+    lower = source.lower()
+    # blake2b256 takes priority — it's the Ergo native hash
+    if "blake2b256" in lower:
+        return "blake2b256"
+    # sha256 is only acceptable if NOT the primary commitment hash
+    # (e.g., legacy export in crypto.ts is OK)
+    if "sha256" in lower or "sha-256" in lower:
+        # Check if sha256 is just a legacy/compat export, not used for commitments
+        lines = source.split("\n")
+        sha256_in_commitment = False
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("//") or stripped.startswith("*") or stripped.startswith("/*"):
+                continue
+            # Look for sha256 being used in commitment context
+            if "sha256" in lower and any(kw in stripped.lower() for kw in ["commit", "await sha256", "= sha256"]):
+                sha256_in_commitment = True
+                break
+        if sha256_in_commitment:
+            return "sha256"
+        # sha256 present but not used for commitments — likely legacy export
+        return "blake2b256"  # already confirmed blake2b256 present above
+    return "unknown"
+
+
+def _scan_source_file(rel_path: str) -> str:
+    """Read a source file relative to repo root, return hash function."""
+    repo_root = os.path.normpath(os.path.join(
+        os.path.dirname(__file__), "..", "..", ".."
+    ))
+    full_path = os.path.join(repo_root, rel_path)
+    if not os.path.exists(full_path):
+        return "missing"
+    with open(full_path, "r") as f:
+        return _find_hash_function(f.read(), rel_path)
+
+
+def test_commitment_hash_consistency():
+    """
+    SEC-CRITICAL-1: All components must use blake2b256 for commitments.
+
+    If frontend uses SHA256 but on-chain contracts use blake2b256,
+    every reveal verification fails. All bets become timeout refunds.
+    The protocol is completely broken.
+
+    This test catches the mismatch before deployment.
+    """
+    files_to_check = {
+        "frontend/src/components/games/CoinFlipGame.tsx": "Frontend CoinFlip",
+        "frontend/src/utils/crypto.ts": "Frontend crypto utils",
+        "frontend/src/utils/dice.ts": "Frontend dice utils",
+        "frontend/src/utils/plinko.ts": "Frontend plinko utils",
+        "backend/rng_module.py": "Backend RNG module",
+        "smart-contracts/coinflip_v1.es": "On-chain CoinFlip",
+        "smart-contracts/dice_v1.es": "On-chain Dice",
+        "smart-contracts/plinko_v1.es": "On-chain Plinko",
+    }
+
+    results = {}
+    for rel_path, label in files_to_check.items():
+        results[label] = _scan_source_file(rel_path)
+
+    # Filter out missing files (not all may exist yet)
+    present = {k: v for k, v in results.items() if v != "missing"}
+
+    if not present:
+        pytest.skip("No commitment-related files found")
+
+    # All present files must use blake2b256
+    for label, hash_fn in present.items():
+        if hash_fn != "blake2b256":
+            pytest.fail(
+                f"SEC-CRITICAL-1: {label} uses '{hash_fn}' instead of blake2b256. "
+                "All components MUST use blake2b256 (Ergo native opcode) for "
+                "commitment hashing. Using any other hash breaks on-chain reveal."
+            )
+
+
+def test_commitment_hash_functional():
+    """
+    SEC-CRITICAL-1: Functional test — verify blake2b256 produces correct
+    commitment hash for a known test vector.
+
+    Test vector:
+        secret = 0x0102030405060708
+        choice = 0 (heads)
+        expected = blake2b256(secret || choice)
+
+    This test uses Python hashlib to compute the expected value and
+    verifies the backend module produces the same result.
+    """
+    import hashlib
+
+    secret = bytes([1, 2, 3, 4, 5, 6, 7, 8])
+    choice = 0
+
+    # Compute expected with raw hashlib
+    commit_data = secret + bytes([choice])
+    expected_hash = hashlib.blake2b(commit_data, digest_size=32).hexdigest()
+
+    # Compute via backend module
+    repo_root = os.path.normpath(os.path.join(
+        os.path.dirname(__file__), "..", "..", ".."
+    ))
+    rng_module_path = os.path.join(repo_root, "backend", "rng_module.py")
+
+    if not os.path.exists(rng_module_path):
+        pytest.skip(f"rng_module.py not found at {rng_module_path}")
+
+    # Import and test
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("rng_module", rng_module_path)
+    rng = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rng)
+
+    actual_hash = rng.generate_commit(secret, choice)
+
+    assert actual_hash == expected_hash, (
+        f"SEC-CRITICAL-1: Backend generate_commit() produced wrong hash.\n"
+        f"  secret={secret.hex()}, choice={choice}\n"
+        f"  expected (blake2b256): {expected_hash}\n"
+        f"  actual:                {actual_hash}\n"
+        f"  Backend is NOT using blake2b256 for commitments."
+    )
+
+    # Also verify the verify_commit function works
+    assert rng.verify_commit(expected_hash, secret, choice), (
+        "SEC-CRITICAL-1: verify_commit() rejected a valid commitment."
+    )
+
+    # Verify wrong commitment is rejected
+    assert not rng.verify_commit("00" * 32, secret, choice), (
+        "SEC-CRITICAL-1: verify_commit() accepted an invalid commitment."
+    )

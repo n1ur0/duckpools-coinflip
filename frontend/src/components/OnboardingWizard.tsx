@@ -103,7 +103,7 @@ const STEPS: Step[] = [
           <span className="ow-step-num">1</span>
           <span>
             <strong>Commit:</strong> You pick Heads or Tails and a random
-            secret. We compute <code>SHA256(secret || choice)</code> as your
+            secret. We compute <code>blake2b256(secret || choice)</code> as your
             commitment.
           </span>
         </li>
