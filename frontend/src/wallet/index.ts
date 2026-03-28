@@ -8,3 +8,4 @@
 export * from './adapters';
 export { useWalletManager } from './useWalletManager';
 export { useErgoWallet } from './useErgoWallet';
+export { useWalletSessionPersistence } from './useWalletSessionPersistence';
