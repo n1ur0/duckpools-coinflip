@@ -26,6 +26,8 @@ import type { Asset } from '../types';
 import { createWalletError } from '../types';
 import { getExpectedNetworkType, getNetworkFromAddress } from '../utils/network';
 import { getWalletConnection, waitForConnector, getWalletInfo } from './adapters';
+import { useWalletSessionPersistence } from './useWalletSessionPersistence';
+
 // Use a simple flag for logging - in production this would be false
 const isDev = import.meta.env.DEV;
 const log = isDev ? console : { log: () => {}, warn: () => {}, error: () => {} };
@@ -116,6 +118,9 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
 
   const walletInfo = walletKey ? getWalletInfo(walletKey) : undefined;
   const walletDisplayName = walletInfo?.name ?? walletKey ?? 'wallet';
+  
+  // Session persistence integration
+  const { saveSession, restoreSession, clearSession, hasSession } = useWalletSessionPersistence();
 
   // ─── Disconnect when wallet key changes ──────────────────────
 
@@ -185,8 +190,39 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
       if (!available || !conn) return;
 
       try {
+        // First try to restore from persisted session for immediate UI feedback
+        const persistedSession = hasSession(walletKey) ? restoreSession(walletKey) : null;
+        if (persistedSession) {
+          log.log('[Wallet] Restored session from persistence:', { walletKey, address: persistedSession.walletAddress });
+          setState(prev => ({
+            ...prev,
+            isConnected: true,
+            isLocked: false,
+            walletAddress: persistedSession.walletAddress,
+            balance: persistedSession.balance,
+            network: persistedSession.network,
+            tokens: persistedSession.tokens,
+          }));
+        }
+
+        // Then verify with actual wallet connection
         const connected = await conn.isConnected();
-        if (cancelled || !connected) return;
+        if (cancelled || !connected) {
+          // If wallet is not actually connected, clear the persisted session
+          if (persistedSession) {
+            clearSession(walletKey);
+            setState(prev => ({
+              ...prev,
+              isConnected: false,
+              isLocked: false,
+              walletAddress: undefined,
+              balance: undefined,
+              network: undefined,
+              tokens: undefined,
+            }));
+          }
+          return;
+        }
 
         const ctx = await conn.getContext();
         if (cancelled || !ctx) return;
@@ -194,6 +230,8 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
         setErgo(ctx);
         const address = await ctx.get_change_address();
         const bal = parseNanoErg(await ctx.get_balance());
+        const utxos = await ctx.get_utxos();
+        const tokens = extractTokens(utxos);
 
         if (cancelled) return;
         setState(prev => ({
@@ -203,10 +241,24 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
           walletAddress: address,
           balance: isNaN(bal) ? undefined : bal,
           network: getNetworkFromAddress(address),
+          tokens,
         }));
+
+        // Save the fresh session data
+        saveSession(walletKey, {
+          isConnected: true,
+          isConnecting: false,
+          isLocked: false,
+          walletAddress: address,
+          balance: isNaN(bal) ? undefined : bal,
+          network: getNetworkFromAddress(address),
+          error: undefined,
+        }, tokens);
       } catch (err: any) {
         // code -3 = not connected, expected
         if (err?.code !== -3) log.error('Failed to restore wallet:', err);
+        // If there was an error during restoration, clear any persisted session
+        clearSession(walletKey);
       }
     };
 
@@ -216,7 +268,7 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
       cancelled = true;
       if (connectTimer.current) { clearTimeout(connectTimer.current); connectTimer.current = null; }
     };
-  }, [walletKey]);
+  }, [walletKey, hasSession, restoreSession, clearSession, saveSession]);
 
   // ─── connect ──────────────────────────────────────────────────
 
@@ -435,15 +487,23 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
         return;
       }
 
-      setState(prev => ({
-        ...prev,
+      const finalState = {
         isConnected: true,
         isConnecting: false,
         isLocked: false,
         walletAddress: address,
         balance: isNaN(bal) ? undefined : bal,
         network: walletNetwork,
+        error: undefined,
+      };
+      
+      setState(prev => ({
+        ...prev,
+        ...finalState,
       }));
+
+      // Save session on successful connection
+      saveSession(walletKey, finalState, []);
 
       log.log('[Wallet] Connection complete:', { address, balance: bal, network: walletNetwork });
     } catch (error: any) {
@@ -469,10 +529,12 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
       if (conn) {
         try { await conn.disconnect(); } catch (e) { console.error('Disconnect error:', e); }
       }
+      // Clear the persisted session
+      clearSession(walletKey);
     }
     setErgo(null);
     setState({ isConnected: false, isConnecting: false, isLocked: false });
-  }, [walletKey]);
+  }, [walletKey, clearSession]);
 
   // ─── signTransaction ──────────────────────────────────────────
 
