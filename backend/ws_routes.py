@@ -361,7 +361,12 @@ class WSStatsResponse(BaseModel):
 
 @router.get("/ws/stats", response_model=WSStatsResponse)
 async def ws_stats(request: Request):
-    """Get WebSocket connection manager statistics."""
+    """Get WebSocket connection manager statistics. Requires admin API key."""
+    import os
+    api_key = request.headers.get("X-Api-Key", "")
+    expected = os.getenv("ADMIN_API_KEY", "")
+    if not expected or not api_key or api_key != expected:
+        raise HTTPException(status_code=401, detail="Admin API key required")
     ws_manager: ConnectionManager = request.app.state.ws_manager
     stats = ws_manager.get_stats()
     return WSStatsResponse(**stats)

@@ -33,3 +33,6 @@ export type { SpinnerProps, SpinnerVariant, SpinnerSize } from './Spinner';
 
 export { default as Tooltip } from './Tooltip';
 export type { TooltipProps, TooltipPosition } from './Tooltip';
+
+export { default as Toast } from './Toast';
+export type { ToastProps, ToastType, ToastPosition } from './Toast';

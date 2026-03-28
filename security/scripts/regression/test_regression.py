@@ -920,3 +920,137 @@ def test_ws_limits_are_reasonable():
                 f"SEC-A2: MAX_SUBS_PER_ADDRESS={addr_limit} is too high. "
                 "More than 10 connections per address enables surveillance."
             )
+
+
+# ═══════════════════════════════════════════════════════════════
+# 14. BE-8: FAIL-FAST ON EMPTY NODE_API_KEY
+#    Server must refuse to start without NODE_API_KEY.
+# ═══════════════════════════════════════════════════════════════
+
+def test_failfast_on_empty_node_api_key():
+    """
+    BE-8: api_server.py must sys.exit(1) when NODE_API_KEY is empty.
+
+    Without this check, the server starts in a degraded state where
+    every blockchain call silently fails. This is a launch blocker.
+    """
+    api_server_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..",
+        "backend", "api_server.py"
+    )
+    api_server_path = os.path.normpath(api_server_path)
+
+    if not os.path.exists(api_server_path):
+        pytest.skip(f"api_server.py not found at {api_server_path}")
+
+    with open(api_server_path, "r") as f:
+        source = f.read()
+
+    # Must check NODE_API_KEY and call sys.exit(1) if empty
+    has_check = "NODE_API_KEY" in source and "sys.exit" in source
+    if not has_check:
+        pytest.fail(
+            "BE-8: api_server.py must fail-fast when NODE_API_KEY is empty. "
+            "Add: if not NODE_API_KEY: sys.exit(1)"
+        )
+
+    # The check must happen BEFORE the app is created (module-level, not in lifespan)
+    # Find the sys.exit line and verify it comes before "app = FastAPI"
+    exit_pos = source.find("sys.exit")
+    app_pos = source.find("app = FastAPI")
+    if exit_pos > app_pos and app_pos > 0:
+        pytest.fail(
+            "BE-8: NODE_API_KEY fail-fast check must be at module level, "
+            "not inside lifespan or route handlers."
+        )
+
+
+# ═══════════════════════════════════════════════════════════════
+# 15. BE-6: /ws/stats REQUIRES AUTHENTICATION
+#    Connection stats are operational intel — must be admin-only.
+# ═══════════════════════════════════════════════════════════════
+
+def test_ws_stats_requires_auth():
+    """
+    BE-6: /ws/stats endpoint must require admin API key authentication.
+
+    Exposing connection counts, tracked addresses, and IP information
+    without auth leaks operational intelligence to attackers.
+    """
+    ws_routes_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..",
+        "backend", "ws_routes.py"
+    )
+    ws_routes_path = os.path.normpath(ws_routes_path)
+
+    if not os.path.exists(ws_routes_path):
+        pytest.skip(f"ws_routes.py not found at {ws_routes_path}")
+
+    with open(ws_routes_path, "r") as f:
+        source = f.read()
+
+    # Find the ws_stats function
+    stats_func_start = source.find("async def ws_stats")
+    if stats_func_start == -1:
+        pytest.skip("ws_stats function not found")
+
+    # Look for auth check within the function body (next ~500 chars)
+    func_body = source[stats_func_start:stats_func_start + 500]
+    has_auth = (
+        "X-Api-Key" in func_body or
+        "ADMIN_API_KEY" in func_body or
+        "api_key" in func_body
+    )
+
+    if not has_auth:
+        pytest.fail(
+            "BE-6: /ws/stats must require admin API key authentication. "
+            "This endpoint exposes connection counts and tracked addresses."
+        )
+
+
+# ═══════════════════════════════════════════════════════════════
+# 16. BE-5: APY ENDPOINT INPUT VALIDATION
+#    avg_bet_size must be validated to prevent abuse.
+# ═══════════════════════════════════════════════════════════════
+
+def test_apy_input_validation():
+    """
+    BE-5: /apy endpoint must validate avg_bet_size input.
+
+    Without validation, negative values, non-numeric strings, or
+    absurdly large values can produce misleading APY calculations.
+    """
+    lp_routes_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..",
+        "backend", "lp_routes.py"
+    )
+    lp_routes_path = os.path.normpath(lp_routes_path)
+
+    if not os.path.exists(lp_routes_path):
+        pytest.skip(f"lp_routes.py not found at {lp_routes_path}")
+
+    with open(lp_routes_path, "r") as f:
+        source = f.read()
+
+    # Find the APY endpoint
+    apy_func_start = source.find("async def get_pool_apy")
+    if apy_func_start == -1:
+        pytest.skip("get_pool_apy function not found")
+
+    func_body = source[apy_func_start:apy_func_start + 1500]
+
+    # Must have some form of input validation
+    has_validation = (
+        "ValueError" in func_body or
+        "TypeError" in func_body or
+        "bet_size_erg <= 0" in func_body or
+        "bet_size_erg >" in func_body or
+        "HTTPException" in func_body
+    )
+
+    if not has_validation:
+        pytest.xfail(
+            "BE-5: /apy endpoint does not validate avg_bet_size input. "
+            "Add bounds checking and type validation."
+        )

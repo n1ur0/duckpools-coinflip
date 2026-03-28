@@ -12,8 +12,9 @@ MAT-15: Tokenized bankroll and liquidity pool
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from validators import validate_ergo_address, ValidationError
 from pool_manager import (
     PoolConfig,
     PoolStateManager,
@@ -32,10 +33,26 @@ class DepositRequest(BaseModel):
     amount: int = Field(..., gt=0, description="Deposit amount in nanoERG")
     address: str = Field(..., min_length=1, description="LP's ERG address")
 
+    @field_validator("address")
+    @classmethod
+    def validate_address(cls, v: str) -> str:
+        try:
+            return validate_ergo_address(v)
+        except ValidationError as e:
+            raise ValueError(str(e))
+
 
 class WithdrawRequestCreate(BaseModel):
     lp_amount: int = Field(..., gt=0, description="LP tokens to withdraw")
     address: str = Field(..., min_length=1, description="LP's ERG address")
+
+    @field_validator("address")
+    @classmethod
+    def validate_address(cls, v: str) -> str:
+        try:
+            return validate_ergo_address(v)
+        except ValidationError as e:
+            raise ValueError(str(e))
 
 
 class WithdrawExecuteRequest(BaseModel):
@@ -147,6 +164,12 @@ async def get_lp_balance(address: str, request: Request):
     """Get LP token balance for an address."""
     import httpx
 
+    # BE-9: Validate address to prevent SSRF via node API
+    try:
+        address = validate_ergo_address(address)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     mgr = get_pool_manager(request)
     state = await mgr.get_pool_state()
 
@@ -185,14 +208,25 @@ async def get_lp_balance(address: str, request: Request):
 async def get_pool_apy(
     request: Request,
     avg_bet_size: Optional[str] = Query(None, description="Average bet size in ERG"),
-    bets_per_block: Optional[float] = Query(None, description="Average bets per block"),
+    bets_per_block: Optional[float] = Query(None, description="Average bets per block", ge=0, le=1000),
 ):
     """Calculate pool APY based on metrics."""
     mgr = get_pool_manager(request)
     state = await mgr.get_pool_state()
 
-    # Defaults if not provided
-    bet_size_erg = float(avg_bet_size) if avg_bet_size else 1.0
+    # Validate avg_bet_size if provided
+    if avg_bet_size is not None:
+        try:
+            bet_size_erg = float(avg_bet_size)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="avg_bet_size must be a numeric value in ERG")
+        if bet_size_erg <= 0:
+            raise HTTPException(status_code=400, detail="avg_bet_size must be positive")
+        if bet_size_erg > 1_000_000:
+            raise HTTPException(status_code=400, detail="avg_bet_size unreasonably large (max 1,000,000 ERG)")
+    else:
+        bet_size_erg = 1.0
+
     bet_size_nano = int(bet_size_erg * 1e9)
     bpb = bets_per_block if bets_per_block is not None else 0.5
 
