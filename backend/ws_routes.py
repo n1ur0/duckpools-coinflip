@@ -365,7 +365,7 @@ async def ws_stats(request: Request):
     import os
     api_key = request.headers.get("X-Api-Key", "")
     expected = os.getenv("ADMIN_API_KEY", "")
-    if not expected or not api_key or api_key != expected:
+    if not expected or not api_key or not hmac.compare_digest(api_key, expected):
         raise HTTPException(status_code=401, detail="Admin API key required")
     ws_manager: ConnectionManager = request.app.state.ws_manager
     stats = ws_manager.get_stats()
