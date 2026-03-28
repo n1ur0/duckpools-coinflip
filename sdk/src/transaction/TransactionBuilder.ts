@@ -118,18 +118,18 @@ export class TransactionBuilder {
    * Build bet placement transaction
    * Creates a PendingBetBox with commitment and other registers
    *
-   * Register layout MUST match coinflip_v2.es (compiled against node v6.0.3):
+   * Register layout MUST match coinflip_v2.es (compiled 2026-03-28):
    *   R4: Coll[Byte] — house's compressed public key (33 bytes)
    *   R5: Coll[Byte] — player's compressed public key (33 bytes)
-   *   R6: Coll[Byte] — blake2b256(longToByteArray(secret) ++ longToByteArray(choice))
+   *   R6: Coll[Byte] — blake2b256(playerSecret ++ Coll(choiceByte))
    *   R7: Int        — player's choice: 0=heads, 1=tails
-   *   R8: Int        — player's random secret (hashed via longToByteArray in contract)
-   *   R9: Int        — block height for timeout/refund
+   *   R8: Int        — block height for timeout/refund
+   *   R9: Coll[Byte] — player's random secret (32 bytes)
    *
    * NOTE: Ergo boxes only have R0-R9. R0-R3 are reserved. No R10.
    * NOTE: betId is tracked off-chain only, NOT in contract registers.
-   * NOTE: Contract uses longToByteArray(secret.toLong) ++ longToByteArray(choice.toLong)
-   *       for the blake2b256 commitment hash — frontend must match this encoding.
+   * NOTE: Contract uses blake2b256(playerSecret ++ Coll(choiceByte))
+   *       where playerSecret is raw bytes (R9) and choiceByte is 0 or 1.
    */
   buildPlaceBetTransaction(params: {
     playerAddress: string;
@@ -137,9 +137,9 @@ export class TransactionBuilder {
     amount: bigint;
     housePubKey: string;       // House's compressed public key (hex, 33 bytes)
     playerPubKey: string;      // Player's compressed public key (hex)
-    commitment: string;        // blake2b256(longToByteArray(secret) ++ longToByteArray(choice)) (hex, 64 chars)
+    commitment: string;        // blake2b256(playerSecret ++ Coll(choiceByte)) (hex, 64 chars)
     choice: number;            // Player's choice: 0=heads, 1=tails
-    secret: number;            // Player's random secret as Int (NOT hex bytes)
+    secret: string;            // Player's random secret as hex string (32 bytes, Coll[Byte])
     timeoutHeight: number;     // Block height for timeout/refund
     inputBoxId: string;
     inputBoxValue: bigint;
@@ -152,8 +152,8 @@ export class TransactionBuilder {
         R5: { type: 'Coll[Byte]' as const, value: params.playerPubKey },
         R6: { type: 'Coll[Byte]' as const, value: params.commitment },
         R7: { type: 'Int' as const, value: params.choice },
-        R8: { type: 'Int' as const, value: params.secret },
-        R9: { type: 'Int' as const, value: params.timeoutHeight },
+        R8: { type: 'Int' as const, value: params.timeoutHeight },
+        R9: { type: 'Coll[Byte]' as const, value: params.secret },
       } as Record<string, SValue>,
     }
 
