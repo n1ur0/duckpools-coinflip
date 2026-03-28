@@ -1,0 +1,17 @@
+{
+  "address": "6d48wTUX3sXR9tw4vRvX9bKg8zKYhpM7bFwNYDFNEXeVvKSYapzFiHxENW6QUzzavmuDUKHmdooq9d6GkVddFwvutZ9thCJqySLxMrxbKBQ5gUQgHGmVxaJTd2G4d5LgKJYB2hV6mTsc3SgvvEUSuret9mYknpGwjQzekbJD4gShxwGsyxoWL9oxM4pkL3yEj2eYQDowTm8XZC9oDR7nonnvqg3wo3HQ1cwL",
+  "ergoTree": "1006040004040402040005020564d804d601b2a5730000d602e4c6a7050ed603d1ed92b1a57301aedb6308b2a5730200d901034d0eed938c7203018cb2db6308a773030001938c7203027304d604c1a7eb02ea02ea02ea02cdeee4c6a7040ed193cbb37a7ee4c6a70804057a7ee4c6a7070405e4c6a7060ed193c2720172027203ea02ea02ea02d192a3e4c6a70904cdee7202d192c172019972049d720473057203",
+  "sourceFile": "coinflip_v2.es",
+  "compiledAt": "2026-03-28T20:10:00Z",
+  "nodeVersion": "ergo-6.0.3",
+  "network": "testnet",
+  "registerLayout": {
+    "R4": "housePubKey (Coll[Byte])",
+    "R5": "playerPubKey (Coll[Byte])",
+    "R6": "commitmentHash (Coll[Byte])",
+    "R7": "playerChoice (Int)",
+    "R8": "playerSecret (Int)",
+    "R9": "timeoutHeight (Int)"
+  },
+  "commitmentFormula": "blake2b256(longToByteArray(R8) ++ longToByteArray(R7))"
+}
