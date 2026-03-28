@@ -38,13 +38,6 @@ const CoinFlip: React.FC<CoinFlipProps> = ({
 
   
 
-<<<<<<< HEAD
-  const getCoinColor = () => {
-    if (isFlipping) return 'var(--accent-gold)';
-    if (result === 'heads') return 'var(--accent-gold)';
-    if (result === 'tails') return 'var(--accent-tails)';
-    return 'var(--accent-gold)';
-=======
   const getCoinClassName = () => {
     const classes = ['coin'];
     
@@ -66,7 +59,6 @@ const CoinFlip: React.FC<CoinFlipProps> = ({
     }
     
     return classes.join(' ');
->>>>>>> 4d966be (feat: Extract CoinFlip inline styles to CSS classes)
   };
 
   const getCoinLabel = () => {
