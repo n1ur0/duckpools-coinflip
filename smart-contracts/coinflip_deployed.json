@@ -1,0 +1,18 @@
+{
+  "contractName": "coinflip_v2",
+  "network": "testnet",
+  "p2sAddress": "3yNMkSZ6b36YGBJJNhpavxxCFg4f2ceH5JF81hXJgzWoWozuFJSjoW8Q5JXow6fsTVNrqz48h8a9ajYSTKfwaxG16GbHzxrDcsarkBkbR6NYdGeoCZ9KgNcNMYPLV9RPkLFwBPLHxDxyTmBfqn5L75zqftETuAadKr8FHEYZrVPZ6kn6gdiZbzMwghxRy2g4wpTdby4jnxhA42UH7JJzMibgMNBW4yvzw8EaguPLVja6xsxx43yihw5DEzMGzL7HKWYUs6uVugK1C8Feh3KUX9kpea5xpLXX5oZCV47W6cnTrJfJD3",
+  "ergoTreeHex": "19d8010c04000200020104000404040005c20105640400040004000564d805d601cdeee4c6a7040ed602e4c6a7090ed603e4c6a70704d604cdeee4c6a7050ed605c1a7eb02ea02ea027201d193cbb3720283010295937203730073017302e4c6a7060ed195939e7eb2cbb3db6902db6503fe72027303000473047203d801d606b2a5730500ed93c27206d0720492c172069d9c720573067307d801d606b2a5730800ed93c27206d0720192c172067205ea02ea02ea02d192a3e4c6a708047204d193c2b2a5730900d07204d192c1b2a5730a009972059d7205730b",
+  "registerLayout": {
+    "R4": "Coll[Byte] - house compressed PK (33 bytes)",
+    "R5": "Coll[Byte] - player compressed PK (33 bytes)",
+    "R6": "Coll[Byte] - commitment hash blake2b256(secret||choice) (32 bytes)",
+    "R7": "Int - player choice (0=heads, 1=tails)",
+    "R8": "Int - timeout height (block number)",
+    "R9": "Coll[Byte] - player secret (32 random bytes)"
+  },
+  "houseEdge": 0.03,
+  "refundFee": 0.02,
+  "timeoutBlocks": 100,
+  "compiledAt": "2026-03-28T19:05:00Z"
+}
