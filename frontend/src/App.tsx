@@ -6,7 +6,7 @@ import GameHistory from './components/GameHistory';
 import StatsDashboard from './components/StatsDashboard';
 import Leaderboard from './components/Leaderboard';
 import CompPoints from './components/CompPoints';
-import BetForm from './components/BetForm';
+import CoinFlipGame from './components/games/CoinFlipGame';
 import PoolManager from './components/PoolManager';
 import TestWallet from './components/TestWallet';
 import WalletConnector from './components/WalletConnector';
@@ -159,7 +159,7 @@ function App() {
                   >
                     {activeGame === 'coinflip' && (
                       <div className={highlightBetForm ? 'bet-form-highlight' : ''}>
-                        <BetForm />
+                        <CoinFlipGame />
                       </div>
                     )}
                     {activeGame === 'dice' && (
