@@ -4,7 +4,7 @@ DuckPools - Oracle Routes
 API endpoints for oracle health monitoring and status.
 
 MAT-31: Oracle health monitoring with stale feed detection, failover logic, and alerting
-MAT-XXX: Oracle price feed integration module with Ergo oracle pool adapter
+MAT-4f3e5a68: Oracle price feed integration module with Ergo oracle pool adapter
 SEC-A3: /switch endpoint requires admin API key authentication
 """
 

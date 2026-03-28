@@ -5,7 +5,7 @@ Service for managing Ergo Oracle Pool integrations with health monitoring,
 stale feed detection, failover logic, and alerting.
 
 MAT-31: Oracle health monitoring and failover
-MAT-XXX: Oracle price feed integration module with Ergo oracle pool adapter
+MAT-4f3e5a68: Oracle price feed integration module with Ergo oracle pool adapter
 """
 
 import asyncio

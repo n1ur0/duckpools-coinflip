@@ -4,7 +4,7 @@ DuckPools - Ergo Oracle Pool Adapter
 Adapter for integrating with Ergo blockchain oracle pools.
 Fetches oracle data directly from on-chain boxes and parses register values.
 
-MAT-XXX: Oracle price feed integration module with Ergo oracle pool adapter
+MAT-4f3e5a68: Oracle price feed integration module with Ergo oracle pool adapter
 """
 
 import logging
