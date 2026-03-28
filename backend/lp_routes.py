@@ -440,17 +440,8 @@ async def execute_withdrawal(body: WithdrawExecuteRequest, request: Request):
     requested_erg = 0
     requested_erg_str = registers.get("R5", {}).get("serializedValue", "")
     if requested_erg_str:
-        buf = bytes.fromhex(requested_erg_str)
-        if buf[0] == 0x04:  # LongConstant
-            value = 0
-            shift = 0
-            for i in range(1, len(buf)):
-                byte = buf[i]
-                value |= (byte & 0x7F) << shift
-                if (byte & 0x80) == 0:
-                    break
-                shift += 7
-            requested_erg = (value >> 1) ^ -(value & 1)
+        # R5 uses serialize_long (0x04 prefix) — handled by shared method (SEC-A6)
+        requested_erg = mgr._extract_int_from_serialized(requested_erg_str)
 
     # Actual erg is capped by available bankroll
     max_withdraw = max(0, state.bankroll - mgr.config.min_pool_value)
