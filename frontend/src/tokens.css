@@ -33,19 +33,27 @@
   --accent-red-subtle: rgba(239, 68, 68, 0.15);
   --accent-blue: #3b82f6;
   --accent-purple: #8b5cf6;
+  --accent-tails: #63b3ed;
+  --accent-tails-light: #90cdf4;
+  --accent-tails-dark: #4299e1;
+  --accent-tails-subtle: rgba(99, 179, 237, 0.15);
 
   /* === Semantic Colors === */
   --color-success: #00ff88;
   --color-warning: #f0b429;
   --color-error: #ef4444;
   --color-info: #3b82f6;
+  --color-win: var(--accent-green);
+  --color-win-subtle: var(--accent-green-subtle);
+  --color-loss: var(--accent-red);
+  --color-loss-subtle: var(--accent-red-subtle);
 
   /* === Borders === */
   --border-default: rgba(255, 255, 255, 0.08);
   --border-subtle: rgba(255, 255, 255, 0.04);
   --border-strong: rgba(255, 255, 255, 0.15);
   --border-focus: rgba(240, 180, 41, 0.5);
-  --border-color: rgba(255, 255, 255, 0.08);
+  --border-color: var(--border-default); /* Alias — all components use --border-color */
 
   /* === Typography === */
   --font-heading: "Space Grotesk", sans-serif;
