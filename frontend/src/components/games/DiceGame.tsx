@@ -124,7 +124,10 @@ const DiceGame: React.FC<DiceGameProps> = ({ className = '' }) => {
 
     setIsSubmitting(true);
     setError(null);
-      const { secret, commitment } = await generateDiceCommit(rollTarget);
+
+    try {
+      // 1. Generate secret & commitment
+      const { commitment } = await generateDiceCommit(rollTarget);
       const betId = generateBetId();
 
       // 2. Build API request
