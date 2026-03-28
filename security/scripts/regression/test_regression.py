@@ -444,6 +444,7 @@ def test_no_default_hello_api_key():
     SEC-1: API key default must not be 'hello'.
     
     Default 'hello' in production would allow unauthenticated access.
+    Also catches empty-string defaults for keys that should be required.
     """
     api_server_path = os.path.join(
         os.path.dirname(__file__), "..", "..", "..",
@@ -461,10 +462,10 @@ def test_no_default_hello_api_key():
     lines = source.split("\n")
     for i, line in enumerate(lines):
         if "API_KEY" in line and 'os.getenv' in line:
-            # Check if 'hello' is the default
+            # Check if 'hello' is the default — HARD fail, not xfail
             if '"hello"' in line or "'hello'" in line:
-                pytest.xfail(
-                    f"SEC-1: API_KEY uses 'hello' as default at line {i+1}. "
+                pytest.fail(
+                    f"SEC-A9: API_KEY uses 'hello' as default at line {i+1}. "
                     "This must be replaced with a strong random default."
                 )
 
