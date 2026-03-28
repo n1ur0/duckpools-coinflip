@@ -76,7 +76,7 @@
 }
 
 .coinflip-result.tails {
-  color: var(--accent-blue, #3b82f6);
+  color: var(--accent-tails, #63b3ed);
 }
 
 @keyframes coinflip-result-appear {
@@ -276,14 +276,14 @@
 }
 
 .coinflip-choice-btn--tails {
-  border-color: rgba(59, 130, 246, 0.3);
+  border-color: rgba(99, 179, 237, 0.3);
 }
 
 .coinflip-choice-btn--tails:hover,
 .coinflip-choice-btn--tails.coinflip-choice-btn--selected {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: var(--accent-blue, #3b82f6);
-  color: var(--accent-blue, #3b82f6);
+  background: rgba(99, 179, 237, 0.1);
+  border-color: var(--accent-tails, #63b3ed);
+  color: var(--accent-tails, #63b3ed);
 }
 
 .coinflip-choice-btn:active {

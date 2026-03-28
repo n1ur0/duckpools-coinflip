@@ -15,7 +15,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import type {
   WalletState,
-  EIP12ContextAPI,
   Asset,
 } from '../types';
 
@@ -53,14 +52,6 @@ function safeLocalStorageGet(key: string): string | null {
 function safeLocalStorageSet(key: string, value: string): void {
   try {
     localStorage.setItem(key, value);
-  } catch (e) {
-    log.warn('localStorage unavailable:', e);
-  }
-}
-
-function safeLocalStorageRemove(key: string): void {
-  try {
-    localStorage.removeItem(key);
   } catch (e) {
     log.warn('localStorage unavailable:', e);
   }
