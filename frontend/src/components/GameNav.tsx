@@ -5,7 +5,7 @@ import type { GameType } from '../types/Game';
 const games: { id: GameType; label: string; comingSoon?: boolean }[] = [
   { id: 'coinflip', label: 'Coin Flip' },
   { id: 'dice', label: 'Dice' },
-  { id: 'plinko', label: 'Plinko', comingSoon: true },
+  { id: 'plinko', label: 'Plinko' },
 ];
 
 export default function GameNav() {
