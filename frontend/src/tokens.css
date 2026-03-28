@@ -154,4 +154,10 @@
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-blur: 10px;
   --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+
+  /* === Breakpoints (for documentation) === */
+  --bp-sm: 640px;
+  --bp-md: 768px;
+  --bp-lg: 1024px;
+  --bp-xl: 1280px;
 }

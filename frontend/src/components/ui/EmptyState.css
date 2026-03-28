@@ -1,0 +1,80 @@
+/* EmptyState - ui-empty-state prefix */
+
+.ui-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 24px;
+  min-height: 200px;
+}
+
+/* ── Icon ───────────────────────────────────────── */
+
+.ui-empty-state__icon {
+  margin-bottom: 16px;
+  opacity: 0.3;
+  color: var(--text-muted, rgba(255, 255, 255, 0.5));
+  
+  /* Icon sizing */
+  font-size: 48px;
+  line-height: 1;
+  
+  /* If icon is an SVG, ensure proper sizing */
+  svg {
+    width: 48px;
+    height: 48px;
+  }
+}
+
+/* ── Title ───────────────────────────────────────── */
+
+.ui-empty-state__title {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary, #ffffff);
+  line-height: 1.4;
+}
+
+/* ── Description ───────────────────────────────────── */
+
+.ui-empty-state__description {
+  margin: 0 0 24px 0;
+  font-size: 14px;
+  color: var(--text-muted, rgba(255, 255, 255, 0.5));
+  line-height: 1.5;
+  max-width: 320px;
+}
+
+/* ── Action Button ───────────────────────────────── */
+
+.ui-empty-state__action {
+  margin-top: 8px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .ui-empty-state {
+    padding: 32px 16px;
+  }
+  
+  .ui-empty-state__icon {
+    font-size: 40px;
+    
+    svg {
+      width: 40px;
+      height: 40px;
+    }
+  }
+  
+  .ui-empty-state__title {
+    font-size: 16px;
+  }
+  
+  .ui-empty-state__description {
+    font-size: 13px;
+    max-width: 280px;
+  }
+}

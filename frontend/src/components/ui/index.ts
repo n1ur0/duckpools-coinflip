@@ -6,7 +6,7 @@
  *
  * @example
  * ```tsx
- * import { Button, Card, Input, Modal, Badge, Toggle, Tooltip } from '@/components/ui';
+ * import { Button, Card, Input, Modal, Badge, Toggle, Tooltip, AddressInput, ToastProvider, useToast } from '@/components/ui';
  * ```
  */
 
@@ -18,6 +18,9 @@ export type { CardProps, CardVariant, CardPadding } from './Card';
 
 export { default as Input } from './Input';
 export type { InputProps } from './Input';
+
+export { default as AddressInput } from './AddressInput';
+export type { AddressInputProps } from './AddressInput';
 
 export { default as Modal } from './Modal';
 export type { ModalProps, ModalSize } from './Modal';
@@ -36,3 +39,6 @@ export type { TooltipProps, TooltipPosition } from './Tooltip';
 
 export { default as Toast } from './Toast';
 export type { ToastProps, ToastType, ToastPosition } from './Toast';
+
+export { ToastProvider, useToast } from './ToastProvider';
+export type { ToastItem } from './ToastProvider';
