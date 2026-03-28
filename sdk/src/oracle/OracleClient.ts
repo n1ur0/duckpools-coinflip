@@ -5,6 +5,13 @@
  * on-chain Ergo oracle pools and HTTP oracle endpoints.
  * 
  * MAT-XXX: Oracle price feed integration module with Ergo oracle pool adapter
+ * 
+ * NOTE: This module is excluded from tsconfig.json compilation until the
+ * following dependencies are implemented:
+ *   - src/types/oracle.ts (OracleFeed, PriceFeedData, OracleHealthStatus types)
+ *   - ApiResponse type export from src/types/index.ts
+ *   - DuckPoolsClient.request() HTTP method
+ * See DEVOPS-5 for tracking.
  */
 
 import type { OracleFeed, PriceFeedData, OracleHealthStatus } from '../types/oracle';

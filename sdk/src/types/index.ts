@@ -99,6 +99,8 @@ export interface TransactionOutput {
  */
 export interface TransactionInput {
   boxId: string;
+  /** Resolved box value in nanoERG (fetched from node) */
+  value: bigint;
   extension?: Record<string, unknown>;
 }
 
@@ -239,6 +241,8 @@ export interface RevealBetResult {
   payout: bigint;
   blockHash: string;
   rngHash: string;
+  /** Block height used for RNG seed */
+  rngHeight: number;
 }
 
 /**
