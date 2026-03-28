@@ -4,27 +4,26 @@
  */
 
 import { Buffer } from 'buffer';
+import { createHash, randomBytes } from 'crypto';
 
 // Use Web Crypto API in browser, Node.js crypto in Node.js
 let subtle: SubtleCrypto | null = null;
 
-if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
+if (typeof globalThis !== 'undefined' && globalThis.crypto?.subtle) {
+  // Available in modern Node.js (19+) and all browsers
+  subtle = globalThis.crypto.subtle;
+} else if (typeof window !== 'undefined' && window.crypto?.subtle) {
   subtle = window.crypto.subtle;
-} else if (typeof require === 'function') {
-  // Node.js environment
-  try {
-    const nodeCrypto = require('crypto');
-    subtle = {
-      digest: async (algorithm: string, data: Uint8Array) => {
-        const nodeCrypto = require('crypto');
-        const hash = nodeCrypto.createHash(algorithm.replace('-', '').toLowerCase());
-        hash.update(Buffer.from(data));
-        return new Uint8Array(hash.digest());
-      },
-    } as unknown as SubtleCrypto;
-  } catch (_e) {
-    // crypto module not available
-  }
+} else {
+  // Node.js fallback using crypto.createHash
+  subtle = {
+    digest: async (algorithm: string, data: Uint8Array) => {
+      const algo = algorithm.replace('-', '').toLowerCase();
+      const hash = createHash(algo);
+      hash.update(Buffer.from(data));
+      return new Uint8Array(hash.digest());
+    },
+  } as unknown as SubtleCrypto;
 }
 
 /**
@@ -53,13 +52,21 @@ export async function sha256(data: Uint8Array | Buffer | string): Promise<Buffer
  * Generate a random secret (8 bytes)
  */
 export function generateSecret(): string {
-  if (typeof window !== 'undefined' && window.crypto) {
-    const bytes = new Uint8Array(8);
-    window.crypto.getRandomValues(bytes);
-    return Buffer.from(bytes).toString('hex');
-  } else if (typeof require === 'function') {
-    const nodeCrypto = require('crypto');
-    return nodeCrypto.randomBytes(8).toString('hex');
+  try {
+    // Node.js: use crypto.randomBytes (always available)
+    return randomBytes(8).toString('hex');
+  } catch {
+    // Browser: use Web Crypto API
+    if (typeof globalThis !== 'undefined' && globalThis.crypto) {
+      const bytes = new Uint8Array(8);
+      globalThis.crypto.getRandomValues(bytes);
+      return Buffer.from(bytes).toString('hex');
+    }
+    if (typeof window !== 'undefined' && window.crypto) {
+      const bytes = new Uint8Array(8);
+      window.crypto.getRandomValues(bytes);
+      return Buffer.from(bytes).toString('hex');
+    }
   }
   throw new Error('Random number generator not available');
 }
