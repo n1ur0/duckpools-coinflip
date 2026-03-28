@@ -5,6 +5,7 @@
 # This file defines the full development stack:
 # - Backend API (FastAPI) with hot-reload
 # - Frontend (React + Vite) with hot-reload
+# - Off-chain Bot for bet resolution with hot-reload
 # - External Ergo node (not included in this compose)
 #
 # Usage:
@@ -78,6 +79,35 @@ services:
       - duckpools-network
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    depends_on:
+      - backend  # Start backend first
+
+  # Off-chain Bot Service
+  off-chain-bot:
+    build:
+      context: ./off-chain-bot
+      target: development  # Use development stage with hot-reload
+    container_name: duckpools-offchain-bot-dev
+    environment:
+      # Bot configuration
+      - NODE_ENV=development
+      - LOG_LEVEL=DEBUG
+      # Ergo node configuration (external)
+      - ERGO_NODE_URL=http://host.docker.internal:9052
+      - ERGO_API_KEY=blake2...lo")
+    volumes:
+      # Mount bot code for hot-reload
+      - ./off-chain-bot:/app
+      - /app/__pycache__  # Exclude cache
+      - /app/logs  # Exclude logs (will be created in container)
+    networks:
+      - duckpools-network
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "main.py"]  # Check if the bot process is running
       interval: 30s
       timeout: 10s
       start_period: 30s

@@ -21,7 +21,7 @@ A provably-fair gambling protocol on Ergo blockchain using a commit-reveal schem
 
 2. **Start the development stack**
    ```bash
-   # Start both backend and frontend with hot-reload
+   # Start backend, frontend, and off-chain-bot with hot-reload
    docker-compose up
    
    # Or run in background
@@ -101,6 +101,7 @@ docker-compose logs -f
 # View specific service logs
 docker-compose logs -f backend
 docker-compose logs -f frontend
+docker-compose logs -f off-chain-bot
 
 # Stop services
 docker-compose down
@@ -136,6 +137,16 @@ docker-compose down -v
   - `VITE_ERGO_NODE_URL`: Ergo node URL
   - `CHOKIDAR_USEPOLLING`: Enable file polling in Docker
 
+#### Off-chain Bot Service
+
+- **Port**: No external port (internal service)
+- **Hot-Reload**: Enabled (code changes trigger restart)
+- **Environment Variables**:
+  - `NODE_ENV`: development
+  - `LOG_LEVEL`: DEBUG
+  - `ERGO_NODE_URL`: External Ergo node URL
+  - `ERGO_API_KEY`: Ergo node API key
+
 ### Production Builds
 
 To create optimized production builds:
@@ -146,6 +157,9 @@ docker build -t duckpools-backend:prod --target production backend/
 
 # Build frontend
 docker build -t duckpools-frontend:prod --target production frontend/
+
+# Build off-chain-bot
+docker build -t duckpools-offchain-bot:prod --target production off-chain-bot/
 ```
 
 ## 🔧 Configuration
@@ -180,6 +194,15 @@ To configure a different Ergo node:
 |----------|---------|-------------|
 | `VITE_API_ENDPOINT` | http://localhost:8000 | Backend API URL |
 | `VITE_ERGO_NODE_URL` | http://localhost:9052 | Ergo node URL |
+
+#### Off-chain Bot
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NODE_ENV` | development | Environment (development/production) |
+| `LOG_LEVEL` | DEBUG | Logging level |
+| `ERGO_NODE_URL` | http://host.docker.internal:9052 | Ergo node URL |
+| `ERGO_API_KEY` | blake2b256("hello") | Ergo node API key |
 
 ## 📚 Documentation
 
