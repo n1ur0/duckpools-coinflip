@@ -86,7 +86,7 @@ jobs:
         continue-on-error: true
 
       - name: Run TruffleHog
-        uses: trufflesecurity/trufflehog@v3
+        uses: trufflesecurity/trufflehog@main
         with:
           path: .
           base: branch
@@ -132,7 +132,7 @@ jobs:
 
       - name: Perform CodeQL Analysis
         if: matrix.analysis-type == 'codeql'
-        uses: github/codeql-action/perform@v3
+        uses: github/codeql-action/analyze@v3
         continue-on-error: true
 
       - name: Run Semgrep
