@@ -4,7 +4,7 @@ DuckPools - VLQ Serializer for Ergo Values
 Implementation of VLQ (Variable-Length Quantity) encoder/decoder for Ergo register values
 with full type coverage including Int, Long, Coll[Byte], and SigmaProp.
 
-MAT-XXX: VLQ encoder/decoder for Ergo values with full type coverage
+MAT-543bd279: VLQ encoder/decoder for Ergo values with full type coverage
 """
 
 import logging
