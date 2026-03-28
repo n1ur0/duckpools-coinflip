@@ -154,10 +154,10 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
           const ctx = await conn.getContext();
           if (!ctx) return;
           setErgo(ctx);
-          const address = await ctx.get_change_address();
-          const bal = parseNanoErg(await ctx.get_balance());
-          const utxos = await ctx.get_utxos();
-          const tokens = extractTokens(utxos);
+        const address = await ctx.get_change_address();
+        const bal = parseNanoErg(await ctx.get_balance());
+        const utxos = await ctx.get_utxos();
+        const tokens = extractTokens(utxos);
           setState(prev => ({
             ...prev,
             isConnected: true,
@@ -372,10 +372,10 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
         const ctx = await conn.getContext();
         if (ctx) {
           setErgo(ctx);
-          const address = await ctx.get_change_address();
-          const bal = parseNanoErg(await ctx.get_balance());
-          const utxos = await ctx.get_utxos();
-          const tokens = extractTokens(utxos);
+        const address = await ctx.get_change_address();
+        const bal = parseNanoErg(await ctx.get_balance());
+        const utxos = await ctx.get_utxos();
+        const tokens = extractTokens(utxos);
 
           const walletNetwork = getNetworkFromAddress(address);
           const expected = getExpectedNetworkType();
@@ -470,6 +470,8 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
 
       const address = await ctx.get_change_address();
       const bal = parseNanoErg(await ctx.get_balance());
+      const utxos = await ctx.get_utxos();
+      const tokens = extractTokens(utxos);
 
       const walletNetwork = getNetworkFromAddress(address);
       const expected = getExpectedNetworkType();
@@ -494,16 +496,17 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
         walletAddress: address,
         balance: isNaN(bal) ? undefined : bal,
         network: walletNetwork,
+        tokens,
         error: undefined,
       };
-      
+
       setState(prev => ({
         ...prev,
         ...finalState,
       }));
 
       // Save session on successful connection
-      saveSession(walletKey, finalState, []);
+      saveSession(walletKey, finalState, tokens);
 
       log.log('[Wallet] Connection complete:', { address, balance: bal, network: walletNetwork });
     } catch (error: any) {
