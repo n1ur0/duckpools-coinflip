@@ -11,32 +11,124 @@ A provably-fair gambling protocol on Ergo blockchain using a commit-reveal schem
   - REST API on port 9052
   - API key: `blake2b256("hello")`
 
-### Development Setup with Docker
+### Development Setup with Docker (Recommended)
 
-1. **Clone the repository**
+#### 🔥 Easiest Way - Quick Start Script
+
+For the fastest setup, use our quick start script:
+
+```bash
+# First time setup
+./docker-quickstart.sh setup
+
+# Start all services
+./docker-quickstart.sh start
+
+# View logs
+./docker-quickstart.sh logs -f
+
+# Stop services
+./docker-quickstart.sh stop
+```
+
+#### Prerequisites
+
+1. **Docker & Docker Compose**
+   - Install Docker Desktop: [docker.com/get-started](https://www.docker.com/get-started)
+   - Or install Docker CLI and Docker Compose separately
+
+2. **External Ergo Node**
+   - Run Ergo node natively (not in Docker) on port 9052
+   - Configure API key in `ergo.conf`: `apiKeyHash: blake2b256("hello")`
+   - Verify node is accessible: `curl http://localhost:9052/info`
+
+#### Quick Start
+
+1. **Clone and setup**
    ```bash
    git clone <repository-url>
    cd DuckPools
+   
+   # Copy environment configuration
+   cp .env.example .env
+   
+   # Edit .env with your configuration (required values)
+   nano .env
    ```
 
-2. **Start the development stack**
+2. **Start development environment**
    ```bash
-   # Start both backend and frontend with hot-reload
-   docker compose up
+   # Method 1: Using management script (recommended)
+   ./docker-manage.sh dev up
    
-   # Or run in background
+   # Method 2: Direct Docker Compose
    docker compose up -d
    ```
 
-3. **Access the application**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-   - API Health: http://localhost:8000/health
+3. **Access services**
+   - Frontend: http://localhost:3000 (React + Vite dev server)
+   - Backend API: http://localhost:8000 (FastAPI with hot-reload)
+   - API Docs: http://localhost:8000/docs (Swagger UI)
+   - Health Check: http://localhost:8000/health
 
-4. **Stop the services**
+4. **Development workflow**
    ```bash
+   # View logs (all services)
+   docker compose logs -f
+   
+   # View logs for specific service
+   docker compose logs -f backend
+   docker compose logs -f frontend
+   
+   # Rebuild after major changes
+   docker compose build
+   
+   # Stop services
    docker compose down
    ```
+
+#### Advanced Docker Features
+
+The Docker setup includes:
+
+- **Hot Reload**: Code changes automatically reflect in running containers
+- **Health Checks**: All services have automated health monitoring
+- **Volume Mounts**: Persistent logs and hot-reload support
+- **Network Isolation**: Services communicate via internal Docker network
+- **Environment Variables**: Configurable via `.env` file
+- **Development/Production Profiles**: Separate configs for dev and prod
+
+#### Using the Docker Management Script
+
+The `docker-manage.sh` script provides easy commands:
+
+```bash
+# Development commands
+./docker-manage.sh dev up      # Start dev environment
+./docker-manage.sh dev down    # Stop dev environment
+./docker-manage.sh dev logs    # View logs
+./docker-manage.sh dev build   # Rebuild images
+
+# Production commands
+./docker-manage.sh prod up     # Start production
+./docker-manage.sh prod down   # Stop production
+./docker-manage.sh prod logs   # View production logs
+
+# Utilities
+./docker-manage.sh status      # Check container status
+./docker-manage.sh clean all   # Clean all Docker resources
+```
+
+#### Troubleshooting
+
+Common Docker issues and solutions:
+
+- **Port conflicts**: Stop other services using ports 3000/8000
+- **Volume permissions**: Ensure Docker has access to project directories
+- **Build errors**: Clean build cache with `docker builder prune`
+- **Network issues**: Ensure Ergo node is running on host:9052
+
+For detailed troubleshooting, see: [DOCKER.md](DOCKER.md)
 
 ### Manual Development (Without Docker)
 
