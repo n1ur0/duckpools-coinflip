@@ -30,6 +30,7 @@ from tenacity import (
 )
 
 from logger import configure_logging, get_logger
+from health_server import HealthServer
 
 # Configure structured logging
 configure_logging()
@@ -39,7 +40,7 @@ logger = get_logger(__name__)
 
 # Load from environment variables
 NODE_URL = os.getenv("NODE_URL", "http://localhost:9052")
-NODE_API_KEY=os.getenv("NODE_API_KEY", "")
+NODE_API_KEY = os.getenv("NODE_API_KEY", "")
 HEARTBEAT_FILE = os.getenv("HEARTBEAT_FILE", "/tmp/off-chain-bot-heartbeat.txt")
 HEARTBEAT_INTERVAL_SECONDS = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "30"))
 HEALTH_SERVER_PORT = int(os.getenv("HEALTH_SERVER_PORT", "8001"))
