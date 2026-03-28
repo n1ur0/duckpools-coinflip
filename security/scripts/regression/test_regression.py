@@ -12,7 +12,8 @@ Tests enforce protocol invariants that MUST NOT regress:
   5. API key separation (SEC-1)
   6. Security headers present on /health (SEC-2)
   7. RNG uses cryptographic hash (RNG-SEC-1)
-  8. Bet amount validation bounds
+  8. Dice RNG uses rejection sampling, not naive modulo (RNG-SEC-2)
+  9. Bet amount validation bounds
 """
 
 import os
