@@ -36,3 +36,6 @@ export type { TooltipProps, TooltipPosition } from './Tooltip';
 
 export { default as Toast } from './Toast';
 export type { ToastProps, ToastType, ToastPosition } from './Toast';
+
+export { default as EmptyState } from './EmptyState';
+export type { EmptyStateProps } from './EmptyState';
