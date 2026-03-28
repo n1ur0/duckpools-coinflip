@@ -10,8 +10,11 @@
  * Mathematical Model:
  * - For n rows, there are n+1 slots (indexed 0 to n)
  * - Slot k probability follows binomial distribution: P(k) = C(n, k) / 2^n
- * - Multiplier for slot k: multiplier(k) = (1 / P(k)) * (1 - house_edge)
- * - Expected value: E[X] = sum(P(k) * multiplier(k)) = (1 - house_edge) * sum(1) = (1 - house_edge) * (n+1) / (n+1) = 1 - house_edge
+ * - Multiplier for slot k uses power-law parameterization:
+ *     multiplier(k) = A * (1/P(k))^alpha
+ *   where A = (1 - house_edge) / sum(P(j)^(1-alpha))
+ * - Expected value: E[X] = sum(P(k) * multiplier(k)) = 1 - house_edge
+ * - alpha controls risk/reward curve (0.5 = balanced, 0.7 = high risk)
  * - This ensures the house edge is exactly the stated edge regardless of rows
  */
 
@@ -70,18 +73,34 @@ export function getPlinkoSlotProbability(rows: number, slot: number): number {
 
 /**
  * Calculate payout multiplier for a slot.
- * multiplier(k) = (1 / P(k)) * (1 - house_edge)
  *
- * This ensures the expected return is exactly (1 - house_edge).
+ * Uses a power-law parameterization to create an exciting risk/reward curve
+ * while maintaining the exact house edge:
+ *
+ *   multiplier(k) = A * (1/P(k))^alpha
+ *
+ * where A = (1 - house_edge) / sum(P(j)^(1-alpha))
+ *
+ * This ensures: E[X] = sum(P(k) * multiplier(k)) = (1 - house_edge)
+ *
+ * For alpha=0.5: edge multipliers ~21x, center ~0.7x (balanced)
+ * For alpha=0.7: edge multipliers ~68x, center ~0.57x (high risk)
  *
  * @param rows - Number of rows
  * @param slot - Slot index
  */
 export function getPlinkoSlotMultiplier(rows: number, slot: number): number {
   const probability = getPlinkoSlotProbability(rows, slot);
+  const alpha = 0.5; // Risk parameter: 0.5 = balanced, 0.7 = high risk
 
-  // multiplier = (1 / probability) * (1 - house_edge)
-  return (1 / probability) * (1 - PLINKO_HOUSE_EDGE);
+  // Pre-compute normalization constant for this row count
+  let denom = 0;
+  for (let s = 0; s <= rows; s++) {
+    denom += Math.pow(getPlinkoSlotProbability(rows, s), 1 - alpha);
+  }
+
+  const A = (1 - PLINKO_HOUSE_EDGE) / denom;
+  return A * Math.pow(1 / probability, alpha);
 }
 
 /**
@@ -101,16 +120,11 @@ export function calculatePlinkoPayout(betNanoErg: number, rows: number, slot: nu
 /**
  * Compute the expected return for Plinko using PROBABILITY-WEIGHTED sum.
  *
- * BUG FIX: Previous implementation used arithmetic mean of multipliers,
- * which is INCORRECT. Expected value must be probability-weighted:
- * E[X] = sum(P(k) * payout(k)) for all slots k
- *
- * Formula:
- * E[X] = bet * sum(P(k) * multiplier(k))
- *      = bet * sum(P(k) * (1/P(k) * (1 - house_edge)))
- *      = bet * sum((1 - house_edge))
- *      = bet * (n+1) * (1 - house_edge) / (n+1)
- *      = bet * (1 - house_edge)
+ * E[X] = sum(P(k) * multiplier(k)) for all slots k
+ *      = sum(P(k) * A * (1/P(k))^alpha)
+ *      = A * sum(P(k)^(1-alpha))
+ *      = (1 - house_edge) / sum(P(j)^(1-alpha)) * sum(P(k)^(1-alpha))
+ *      = (1 - house_edge)
  *
  * This returns the expected payout amount, not the edge.
  * The house edge is: 1 - (expected_payout / bet) = house_edge
