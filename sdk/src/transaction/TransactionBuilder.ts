@@ -140,7 +140,7 @@ export class TransactionBuilder {
     playerPubKey: string;      // Player's compressed public key (hex)
     commitment: string;        // blake2b256(playerSecret ++ Coll(choiceByte)) (hex, 64 chars)
     choice: number;            // Player's choice: 0=heads, 1=tails
-    secret: string;            // hex bytes            // Player's random secret as hex string (32 bytes, Coll[Byte])
+    secret: string;            // Player's random secret as hex string (32 bytes, Coll[Byte])
     timeoutHeight: number;     // Block height for timeout/refund
     inputBoxId: string;
     inputBoxValue: bigint;
