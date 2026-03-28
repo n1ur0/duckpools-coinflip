@@ -124,6 +124,47 @@ export function serializeSigmaProp(publicKey: string): string {
 }
 
 /**
+ * Serialize SBoolean (Boolean)
+ * Format: type_tag(0x06) for false, type_tag(0x07) for true
+ */
+export function serializeBoolean(value: boolean): string {
+  const buffer = Buffer.from([value ? 0x07 : 0x06]);
+  return buffer.toString('hex');
+}
+
+/**
+ * Serialize SOption (Optional value)
+ * Format: type_tag(0x0b) for None, type_tag(0x0b) + inner_type for Some
+ */
+export function serializeOption(value: SValue | null): string {
+  if (value === null) {
+    const buffer = Buffer.from([0x0b]);
+    return buffer.toString('hex');
+  }
+  // Some: 0x0b + serialized inner value
+  const inner = serializeSValue(value);
+  const buffer = Buffer.concat([Buffer.from([0x0b]), Buffer.from(inner, 'hex')]);
+  return buffer.toString('hex');
+}
+
+/**
+ * Serialize SPair (Tuple/Pair)
+ * Format: type_tag(0x0d) + left_type_tag + left_data + right_type_tag + right_data
+ *
+ * Note: Simplified format - both elements are SValues with their type tags included
+ */
+export function serializePair(left: SValue, right: SValue): string {
+  const leftSerialized = serializeSValue(left);
+  const rightSerialized = serializeSValue(right);
+  const buffer = Buffer.concat([
+    Buffer.from([0x0d]),
+    Buffer.from(leftSerialized, 'hex'),
+    Buffer.from(rightSerialized, 'hex'),
+  ]);
+  return buffer.toString('hex');
+}
+
+/**
  * Serialize SValue to hex string
  */
 export function serializeSValue(svalue: SValue): string {
@@ -137,6 +178,12 @@ export function serializeSValue(svalue: SValue): string {
       return serializeCollByte(svalue.value);
     case 'SigmaProp':
       return serializeSigmaProp(svalue.value);
+    case 'Boolean':
+      return serializeBoolean(svalue.value);
+    case 'Option':
+      return serializeOption(svalue.value);
+    case 'Pair':
+      return serializePair(svalue.left, svalue.right);
     default:
       throw new SerializationError('Unknown SValue type', { type: svalue });
   }
@@ -239,6 +286,103 @@ function decodeVLQ(buffer: Buffer, offset: number): { value: bigint; offset: num
 }
 
 /**
+ * Deserialize SBoolean (Boolean)
+ */
+export function deserializeBoolean(hex: string): boolean {
+  const buffer = Buffer.from(hex, 'hex');
+
+  if (buffer[0] !== 0x06 && buffer[0] !== 0x07) {
+    throw new SerializationError('Not a Boolean', { prefix: buffer[0].toString(16) });
+  }
+
+  return buffer[0] === 0x07;
+}
+
+/**
+ * Deserialize SOption (Optional value)
+ */
+export function deserializeOption(hex: string): SValue | null {
+  const buffer = Buffer.from(hex, 'hex');
+
+  if (buffer[0] !== 0x0b) {
+    throw new SerializationError('Not an Option', { prefix: buffer[0].toString(16) });
+  }
+
+  // Check if it's None (only 0x0b byte) or Some (0x0b + inner value)
+  if (buffer.length === 1) {
+    return null; // None
+  }
+
+  // Some - deserialize the inner value (skip 0x0b byte)
+  return deserializeSValue(hex.substring(2));
+}
+
+/**
+ * Deserialize SPair (Tuple/Pair)
+ */
+export function deserializePair(hex: string): { left: SValue; right: SValue } {
+  const buffer = Buffer.from(hex, 'hex');
+
+  if (buffer[0] !== 0x0d) {
+    throw new SerializationError('Not a Pair', { prefix: buffer[0].toString(16) });
+  }
+
+  // Skip pair type tag (0x0d)
+  let offset = 1;
+
+  // Deserialize left value
+  const leftHex = hex.substring(offset * 2);
+  const left = deserializeSValue(leftHex);
+
+  // Calculate offset after left value
+  const leftBuffer = Buffer.from(leftHex, 'hex');
+  const leftTypeTag = leftBuffer[0];
+  const leftLength = getSerializedValueLength(leftTypeTag, leftBuffer);
+
+  offset += leftLength;
+
+  // Deserialize right value
+  const rightHex = hex.substring(offset * 2);
+  const right = deserializeSValue(rightHex);
+
+  return { left, right };
+}
+
+/**
+ * Helper to get the length of a serialized SValue
+ */
+function getSerializedValueLength(typeTag: number, buffer: Buffer): number {
+  switch (typeTag) {
+    case 0x06: // Boolean false
+    case 0x07: // Boolean true
+      return 1;
+    case 0x0b: // Option None
+      return 1;
+    case 0x02: { // Int
+      const { offset } = decodeVLQ(buffer, 1);
+      return offset;
+    }
+    case 0x04: { // Long
+      const { offset } = decodeVLQ(buffer, 1);
+      return offset;
+    }
+    case 0x0e: { // Coll[Byte]
+      let offset = 1;
+      if (buffer[1] === 0x01) {
+        offset = 2;
+      }
+      const { offset: lengthOffset } = decodeVLQ(buffer, offset);
+      const { value: length } = decodeVLQ(buffer, offset);
+      return lengthOffset + Number(length);
+    }
+    default:
+      // For complex types like Pair and Option with Some, we need to parse recursively
+      // This is a simplified version - real implementation would need more sophisticated parsing
+      return buffer.length;
+  }
+}
+
+/**
  * Deserialize SValue based on type tag
  */
 export function deserializeSValue(hex: string): SValue {
@@ -255,6 +399,15 @@ export function deserializeSValue(hex: string): SValue {
     case 0x08:
       // SigmaProp - return raw hex for now
       return { type: 'SigmaProp', value: hex.substring(2) };
+    case 0x06:
+    case 0x07:
+      return { type: 'Boolean', value: deserializeBoolean(hex) };
+    case 0x0b:
+      return { type: 'Option', value: deserializeOption(hex) };
+    case 0x0d: {
+      const pair = deserializePair(hex);
+      return { type: 'Pair', left: pair.left, right: pair.right };
+    }
     default:
       throw new SerializationError('Unknown SValue type tag', { typeTag });
   }

@@ -26,7 +26,10 @@ export type SValue =
   | { type: 'Long'; value: bigint }
   | { type: 'Coll[Byte]'; value: string } // hex string
   | { type: 'Coll[SByte]'; value: string } // hex string
-  | { type: 'SigmaProp'; value: string }; // hex string
+  | { type: 'SigmaProp'; value: string } // hex string
+  | { type: 'Boolean'; value: boolean } // true = 0x07, false = 0x06
+  | { type: 'Option'; value: SValue | null } // None = 0x0b, Some = 0x0b + inner_type
+  | { type: 'Pair'; left: SValue; right: SValue }; // Tuple type 0x0d
 
 /**
  * ErgoBox register
