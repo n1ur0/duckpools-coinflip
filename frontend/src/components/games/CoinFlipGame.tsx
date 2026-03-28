@@ -264,7 +264,7 @@ try {
                           Bet: {parseFloat(pendingBet.amount).toFixed(4)} ERG
                         </div>
                       )}
-                      {winOutcome === 'win' && (
+                      {winOutcome === 'win' && pendingBet && (
                         <div className="coinflip-payout-amount">
                           Payout: {(parseFloat(pendingBet.amount) * PAYOUT_MULTIPLIER).toFixed(4)} ERG
                         </div>
