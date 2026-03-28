@@ -9,3 +9,5 @@ export * from './ergoLib';
 export * from './walletUtils';
 export * from './simpleTxBuilder';
 export * from './sigmaSerializer';
+export * from './dice';
+export * from './plinko';
