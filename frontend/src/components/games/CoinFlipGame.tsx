@@ -369,9 +369,12 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
           <button
             className="coinflip-flip-again-btn"
             onClick={() => {
-              setResult(null);
-              setWinOutcome(null);
-              setError(null);
+              // Add a small delay for better UX when clicking "Flip Again"
+              setTimeout(() => {
+                setResult(null);
+                setWinOutcome(null);
+                setError(null);
+              }, 100);
             }}
           >
             Flip Again

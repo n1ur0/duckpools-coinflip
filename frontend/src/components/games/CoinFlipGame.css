@@ -67,50 +67,85 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 16px;
   animation: coinflip-result-appear 0.5s ease-out;
+  padding: 8px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  min-width: 180px;
 }
 
 .coinflip-result {
   font-family: var(--font-heading, 'Space Grotesk', sans-serif);
-  font-size: 1.2rem;
-  font-weight: 700;
+  font-size: 1.6rem;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 2px;
+  letter-spacing: 3px;
   animation: coinflip-result-appear 0.5s ease-out;
+  position: relative;
+  padding: 8px 24px;
+  border-radius: 50px;
 }
 
 .coinflip-result.heads {
   color: var(--accent-gold, #f0b429);
+  background: rgba(240, 180, 41, 0.1);
+  border: 2px solid rgba(240, 180, 41, 0.3);
+  box-shadow: 0 0 16px rgba(240, 180, 41, 0.2);
 }
 
 .coinflip-result.tails {
   color: var(--accent-tails, #63b3ed);
+  background: rgba(99, 179, 237, 0.1);
+  border: 2px solid rgba(99, 179, 237, 0.3);
+  box-shadow: 0 0 16px rgba(99, 179, 237, 0.2);
 }
 
 .coinflip-outcome {
   font-family: var(--font-heading, 'Space Grotesk', sans-serif);
-  font-size: 1.8rem;
-  font-weight: 800;
+  font-size: 2rem;
+  font-weight: 900;
   text-transform: uppercase;
-  letter-spacing: 3px;
-  padding: 8px 20px;
-  border-radius: 30px;
+  letter-spacing: 4px;
+  padding: 12px 32px;
+  border-radius: 40px;
   margin-top: 8px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .coinflip-outcome.win {
   color: var(--accent-green, #00ff88);
-  background: rgba(0, 255, 136, 0.1);
-  border: 2px solid var(--accent-green, #00ff88);
-  box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+  background: rgba(0, 255, 136, 0.15);
+  border: 3px solid var(--accent-green, #00ff88);
+  box-shadow: 0 0 30px rgba(0, 255, 136, 0.4), inset 0 0 20px rgba(0, 255, 136, 0.1);
 }
 
 .coinflip-outcome.loss {
   color: var(--accent-red, #ef4444);
-  background: rgba(239, 68, 68, 0.1);
-  border: 2px solid var(--accent-red, #ef4444);
-  box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.15);
+  border: 3px solid var(--accent-red, #ef4444);
+  box-shadow: 0 0 30px rgba(239, 68, 68, 0.4), inset 0 0 20px rgba(239, 68, 68, 0.1);
+}
+
+/* Add icon indicators for win/loss */
+.coinflip-outcome.win::before {
+  content: '✓';
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: var(--accent-green, #00ff88);
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.8);
+}
+
+.coinflip-outcome.loss::before {
+  content: '✗';
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: var(--accent-red, #ef4444);
+  text-shadow: 0 0 10px rgba(239, 68, 68, 0.8);
 }
 
 @keyframes coinflip-result-appear {
@@ -490,31 +525,51 @@
   display: flex;
   justify-content: center;
   margin-top: 24px;
+  animation: coinflip-result-appear 0.5s ease-out 0.3s both;
 }
 
 .coinflip-flip-again-btn {
-  padding: 14px 28px;
-  border-radius: 12px;
-  border: 2px solid var(--accent-gold, #f0b429);
-  background: rgba(240, 180, 41, 0.1);
+  padding: 16px 36px;
+  border-radius: 50px;
+  border: 3px solid var(--accent-gold, #f0b429);
+  background: linear-gradient(135deg, rgba(240, 180, 41, 0.15), rgba(240, 180, 41, 0.05));
   color: var(--accent-gold, #f0b429);
   font-family: var(--font-heading, 'Space Grotesk', sans-serif);
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 1.1rem;
+  font-weight: 800;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 2px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(240, 180, 41, 0.2);
+}
+
+.coinflip-flip-again-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.coinflip-flip-again-btn:hover::before {
+  left: 100%;
 }
 
 .coinflip-flip-again-btn:hover {
-  background: rgba(240, 180, 41, 0.2);
-  box-shadow: 0 0 20px rgba(240, 180, 41, 0.3);
-  transform: translateY(-2px);
+  background: linear-gradient(135deg, rgba(240, 180, 41, 0.25), rgba(240, 180, 41, 0.1));
+  box-shadow: 0 6px 24px rgba(240, 180, 41, 0.4);
+  transform: translateY(-3px) scale(1.02);
 }
 
 .coinflip-flip-again-btn:active {
-  transform: translateY(0);
+  transform: translateY(-1px) scale(0.98);
+  box-shadow: 0 2px 12px rgba(240, 180, 41, 0.3);
 }
 
 /* ── Touch Area ───────────────────────────────────────── */
