@@ -121,7 +121,7 @@ export class TransactionBuilder {
    * Register layout MUST match coinflip_v2.es (compiled against node v6.0.3):
    *   R4: Coll[Byte] — house's compressed public key (33 bytes)
    *   R5: Coll[Byte] — player's compressed public key (33 bytes)
-   *   R6: Coll[Byte] — blake2b256(longToByteArray(secret) ++ longToByteArray(choice))
+   *   R6: Coll[Byte] — blake2b256(playerSecret ++ Coll(choiceByte))
    *   R7: Int         — player's choice: 0=heads, 1=tails
    *   R8: Int         — block height for timeout/refund
    *   R9: Coll[Byte]  — player's random secret (32 bytes)
@@ -138,9 +138,9 @@ export class TransactionBuilder {
     amount: bigint;
     housePubKey: string;       // House's compressed public key (hex, 33 bytes)
     playerPubKey: string;      // Player's compressed public key (hex)
-    commitment: string;        // blake2b256(longToByteArray(secret) ++ longToByteArray(choice)) (hex, 64 chars)
+    commitment: string;        // blake2b256(playerSecret ++ Coll(choiceByte)) (hex, 64 chars)
     choice: number;            // Player's choice: 0=heads, 1=tails
-    secret: number;            // Player's random secret as Int (NOT hex bytes)
+    secret: string;            // hex bytes            // Player's random secret as hex string (32 bytes, Coll[Byte])
     timeoutHeight: number;     // Block height for timeout/refund
     inputBoxId: string;
     inputBoxValue: bigint;
