@@ -19,6 +19,7 @@ MAT-252: Fix RNG module to match actual protocol implementation
 
 import hashlib
 import math
+import os
 from typing import Tuple, List, Dict
 from dataclasses import dataclass
 
@@ -304,7 +305,7 @@ def simulate_dice(num_rolls: int, block_hashes: List[str] = None) -> Dict[int, i
 
     for i in range(num_rolls):
         block_hash = block_hashes[i % len(block_hashes)]
-        secret_bytes = random.getrandbits(64).to_bytes(8, 'big')
+        secret_bytes = os.urandom(8)
         roll = dice_rng(block_hash, secret_bytes)
         counts[roll] += 1
 
