@@ -1,0 +1,112 @@
+# DuckPools E2E Test Report
+
+**Date**: {date}
+**Test Runner**: {runner}
+**Environment**: {environment}
+**Branch**: {branch}
+**Commit**: {commit}
+
+## Executive Summary
+
+{summary}
+
+## Test Results Overview
+
+| Category | Total Tests | Passed | Failed | Skipped | Pass Rate |
+|----------|------------|--------|--------|---------|-----------|
+| Application Tests | {app_total} | {app_passed} | {app_failed} | {app_skipped} | {app_pass_rate}% |
+| Wallet Tests | {wallet_total} | {wallet_passed} | {wallet_failed} | {wallet_skipped} | {wallet_pass_rate}% |
+| Coinflip Tests | {coinflip_total} | {coinflip_passed} | {coinflip_failed} | {coinflip_skipped} | {coinflip_pass_rate}% |
+| **Overall** | {total_tests} | {total_passed} | {total_failed} | {total_skipped} | {overall_pass_rate}% |
+
+## Detailed Test Results
+
+### Application Tests
+
+| Test Name | Status | Duration | Browser | Notes |
+|-----------|--------|----------|---------|-------|
+| {app_test_1_name} | {app_test_1_status} | {app_test_1_duration} | {app_test_1_browser} | {app_test_1_notes} |
+| {app_test_2_name} | {app_test_2_status} | {app_test_2_duration} | {app_test_2_browser} | {app_test_2_notes} |
+| {app_test_3_name} | {app_test_3_status} | {app_test_3_duration} | {app_test_3_browser} | {app_test_3_notes} |
+| {app_test_4_name} | {app_test_4_status} | {app_test_4_duration} | {app_test_4_browser} | {app_test_4_notes} |
+| {app_test_5_name} | {app_test_5_status} | {app_test_5_duration} | {app_test_5_browser} | {app_test_5_notes} |
+
+### Wallet Functionality Tests
+
+| Test Name | Status | Duration | Browser | Notes |
+|-----------|--------|----------|---------|-------|
+| {wallet_test_1_name} | {wallet_test_1_status} | {wallet_test_1_duration} | {wallet_test_1_browser} | {wallet_test_1_notes} |
+| {wallet_test_2_name} | {wallet_test_2_status} | {wallet_test_2_duration} | {wallet_test_2_browser} | {wallet_test_2_notes} |
+| {wallet_test_3_name} | {wallet_test_3_status} | {wallet_test_3_duration} | {wallet_test_3_browser} | {wallet_test_3_notes} |
+| {wallet_test_4_name} | {wallet_test_4_status} | {wallet_test_4_duration} | {wallet_test_4_browser} | {wallet_test_4_notes} |
+| {wallet_test_5_name} | {wallet_test_5_status} | {wallet_test_5_duration} | {wallet_test_5_browser} | {wallet_test_5_notes} |
+| {wallet_test_6_name} | {wallet_test_6_status} | {wallet_test_6_duration} | {wallet_test_6_browser} | {wallet_test_6_notes} |
+| {wallet_test_7_name} | {wallet_test_7_status} | {wallet_test_7_duration} | {wallet_test_7_browser} | {wallet_test_7_notes} |
+
+### Coinflip Game Tests
+
+| Test Name | Status | Duration | Browser | Notes |
+|-----------|--------|----------|---------|-------|
+| {coinflip_test_1_name} | {coinflip_test_1_status} | {coinflip_test_1_duration} | {coinflip_test_1_browser} | {coinflip_test_1_notes} |
+| {coinflip_test_2_name} | {coinflip_test_2_status} | {coinflip_test_2_duration} | {coinflip_test_2_browser} | {coinflip_test_2_notes} |
+| {coinflip_test_3_name} | {coinflip_test_3_status} | {coinflip_test_3_duration} | {coinflip_test_3_browser} | {coinflip_test_3_notes} |
+| {coinflip_test_4_name} | {coinflip_test_4_status} | {coinflip_test_4_duration} | {coinflip_test_4_browser} | {coinflip_test_4_notes} |
+| {coinflip_test_5_name} | {coinflip_test_5_status} | {coinflip_test_5_duration} | {coinflip_test_5_browser} | {coinflip_test_5_notes} |
+| {coinflip_test_6_name} | {coinflip_test_6_status} | {coinflip_test_6_duration} | {coinflip_test_6_browser} | {coinflip_test_6_notes} |
+| {coinflip_test_7_name} | {coinflip_test_7_status} | {coinflip_test_7_duration} | {coinflip_test_7_browser} | {coinflip_test_7_notes} |
+| {coinflip_test_8_name} | {coinflip_test_8_status} | {coinflip_test_8_duration} | {coinflip_test_8_browser} | {coinflip_test_8_notes} |
+
+## Browser Compatibility
+
+| Browser | Version | Tests Run | Passed | Failed | Pass Rate |
+|---------|---------|-----------|--------|--------|-----------|
+| Chromium | {chromium_version} | {chromium_total} | {chromium_passed} | {chromium_failed} | {chromium_pass_rate}% |
+| Firefox | {firefox_version} | {firefox_total} | {firefox_passed} | {firefox_failed} | {firefox_pass_rate}% |
+| WebKit | {webkit_version} | {webkit_total} | {webkit_passed} | {webkit_failed} | {webkit_pass_rate}% |
+
+## Test Environment Details
+
+### System Information
+- **Operating System**: {os}
+- **Node.js Version**: {node_version}
+- **Playwright Version**: {playwright_version}
+
+### Application Configuration
+- **Frontend URL**: {frontend_url}
+- **Backend URL**: {backend_url}
+- **Test Wallet Address**: {test_wallet_address}
+
+## Issues Found
+
+### Critical Issues
+{critical_issues}
+
+### Major Issues
+{major_issues}
+
+### Minor Issues
+{minor_issues}
+
+## Recommendations
+
+### Immediate Actions
+{immediate_actions}
+
+### Future Improvements
+{future_improvements}
+
+## Screenshots
+
+{screenshots_section}
+
+## Test Logs
+
+{test_logs}
+
+## Conclusion
+
+{conclusion}
+
+---
+
+*Report generated by DuckPools E2E Testing Suite*

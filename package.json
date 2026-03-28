@@ -5,7 +5,12 @@
   "description": "DuckPools - Provably-fair gambling protocol on Ergo",
   "scripts": {
     "accessibility:audit": "node scripts/accessibility/wcag-21-audit.mjs",
-    "accessibility:report": "open accessibility-report.html"
+    "accessibility:report": "open accessibility-report.html",
+    "test:e2e": "cd tests/e2e && npm test",
+    "test:e2e:headed": "cd tests/e2e && npm run test:headed",
+    "test:e2e:debug": "cd tests/e2e && npm run test:debug",
+    "test:e2e:setup": "cd tests/e2e && ./setup.sh",
+    "test:e2e:report": "cd tests/e2e && npm run report:show"
   },
   "devDependencies": {
     "pm2": "^6.0.14",
