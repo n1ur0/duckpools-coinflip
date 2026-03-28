@@ -1,9 +1,9 @@
 # OWASP Top 10 Security Audit - DuckPools API
 
 **Issue ID**: befd4bd3-b8c0-46a2-99cc-b0b765c83b94
-**Performed by**: Penetration Tester Jr
+**Performed by**: Penetration Tester Jr (17fe45e7-3b47-48b5-897a-59d6f7e9ba97)
 **Date**: 2026-03-28
-**Scope**: Backend API (FastAPI), WebSocket endpoints, LP pool routes
+**Scope**: Backend API (FastAPI), WebSocket endpoints, LP pool routes, Oracle service
 **OWASP Top 10 Version**: 2021
 
 ---
@@ -15,11 +15,19 @@ This security audit evaluates the DuckPools Coinflip API against the OWASP Top 1
 - **Backend API**: FastAPI server (`backend/api_server.py`)
 - **LP Pool Routes**: Liquidity pool endpoints (`backend/lp_routes.py`)
 - **WebSocket Routes**: Real-time bet updates (`backend/ws_routes.py`)
-- **Configuration**: CORS, middleware, dependencies
+- **Configuration**: CORS, middleware, dependencies, environment variables
 
 ### Overall Risk Assessment: **MEDIUM**
 
-The API has several security gaps that should be addressed before production deployment, particularly around authentication, rate limiting, input validation, and security headers.
+The API has a solid foundation with Pydantic validation, FastAPI best practices, and blockchain immutability for critical data. However, several security gaps must be addressed before production deployment, particularly around authentication, rate limiting, input validation, and security headers.
+
+### Key Findings
+
+**Critical Issues**: 0
+**High Severity**: 3
+**Medium Severity**: 13
+**Low Severity**: 7
+**Info**: 6
 
 ---
 
@@ -105,7 +113,7 @@ The API has several security gaps that should be addressed before production dep
 
 **1. Address Parameter Validation Weak (MEDIUM)**
 - **Affected endpoint**: `GET /lp/balance/{address:path}` (lp_routes.py:145)
-- **Code**: 
+- **Code**:
   ```python
   @router.get("/balance/{address:path}", response_model=LPBalanceResponse)
   async def get_lp_balance(address: str, request: Request):
@@ -117,15 +125,13 @@ The API has several security gaps that should be addressed before production dep
 - **Recommendation**: Add Ergo address format validation:
   ```python
   from pydantic import constr, Field
-  
-  ErgoAddress = constr(strip_whitespace=True, min_length=1, max_length=100)
-  
+
   # Or use regex for Ergo address validation
   class AddressParam(str):
       @classmethod
       def __get_validators__(cls):
           yield cls.validate
-          
+
       @classmethod
       def validate(cls, v):
           if not v or not (v.startswith('3') or v.startswith('9')):
@@ -141,7 +147,7 @@ The API has several security gaps that should be addressed before production dep
   - `GET /lp/estimate/deposit` - Query param: `amount` (int)
   - `GET /lp/estimate/withdraw` - Query param: `shares` (int)
 
-- **Risk**: 
+- **Risk**:
   - `avg_bet_size` is passed as string then converted to float - could raise exception or cause unexpected behavior
   - No maximum value validation on `amount` and `shares` - could lead to integer overflow or DoS
 
@@ -183,7 +189,7 @@ The API has several security gaps that should be addressed before production dep
 
 **1. No Rate Limiting (HIGH)**
 - **Affected**: All API endpoints
-- **Risk**: 
+- **Risk**:
   - DoS attack: Attacker can spam requests, degrading service for legitimate users
   - Brute force: Enumerate all addresses via `/lp/balance/{address}`
   - Resource exhaustion: WebSocket connections (`ws/bets/{address}`) can be abused
@@ -192,16 +198,16 @@ The API has several security gaps that should be addressed before production dep
   ```python
   from slowapi import Limiter
   from slowapi.util import get_remote_address
-  
+
   limiter = Limiter(key_func=get_remote_address)
   app.state.limiter = limiter
-  
+
   # Apply limits
   @router.get("/lp/pool")
   @limiter.limit("100/minute")
   async def get_pool_state(request: Request):
   ```
-  
+
   Suggested limits:
   - Public endpoints: 100 requests/minute
   - Authenticated endpoints: 1000 requests/minute
@@ -258,7 +264,7 @@ The API has several security gaps that should be addressed before production dep
 - **Recommendation**: Add security headers middleware:
   ```python
   from starlette.middleware.base import BaseHTTPMiddleware
-  
+
   class SecurityHeadersMiddleware(BaseHTTPMiddleware):
       async def dispatch(self, request, call_next):
           response = await call_next(request)
@@ -266,18 +272,18 @@ The API has several security gaps that should be addressed before production dep
           response.headers["X-Frame-Options"] = "DENY"
           response.headers["X-XSS-Protection"] = "1; mode=block"
           response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-          
+
           # HSTS only for HTTPS
           if request.url.scheme == "https":
               response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-          
+
           return response
-  
+
   app.add_middleware(SecurityHeadersMiddleware)
   ```
 
 **2. CORS Too Permissive (MEDIUM)**
-- **Location**: `backend/api_server.py:79-85`
+- **Location**: `backend/api_server.py:102-108`
 - **Code**:
   ```python
   app.add_middleware(
@@ -345,11 +351,11 @@ The API has several security gaps that should be addressed before production dep
   # pip-audit for Python
   pip install pip-audit
   pip-audit
-  
+
   # Or use safety
   pip install safety
   safety check
-  
+
   # Add to CI/CD pipeline
   ```
 
@@ -407,7 +413,7 @@ websockets>=12.0
       "client1_key": {"name": "Client 1", "rate_limit": 1000},
       "client2_key": {"name": "Client 2", "rate_limit": 500},
   }
-  
+
   async def verify_api_key(request: Request) -> str:
       api_key = request.headers.get("X-API-Key") or request.headers.get("api_key")
       if not api_key:
@@ -485,13 +491,13 @@ websockets>=12.0
   import logging
   import time
   from fastapi import Request
-  
+
   logger = logging.getLogger("duckpools.security")
-  
+
   @app.middleware("http")
   async def log_requests(request: Request, call_next):
       start_time = time.time()
-      
+
       # Log request
       logger.info(
           "Request: %s %s from %s (UA: %s)",
@@ -500,9 +506,9 @@ websockets>=12.0
           request.client.host if request.client else "unknown",
           request.headers.get("user-agent", "unknown")
       )
-      
+
       response = await call_next(request)
-      
+
       # Log response
       logger.info(
           "Response: %s %s -> %d (%.2fms)",
@@ -511,7 +517,7 @@ websockets>=12.0
           response.status_code,
           (time.time() - start_time) * 1000
       )
-      
+
       return response
   ```
 
@@ -528,7 +534,7 @@ websockets>=12.0
 - **Recommendation**: Configure log rotation in deployment:
   ```python
   import logging.handlers
-  
+
   handler = logging.handlers.RotatingFileHandler(
       "logs/api.log",
       maxBytes=10_000_000,  # 10MB
@@ -702,11 +708,6 @@ The DuckPools API has a solid foundation with proper use of Pydantic validation,
 - CORS hardening
 - API key rotation
 
-**Nice to Have**:
-- Per-client API keys
-- Threat model
-- Dependency scanning automation
-
 ---
 
 ## Appendix: Scoring Methodology
@@ -733,4 +734,4 @@ Severity levels:
 **Auditor**: Penetration Tester Jr (17fe45e7-3b47-48b5-897a-59d6f7e9ba97)
 **Review Required by**: Security Senior (EM - Security & Compliance)
 **Status**: Ready for review
-**Next Issue**: 4d098eb3-808e-4caf-85af-af9d9e46eb21 (Security headers and XSS hardening verification)
+**Next Issue**: None (all assigned issues completed)
