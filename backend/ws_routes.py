@@ -4,30 +4,39 @@ DuckPools - WebSocket Routes
 FastAPI WebSocket endpoint for real-time bet status updates.
 
 SEC-A1: WebSocket authentication via signed session token.
-  Clients must obtain a token from POST /ws/auth (with wallet signature)
-  and pass it as ?token=<jwt> in the WebSocket URL.
+  Two-step challenge-response flow:
+  1. POST /ws/challenge  -- Get a cryptographic nonce
+  2. POST /ws/auth       -- Sign the challenge with your Ergo wallet, submit proof
+  3. ws://host/ws/bets/{address}?token=***  -- Subscribe with the issued token
+
+  Signatures are verified against the Ergo node via /utils/verifySignature.
+  If the node is unreachable, auth is REJECTED (fail-closed).
 
 SEC-A2: Connection limits enforced by ConnectionManager.
 
 Endpoints:
-  POST /ws/auth              -- Obtain a WebSocket session token
-  ws://host/ws/bets/{address}  -- Subscribe to bet events (requires auth token)
-  GET /ws/stats              -- WebSocket connection stats
+  POST /ws/challenge          -- Obtain a cryptographic challenge nonce
+  POST /ws/auth               -- Verify signature, obtain session token
+  ws://host/ws/bets/{address} -- Subscribe to bet events (requires auth token)
+  GET /ws/stats               -- WebSocket connection stats
 
 MAT-30: Real-time game history with WebSocket updates
+MAT-335: Fix - WebSocket auth now verifies signatures via Ergo node
 """
 
+import asyncio
 import hashlib
 import hmac
 import json
 import logging
 import os
+import secrets
 import time
-import asyncio
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from ws_manager import ConnectionManager, ConnectionLimitExceeded
 from game_events import BetEvent, BetEventType
@@ -42,6 +51,14 @@ router = APIRouter(tags=["websocket"])
 # In production, this should be a dedicated env var. Using BOT_API_KEY as fallback.
 WS_TOKEN_SECRET = os.getenv("WS_TOKEN_SECRET", os.getenv("BOT_API_KEY", ""))
 WS_TOKEN_MAX_AGE = int(os.getenv("WS_TOKEN_MAX_AGE", "3600"))  # 1 hour default
+
+# Ergo node URL for signature verification
+NODE_URL = os.getenv("NODE_URL", "http://localhost:9052")
+NODE_API_KEY = os.getenv("NODE_API_KEY", "")
+
+# Challenge nonce configuration
+CHALLENGE_TTL_SECONDS = 300  # 5 minutes to respond to a challenge
+MAX_PENDING_CHALLENGES = 10000  # Prevent memory exhaustion from challenge spam
 
 
 def _sign_token(payload: dict) -> str:
@@ -100,12 +117,210 @@ def _verify_token(token: str) -> Optional[dict]:
         return None
 
 
-# ─── SEC-A1: Auth Endpoint ─────────────────────────────────────
+# ─── SEC-A1: Challenge Store ──────────────────────────────────
+# Server-side store for pending auth challenges.
+# Key: challenge nonce, Value: (address, created_at)
+_pending_challenges: dict[str, tuple[str, float]] = {}
+_challenge_lock = asyncio.Lock()
+
+
+def _purge_expired_challenges() -> None:
+    """Remove expired challenges from the store."""
+    now = time.time()
+    expired = [nonce for nonce, (_, created) in _pending_challenges.items()
+               if now - created > CHALLENGE_TTL_SECONDS]
+    for nonce in expired:
+        del _pending_challenges[nonce]
+    if expired:
+        logger.debug("Purged %d expired auth challenges", len(expired))
+
+
+async def _create_challenge(address: str) -> str:
+    """
+    Generate a cryptographic challenge nonce and store it.
+    The client must sign this nonce with their Ergo wallet key.
+    """
+    async with _challenge_lock:
+        # Prevent memory exhaustion
+        if len(_pending_challenges) >= MAX_PENDING_CHALLENGES:
+            _purge_expired_challenges()
+            if len(_pending_challenges) >= MAX_PENDING_CHALLENGES:
+                raise HTTPException(
+                    status_code=429,
+                    detail="Too many pending challenges. Please wait."
+                )
+
+        nonce = secrets.token_hex(32)
+        _pending_challenges[nonce] = (address.lower(), time.time())
+        return nonce
+
+
+async def _consume_challenge(nonce: str, expected_address: str) -> bool:
+    """
+    Validate and consume a challenge nonce.
+    Returns True if the nonce is valid and matches the expected address.
+    """
+    async with _challenge_lock:
+        entry = _pending_challenges.pop(nonce, None)
+        if entry is None:
+            return False
+
+        stored_address, created_at = entry
+
+        # Check expiry
+        if time.time() - created_at > CHALLENGE_TTL_SECONDS:
+            return False
+
+        # Verify address matches
+        if stored_address != expected_address.lower():
+            return False
+
+        return True
+
+
+# ─── SEC-A1: Ergo Node Signature Verification ──────────────────
+
+async def _verify_ergo_signature(
+    address: str,
+    message: str,
+    signature: str,
+) -> bool:
+    """
+    Verify a ProveDlog signature against the Ergo node.
+
+    Uses the node's /utils/verifySignature endpoint which checks
+    that the signature was produced by the private key corresponding
+    to the given address over the given message.
+
+    Returns True if the node confirms the signature is valid.
+    Returns False if verification fails or the node is unreachable.
+
+    MAT-335: This is the critical fix — we no longer accept any non-empty
+    signature. Every auth request is cryptographically verified.
+    """
+    try:
+        headers = {}
+        if NODE_API_KEY:
+            headers["api_key"] = NODE_API_KEY
+
+        payload = {
+            "message": message,
+            "signature": signature,
+            "address": address,
+        }
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"{NODE_URL}/utils/verifySignature",
+                json=payload,
+                headers=headers,
+            )
+
+        if response.status_code == 200:
+            result = response.json()
+            verified = result.get("result", False)
+            if verified:
+                logger.info(
+                    "Signature verified for %s via Ergo node",
+                    address[:10],
+                )
+                return True
+            else:
+                logger.warning(
+                    "Signature REJECTED for %s — node returned false",
+                    address[:10],
+                )
+                return False
+        else:
+            logger.error(
+                "Ergo node returned HTTP %d during signature verification: %s",
+                response.status_code,
+                response.text[:200],
+            )
+            return False
+
+    except httpx.TimeoutException:
+        logger.error(
+            "Ergo node timed out during signature verification — "
+            "rejecting auth (fail-closed)"
+        )
+        return False
+    except httpx.ConnectError:
+        logger.error(
+            "Cannot connect to Ergo node for signature verification — "
+            "rejecting auth (fail-closed)"
+        )
+        return False
+    except Exception as e:
+        logger.error(
+            "Unexpected error during signature verification: %s — "
+            "rejecting auth (fail-closed)", e
+        )
+        return False
+
+
+# ─── SEC-A1: Auth Endpoints ────────────────────────────────────
+
+class ChallengeRequest(BaseModel):
+    address: str
+
+    @field_validator("address")
+    @classmethod
+    def validate_address(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 26 or len(v) > 60:
+            raise ValueError("Invalid Ergo address length")
+        if not v.startswith(("3", "9")):
+            raise ValueError("Ergo address must start with 3 (mainnet) or 9 (testnet)")
+        return v
+
+
+class ChallengeResponse(BaseModel):
+    challenge: str
+    address: str
+    expires_at: int
+
 
 class WSAuthRequest(BaseModel):
     address: str
     signature: str
-    message: str
+    challenge: str
+
+    @field_validator("address")
+    @classmethod
+    def validate_address(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 26 or len(v) > 60:
+            raise ValueError("Invalid Ergo address length")
+        if not v.startswith(("3", "9")):
+            raise ValueError("Ergo address must start with 3 (mainnet) or 9 (testnet)")
+        return v
+
+    @field_validator("signature")
+    @classmethod
+    def validate_signature(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Signature is required and must be non-empty")
+        v = v.strip()
+        # ProveDlog signatures are Base16-encoded, reasonable length check
+        if len(v) < 10 or len(v) > 10000:
+            raise ValueError("Signature has invalid length")
+        return v
+
+    @field_validator("challenge")
+    @classmethod
+    def validate_challenge(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Challenge nonce is required")
+        v = v.strip()
+        # Our challenges are 64-char hex (secrets.token_hex(32))
+        if len(v) != 64:
+            raise ValueError("Invalid challenge nonce length")
+        try:
+            int(v, 16)
+        except ValueError:
+            raise ValueError("Challenge nonce must be valid hex")
+        return v
 
 
 class WSAuthResponse(BaseModel):
@@ -113,36 +328,83 @@ class WSAuthResponse(BaseModel):
     expires_at: int
 
 
+@router.post("/ws/challenge", response_model=ChallengeResponse)
+async def ws_challenge(body: ChallengeRequest):
+    """
+    SEC-A1 Step 1: Request a cryptographic challenge.
+
+    The client provides their Ergo address and receives a unique
+    challenge nonce. They must sign this nonce with their wallet
+    and submit the signature to /ws/auth.
+
+    The challenge expires after CHALLENGE_TTL_SECONDS (default: 5 minutes).
+    """
+    address = body.address.strip()
+
+    # Purge expired challenges opportunistically
+    async with _challenge_lock:
+        _purge_expired_challenges()
+
+    challenge = await _create_challenge(address)
+
+    return ChallengeResponse(
+        challenge=challenge,
+        address=address.lower(),
+        expires_at=int(time.time()) + CHALLENGE_TTL_SECONDS,
+    )
+
+
 @router.post("/ws/auth", response_model=WSAuthResponse)
 async def ws_authenticate(request: Request, body: WSAuthRequest):
     """
-    SEC-A1: Obtain a WebSocket session token.
+    SEC-A1 Step 2: Verify signature and obtain a WebSocket session token.
 
     The client must provide:
     - address: Their Ergo address (P2PK, starts with 3 or 9)
-    - message: A random challenge string (server-issued or client-generated)
-    - signature: HMAC-SHA256 or ProveDlog signature proving address ownership
+    - challenge: The nonce obtained from POST /ws/challenge
+    - signature: ProveDlog signature proving ownership of the address,
+                 signing the challenge string
 
-    For MVP, we accept the signature as-is and bind the token to the address.
-    Full Nautilus wallet signature verification will be added when the wallet
-    integration layer is complete (depends on frontend wallet adapter).
+    The signature is verified against the Ergo node's /utils/verifySignature.
+    If the node is unreachable, authentication is REJECTED (fail-closed).
+
+    MAT-335: This endpoint previously accepted any non-empty signature,
+    allowing impersonation of any Ergo address. Now requires cryptographic
+    proof of address ownership.
 
     Returns a signed token valid for WS_TOKEN_MAX_AGE seconds.
     """
     address = body.address.strip()
 
-    # Basic address validation
-    if len(address) < 20 or not address.startswith(("3", "9")):
-        raise HTTPException(status_code=400, detail="Invalid Ergo address format")
+    # Step 1: Validate and consume the challenge nonce
+    challenge_valid = await _consume_challenge(body.challenge, address)
+    if not challenge_valid:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid, expired, or already-used challenge. "
+                   "Request a new challenge from POST /ws/challenge.",
+        )
 
-    if not body.signature:
-        raise HTTPException(status_code=400, detail="Signature is required")
+    # Step 2: Verify the signature cryptographically via Ergo node
+    # The message to sign is the challenge nonce itself
+    signature_valid = await _verify_ergo_signature(
+        address=address,
+        message=body.challenge,
+        signature=body.signature,
+    )
 
-    # TODO: When wallet adapter is ready, verify the signature cryptographically
-    # against the address's public key. For now, any non-empty signature is accepted
-    # as proof-of-concept. This MUST be hardened before mainnet.
-    # See: https://github.com/n1ur0/duckpools-coinflip/issues/58
+    if not signature_valid:
+        logger.warning(
+            "WS auth REJECTED for %s — signature verification failed",
+            address[:10],
+        )
+        raise HTTPException(
+            status_code=401,
+            detail="Signature verification failed. The signature does not "
+                   "match the provided address and challenge.",
+        )
 
+    # Step 3: Issue session token
     expires_at = int(time.time()) + WS_TOKEN_MAX_AGE
     token = _sign_token({
         "sub": address.lower(),
