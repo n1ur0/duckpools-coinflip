@@ -56,18 +56,17 @@ def validate_ergo_address(address: str) -> str:
 
     if len(address) < 26:
         raise ValidationError(
-            f"Address too short ({len(address)} chars, expected 26-60)"
+            "Address too short (expected 26-60 chars)"
         )
 
     if not ERGO_ADDRESS_RE.match(address):
         if not address.startswith(("3", "9")):
             raise ValidationError(
-                f"Invalid Ergo address prefix: expected '3' (mainnet) or '9' (testnet), "
-                f"got '{address[0]}'"
+                "Invalid Ergo address prefix: expected '3' (mainnet) or '9' (testnet)"
             )
         raise ValidationError(
-            f"Address contains invalid characters or has wrong length "
-            f"({len(address)} chars, expected 26-60)"
+            "Address contains invalid characters or has wrong length "
+            "(expected 26-60 chars)"
         )
 
     return address
