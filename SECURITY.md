@@ -141,6 +141,24 @@ The following are NOT eligible for bounties:
 
 5. **Access Control**
    - Principle of least privilege
+
+### CSP Production Hardening (MAT-337)
+
+The development CSP policy in `backend/api_server.py` uses `unsafe-inline` and `unsafe-eval` to support Vite's HMR. Before production deployment, the following changes are required:
+
+1. **Remove `unsafe-eval`** — Eliminates `eval()` and dynamic code execution vectors
+2. **Replace `unsafe-inline` with nonces** — Generate a per-request CSP nonce and inject it into `<script>` tags via the template layer
+3. **Update `connect-src`** — Add WebSocket (`wss:`) and API origins explicitly instead of relying on `'self'`
+4. **Remove X-Security-Middleware header** — Already removed; do not re-add debug headers
+
+Example production CSP:
+```
+script-src 'self' 'nonce-{RANDOM}';
+style-src 'self' 'nonce-{RANDOM}';
+connect-src 'self' https://api.duckpools.io wss://ws.duckpools.io;
+```
+
+See `backend/api_server.py:SecurityHeadersMiddleware` for the current policy.
    - Separate dev/staging/production environments
    - Audit access logs regularly
 
