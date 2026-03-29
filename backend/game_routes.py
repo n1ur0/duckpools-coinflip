@@ -360,8 +360,23 @@ async def contract_info():
 
 @router.post("/place-bet", response_model=PlaceBetResponse)
 async def place_bet(req: PlaceBetRequest):
-    """Place a coinflip bet from BetForm.tsx / CoinFlipGame.tsx."""
+    """Place a coinflip bet from BetForm.tsx / CoinFlipGame.tsx.
+
+    MAT-350: Bet deduplication — rejects duplicate betIds to prevent
+    replay attacks where the same bet request is submitted multiple times.
+    """
     now = datetime.now(timezone.utc).isoformat()
+
+    # ── MAT-350: Bet deduplication (replay attack prevention) ──
+    # Check if a bet with this betId already exists
+    for existing_bet in _bets:
+        if existing_bet["betId"] == req.betId:
+            return PlaceBetResponse(
+                success=False,
+                txId=existing_bet.get("txId", ""),
+                betId=req.betId,
+                message="Duplicate bet: this betId has already been placed.",
+            )
 
     side = "heads" if req.choice == 0 else "tails"
 
