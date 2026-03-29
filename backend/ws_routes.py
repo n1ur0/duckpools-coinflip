@@ -111,6 +111,7 @@ class WSAuthRequest(BaseModel):
 class WSAuthResponse(BaseModel):
     token: str
     expires_at: int
+    warning: Optional[str] = None
 
 
 @router.post("/ws/auth", response_model=WSAuthResponse)
@@ -144,15 +145,28 @@ async def ws_authenticate(request: Request, body: WSAuthRequest):
     # See: https://github.com/n1ur0/duckpools-coinflip/issues/58
 
     expires_at = int(time.time()) + WS_TOKEN_MAX_AGE
-    token = _sign_token({
-        "sub": address.lower(),
-        "iat": int(time.time()),
-        "exp": expires_at,
-    })
 
     logger.info("WS auth token issued for %s (expires %d)", address[:10], expires_at)
+    logger.warning(
+        "WS auth: signature NOT cryptographically verified (PoC limitation). "
+        "Any non-empty signature was accepted. See MAT-335."
+    )
 
-    return WSAuthResponse(token=token, expires_at=expires_at)
+    return WSAuthResponse(
+        token=_sign_token({
+            "sub": address.lower(),
+            "iat": int(time.time()),
+            "exp": expires_at,
+        }),
+        expires_at=expires_at,
+        warning=(
+            "SIGNATURE_NOT_VERIFIED: This is a proof-of-concept implementation. "
+            "The provided signature was NOT cryptographically verified against the "
+            "address public key. Any non-empty string is accepted as a signature. "
+            "This endpoint MUST be hardened with Nautilus wallet signature verification "
+            "before any production deployment. See MAT-335."
+        ),
+    )
 
 
 # ─── WebSocket Endpoint ────────────────────────────────────────
@@ -365,8 +379,14 @@ async def ws_stats(request: Request):
     import os
     api_key = request.headers.get("X-Api-Key", "")
     expected = os.getenv("ADMIN_API_KEY", "")
-    if not expected or not api_key or not hmac.compare_digest(api_key, expected):
-        raise HTTPException(status_code=401, detail="Admin API key required")
+    if not expected:
+        raise HTTPException(
+            status_code=403,
+            detail="ADMIN_API_KEY environment variable is not configured. "
+                   "WebSocket stats endpoint is disabled.",
+        )
+    if not api_key or not hmac.compare_digest(api_key, expected):
+        raise HTTPException(status_code=403, detail="Invalid or missing admin API key")
     ws_manager: ConnectionManager = request.app.state.ws_manager
     stats = ws_manager.get_stats()
     return WSStatsResponse(**stats)

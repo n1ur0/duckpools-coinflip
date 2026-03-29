@@ -290,6 +290,27 @@ The `docker-compose.override.yml` file provides development-specific overrides:
 - [Security](SECURITY.md) - Security considerations
 - [Ergo Concepts](docs/ERGO_CONCEPTS.md) - Blockchain-specific concepts
 
+## ⚠️ Known Limitations
+
+### WebSocket Authentication (MAT-335)
+
+The `POST /ws/auth` endpoint does **not** cryptographically verify the provided
+signature against the address's public key. Any non-empty string is accepted as
+a valid signature. This means:
+
+- An attacker can authenticate as **any Ergo address** by sending an arbitrary
+  non-empty signature.
+- Once authenticated, they can subscribe to that address's bet events via the
+  WebSocket endpoint.
+- The `/ws/stats` admin endpoint is disabled (returns 403) when
+  `ADMIN_API_KEY` is not configured.
+
+**This is a proof-of-concept limitation.** Full Nautilus wallet signature
+verification will be implemented before any production deployment.
+
+The auth response includes a `warning` field with this notice, and the server
+logs a warning on every successful authentication.
+
 ## 🤝 Contributing
 
 Please read [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for our contribution guidelines.
