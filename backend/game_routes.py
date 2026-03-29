@@ -127,11 +127,27 @@ class PlaceBetRequest(BaseModel):
 
 
 class PlaceBetResponse(BaseModel):
+class PlaceBetResponse(BaseModel):
     success: bool = True
     txId: str = ""
     betId: str = ""
     message: str = ""
 
+class RevealRequest(BaseModel):
+    box_id: str
+    block_hash: str
+
+    @field_validator('box_id')
+    def validate_box_id(cls, v: str) -> str:
+        if not v:
+            raise ValueError('Box ID cannot be empty')
+        return v
+
+    @field_validator('block_hash')
+    def validate_block_hash(cls, v: str) -> str:
+        if len(v) != 64:  # block hash is 32 bytes = 64 hex chars
+            raise ValueError('Block hash must be 64 hex characters')
+        return v
 
 class PlayerStats(BaseModel):
     address: str
@@ -151,17 +167,30 @@ class PlayerStats(BaseModel):
     compPoints: int = 0
     compTier: str = "Bronze"
 
-
 class LeaderboardEntry(BaseModel):
     rank: int
     address: str
     totalBets: int = 0
-    netPnL: str = "0"
+    wins: int = 0
+    losses: int = 0
+    pending: int = 0
     winRate: float = 0.0
+    totalWagered: str = "0"
+    totalWon: str = "0"
+    totalLost: str = "0"
+    netPnL: str = "0"
+    biggestWin: str = "0"
+    currentStreak: int = 0
+    longestWinStreak: int = 0
+    longestLossStreak: int = 0
     compPoints: int = 0
     compTier: str = "Bronze"
 
-
+class RevealResponse(BaseModel):
+    unsigned_tx: Dict[str, Any]
+    player_wins: bool
+    payout_amount: str
+    block_hash: str
 class LeaderboardResponse(BaseModel):
     players: List[LeaderboardEntry]
     totalPlayers: int = 0
@@ -179,16 +208,29 @@ class CompPointsResponse(BaseModel):
     benefits: List[str] = []
 
 
-# ─── In-memory game store (PoC — no database) ──────────────────────
+# ─── Database integration ────────────────────────────────────────
 
-_bets: List[dict] = []
-_pool_stats = {
-    "liquidity": "50000000000000",  # 50,000 ERG in nanoERG
-    "totalBets": 0,
-    "playerWins": 0,
-    "houseWins": 0,
-    "totalFees": "0",
-}
+from .database import (
+    init_db, close_db, create_bet_table, create_pool_stats_table,
+    insert_or_update_pool_stats, get_pool_stats, insert_bet, get_bets_by_address,
+    update_bet_outcome, get_all_bets, get_bet_count, get_player_win_rate,
+    get_player_stats, get_leaderboard, get_total_players, migrate_from_in_memory
+)
+
+# Initialize database on startup
+import asyncio
+asyncio.create_task(init_db())
+
+# Create tables if they don't exist
+async def ensure_tables():
+    await create_bet_table()
+    await create_pool_stats_table()
+    # Initialize pool stats if empty
+    stats = await get_pool_stats()
+    if stats.totalBets == 0:
+        await insert_or_update_pool_stats(stats)
+
+asyncio.create_task(ensure_tables())
 
 
 # ─── Routes ───────────────────────────────────────────────────────
@@ -196,9 +238,12 @@ _pool_stats = {
 @router.get("/leaderboard", response_model=LeaderboardResponse)
 async def get_leaderboard():
     """Leaderboard for Leaderboard.tsx."""
+    players = await get_leaderboard()
+    total_players = await get_total_players()
+    
     return LeaderboardResponse(
-        players=[],
-        totalPlayers=0,
+        players=players,
+        totalPlayers=total_players,
         sortBy="netPnL",
     )
 
@@ -206,106 +251,45 @@ async def get_leaderboard():
 @router.get("/history/{address}", response_model=List[BetRecord])
 async def get_history(address: str):
     """Bet history for GameHistory.tsx."""
-    return [BetRecord(**b) for b in _bets if b["playerAddress"] == address]
+    bets = await get_bets_by_address(address)
+    return bets
 
 
 @router.get("/player/stats/{address}", response_model=PlayerStats)
 async def get_player_stats(address: str):
     """Player stats for StatsDashboard.tsx."""
-    player_bets = [b for b in _bets if b["playerAddress"] == address]
-    wins = sum(1 for b in player_bets if b["outcome"] == "win")
-    losses = sum(1 for b in player_bets if b["outcome"] == "loss")
-    pending = sum(1 for b in player_bets if b["outcome"] == "pending")
-    total = len(player_bets)
-    win_rate = (wins / total * 100) if total > 0 else 0.0
-
-    total_wagered = sum(int(b["betAmount"]) for b in player_bets)
-    total_won = sum(int(b["payout"]) for b in player_bets if b["outcome"] == "win")
-    total_lost = sum(int(b["betAmount"]) for b in player_bets if b["outcome"] == "loss")
-    net_pnl = total_won - total_lost
-    biggest_win = max((int(b["payout"]) for b in player_bets if b["outcome"] == "win"), default=0)
-
-    # Streaks
-    current_streak = 0
-    longest_win = 0
-    longest_loss = 0
-    streak = 0
-    streak_type = None
-    for b in reversed(player_bets):
-        if b["outcome"] in ("win", "loss"):
-            if streak_type is None:
-                streak_type = b["outcome"]
-                streak = 1
-            elif b["outcome"] == streak_type:
-                streak += 1
-            else:
-                break
-    current_streak = streak if streak_type == "win" else -streak
-
-    # Full streak analysis
-    ws = ls = 0
-    cur = 0
-    cur_type = None
-    for b in player_bets:
-        if b["outcome"] in ("win", "loss"):
-            if cur_type == b["outcome"]:
-                cur += 1
-            else:
-                if cur_type == "win":
-                    ws = max(ws, cur)
-                elif cur_type == "loss":
-                    ls = max(ls, cur)
-                cur_type = b["outcome"]
-                cur = 1
-    if cur_type == "win":
-        ws = max(ws, cur)
-    elif cur_type == "loss":
-        ls = max(ls, cur)
-
-    # Comp points: 1 point per 0.01 ERG wagered
-    comp_points = total_wagered // 10000000  # 0.01 ERG = 10M nanoERG
-    comp_tier = "Bronze"
-    if comp_points >= 10000:
-        comp_tier = "Diamond"
-    elif comp_points >= 1000:
-        comp_tier = "Gold"
-    elif comp_points >= 100:
-        comp_tier = "Silver"
-
+    stats = await get_player_stats(address)
+    
     return PlayerStats(
         address=address,
-        totalBets=total,
-        wins=wins,
-        losses=losses,
-        pending=pending,
-        winRate=win_rate,
-        totalWagered=str(total_wagered),
-        totalWon=str(total_won),
-        totalLost=str(total_lost),
-        netPnL=str(net_pnl),
-        biggestWin=str(biggest_win),
-        currentStreak=current_streak,
-        longestWinStreak=longest_win,
-        longestLossStreak=longest_loss,
-        compPoints=comp_points,
-        compTier=comp_tier,
+        totalBets=stats["totalBets"],
+        wins=stats["wins"],
+        losses=stats["losses"],
+        pending=stats["pending"],
+        winRate=stats["winRate"],
+        totalWagered=stats["totalWagered"],
+        totalWon=stats["totalWon"],
+        totalLost=stats["totalLost"],
+        netPnL=stats["netPnL"],
+        biggestWin=stats["biggestWin"],
+        currentStreak=stats["currentStreak"],
+        longestWinStreak=stats["longestWinStreak"],
+        longestLossStreak=stats["longestLossStreak"],
+        compPoints=stats["compPoints"],
+        compTier=stats["compTier"],
     )
 
 
 @router.get("/player/comp/{address}", response_model=CompPointsResponse)
 async def get_player_comp(address: str):
     """Comp points for CompPoints.tsx."""
-    player_bets = [b for b in _bets if b["playerAddress"] == address]
-    total_wagered = sum(int(b["betAmount"]) for b in player_bets)
-    comp_points = total_wagered // 10000000
+    # Get player stats which includes comp points
+    stats = await get_player_stats(address)
+    comp_points = stats["compPoints"]
+    current_tier = stats["compTier"]
 
     tier_thresholds = {"Bronze": 0, "Silver": 100, "Gold": 1000, "Diamond": 10000}
     tier_order = ["Bronze", "Silver", "Gold", "Diamond"]
-
-    current_tier = "Bronze"
-    for tier, threshold in tier_thresholds.items():
-        if comp_points >= threshold:
-            current_tier = tier
 
     tier_idx = tier_order.index(current_tier)
     is_max = tier_idx >= len(tier_order) - 1
@@ -365,30 +349,32 @@ async def place_bet(req: PlaceBetRequest):
 
     side = "heads" if req.choice == 0 else "tails"
 
-    bet = {
-        "betId": req.betId,
-        "txId": "",  # Will be filled when tx is actually broadcast
-        "boxId": "",
-        "playerAddress": req.address,
-        "gameType": "coinflip",
-        "choice": {"gameType": "coinflip", "side": side},
-        "betAmount": req.amount,
-        "outcome": "pending",
-        "actualOutcome": None,
-        "payout": "0",
-        "payoutMultiplier": 0.97,
-        "timestamp": now,
-        "blockHeight": 0,
-        "resolvedAtHeight": None,
-    }
-    _bets.append(bet)
+    bet = BetRecord(
+        betId=req.betId,
+        txId="",  # Will be filled when tx is actually broadcast
+        boxId="",
+        playerAddress=req.address,
+        gameType="coinflip",
+        choice={"gameType": "coinflip", "side": side},
+        betAmount=req.amount,
+        outcome="pending",
+        actualOutcome=None,
+        payout="0",
+        payoutMultiplier=0.97,
+        timestamp=now,
+        blockHeight=0,
+        resolvedAtHeight=None,
+    )
+    
+    # Insert bet into database
+    await insert_bet(bet)
 
     # Update pool stats
-    _pool_stats["totalBets"] += 1
-
-    # Calculate fee
+    stats = await get_pool_stats()
+    stats.totalBets += 1
     fee = int(req.amount) * 3 // 100  # 3% house edge
-    _pool_stats["totalFees"] = str(int(_pool_stats["totalFees"]) + fee)
+    stats.totalFees = str(int(stats.totalFees) + fee)
+    await insert_or_update_pool_stats(stats)
 
     return PlaceBetResponse(
         success=True,
@@ -396,3 +382,97 @@ async def place_bet(req: PlaceBetRequest):
         betId=req.betId,
         message="Bet placed. Waiting for on-chain confirmation.",
     )
+
+
+@router.post("/bot/build-reveal-tx", response_model=RevealResponse)
+async def build_reveal_tx(req: RevealRequest):
+    """Build an unsigned EIP-12 transaction for the house to reveal a coinflip bet.
+    
+    This endpoint is used by the off-chain bot to build reveal transactions.
+    The bot will then sign and submit the transaction to the Ergo network.
+    """
+    # Initialize Ergo node client
+    node = ErgoNodeClient(node_url=NODE_URL, api_key=***
+
+    # Fetch the commit box from the node
+    box_resp = await node.utxo_by_box_id(req.box_id)
+    commit_box = box_resp[0]
+    
+    # Extract necessary data from the commit box
+    bet_amount = commit_box.value
+    player_address = commit_box.address
+    
+    # Calculate win payout (97/50 multiplier)
+    win_payout = (bet_amount * 97) // 50
+    
+    # Fetch the previous block header for RNG
+    prev_block_header = await node.block_header(req.block_hash)
+    
+    # Get the player's secret and choice from the commit box registers
+    registers = commit_box.additional_registers
+    r9_encoded = registers.get("R9")
+    r7_encoded = registers.get("R7")
+    
+    if not r9_encoded or not r7_encoded:
+        raise HTTPException(
+            status_code=400,
+            detail="Commit box missing required registers (R9 or R7)"
+        )
+    
+    # Decode the registers (simplified - actual decoding would be more complex)
+    # In a real implementation, you'd need to decode the Coll[Byte] and Int formats
+    player_secret=***  # This would be decoded properly
+    player_choice = int(r7_encoded)  # This would be decoded properly
+    
+    # Simulate the on-chain RNG to determine outcome
+    # Contract: blake2b256(prevBlockHash ++ playerSecret)[0] % 2
+    rng_input = prev_block_header + player_secret
+    rng_hash = blake2b256(rng_input)
+    flip_result = rng_hash[0] % 2
+    player_wins = flip_result == player_choice
+    
+    # Build the transaction
+    # This is a simplified version - actual implementation would use Fleet SDK
+    unsigned_tx = {
+        "inputs": [
+            {
+                "boxId": req.box_id,
+                "value": bet_amount,
+                "ergoTree": COINFLIP_ERGO_TREE,
+                "creationHeight": commit_box.creation_height,
+                "assets": commit_box.assets,
+                "additionalRegisters": registers,
+                "transactionId": commit_box.transaction_id,
+                "index": commit_box.index,
+            }
+        ],
+        "outputs": [
+            {
+                "value": win_payout if player_wins else bet_amount,
+                "address": player_address if player_wins else HOUSE_ADDRESS,
+                "creationHeight": node.current_height,
+                "assets": commit_box.assets if player_wins else [],
+                "additionalRegisters": {},
+            }
+        ],
+        "dataInputs": [],
+        "fee": 1000000,  # 1 ERG fee
+        "inputsRaw": [],
+        "outputsRaw": [],
+        "dataInputsRaw": [],
+        "version": 4,
+    }
+    
+    return RevealResponse(
+        unsigned_tx=unsigned_tx,
+        player_wins=player_wins,
+        payout_amount=str(win_payout if player_wins else bet_amount),
+        block_hash=req.block_hash,
+    )
+
+@router.post("/admin/migrate-data")
+async def migrate_data():
+    """Migrate data from in-memory store to database."""
+    # This would be called to migrate existing data
+    # In a real implementation, you'd need to get the in-memory data and migrate it
+    return {"message": "Data migration endpoint created. Implement migration logic."}
