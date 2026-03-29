@@ -82,14 +82,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         )
 
         # Content Security Policy - prevent XSS and data injection
-        # NOTE: unsafe-inline/unsafe-eval needed for Vite dev server (HMR).
-        #       For production, use nonces instead.
+        # NOTE: Removed unsafe-inline/unsafe-eval for improved security.
+        #       For production, implement nonce-based CSP and remove this comment.
+        #       Development: allow WebSocket connections and cross-origin API calls.
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-            "style-src 'self' 'unsafe-inline'; "
+            "script-src 'self'; "
+            "style-src 'self'; "
             "img-src 'self' data:; "
-            "connect-src 'self'; "
+            "connect-src 'self' ws: wss: http://localhost:3000; "
             "frame-ancestors 'none'; "
             "form-action 'self'; "
             "base-uri 'self'; "
