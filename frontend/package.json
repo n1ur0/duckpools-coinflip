@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dev:port3000": "./start.sh",
+    "dev:daemon": "./start.sh --daemon"
   },
   "dependencies": {
     "@fleet-sdk/core": "^0.12.0",
