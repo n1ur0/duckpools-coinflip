@@ -10,14 +10,14 @@ DuckPools CoinFlip is a proof-of-concept decentralized gambling application buil
    - Player generates a secret (8 bytes, random)
    - Player commits to a choice (heads=0, tails=1)
    - Commitment hash = blake2b256(secret || choice)
-   - Box registers:
-     - R4: House public key (SigmaProp)
-     - R5: Player address (Coll[Byte])
-     - R6: Commitment hash (Coll[Byte])
-     - R7: Player choice (Int)
-     - R8: Player secret (Int)
-     - R9: Bet ID (Coll[Byte])
-     - R10: Timeout height (Int)
+   - Box registers (coinflip_v2.es — compiled and deployed):
+     - R4: House public key (Coll[Byte], 33-byte compressed PK)
+     - R5: Player public key (Coll[Byte], 33-byte compressed PK)
+     - R6: Commitment hash (Coll[Byte], blake2b256(secret || choice))
+     - R7: Player choice (Int, 0=heads, 1=tails)
+     - R8: Timeout height (Int, block height for refund)
+     - R9: Player secret (Coll[Byte], 32 random bytes)
+     - Note: betId tracked off-chain only. No R10 (Ergo supports R4-R9).
 
 2. **Reveal Phase**: House reveals the outcome
    - House fetches current block hash from node
@@ -36,9 +36,9 @@ DuckPools CoinFlip is a proof-of-concept decentralized gambling application buil
 ### Design Trade-Offs for PoC
 
 **1. Player Secret Visible On-Chain (MAT-348)**
-- **Issue**: Player secret is stored in R8 register, visible to anyone
+- **Issue**: Player secret is stored in R9 register, visible to anyone
 - **Impact**: House can peek at player's choice before reveal
-- **Trust Assumption**: House is honest about not peeking at R8
+- **Trust Assumption**: House is honest about not peeking at R9
 - **Production Solution**: Use ZK-proof or commitment scheme where secret is not stored in box
 
 **2. No Payout Amount Enforcement (MAT-336)**
@@ -61,7 +61,7 @@ DuckPools CoinFlip is a proof-of-concept decentralized gambling application buil
 
 ### Trust Model for PoC
 The DuckPools CoinFlip PoC trusts the house operator to:
-- Not peek at player's choice in R8 register
+- Not peek at player's choice in R9 register
 - Pay correct amounts (bet + winnings) during reveal
 - Use fair block hash without manipulation
 - Be available to reveal bets within timeout window
@@ -75,19 +75,27 @@ For a production system, the following would be needed:
 - House commitment to block height before reveal
 - Economic stakes for house (security deposit slashed on misbehavior)
 
-## Smart Contract: coinflip_v1.es
+## Smart Contract: coinflip_v2.es (deployed)
+
+### Register Layout
+| Register | Type | Content |
+|----------|------|---------|
+| R4 | Coll[Byte] | House compressed public key (33 bytes) |
+| R5 | Coll[Byte] | Player compressed public key (33 bytes) |
+| R6 | Coll[Byte] | Commitment hash: blake2b256(secret \|\| choice) (32 bytes) |
+| R7 | Int | Player choice: 0=heads, 1=tails |
+| R8 | Int | Timeout height for refund |
+| R9 | Coll[Byte] | Player secret (32 random bytes) |
 
 ### Guard Clauses
-- **IsHouse**: INPUTS(0).propositionBytes == R4[HousePubKey]
-- **IsPlayer**: INPUTS(0).propositionBytes == R5[PlayerAddress]
-- **NFTPreserved**: Game NFT token preserved in spend
-- **IsValidReveal**: blake2b256(R8[Secret] || R7[Choice]) == R6[CommitmentHash]
-- **IsTimedOut**: currentHeight > R10[TimeoutHeight]
-- **RefundValueOk**: OUTPUTS(0).value >= (INPUTS(0).value - (INPUTS(0).value * 2/100))
+- **Reveal path (house)**: houseProp && commitmentOk && correct payout output
+- **Refund path (player)**: HEIGHT >= timeoutHeight && playerProp && refund >= 98% of bet
+- **Commitment verification**: blake2b256(R9[Secret] ++ R7[Choice]) == R6[CommitmentHash]
+- **RNG**: blake2b256(prevBlockHash ++ R9[Secret])[0] % 2
 
 ### Spend Paths
-1. **House Reveal**: canReveal (isHouse && nftPreserved && isValidReveal)
-2. **Player Refund**: canRefund (isTimedOut && isPlayer && refundValueOk && nftToHouse)
+1. **House Reveal**: Verifies commitment, determines outcome via block-hash RNG, pays winner
+2. **Player Refund**: After timeout height, player reclaims 98% of bet
 
 ## Backend Architecture
 
@@ -167,7 +175,7 @@ Security headers not applied to 500 error responses, potentially leaking system 
 ## RNG Fairness
 
 ### Algorithm
-SHA-256(commitment || secret || block_hash) → first byte % 2 = outcome (0=heads, 1=tails)
+blake2b256(prevBlockHash ++ playerSecret)[0] % 2 = outcome (0=heads, 1=tails)
 
 ### Statistical Properties (MAT-220)
 - Uniform distribution: Expected 50% heads, 50% tails
