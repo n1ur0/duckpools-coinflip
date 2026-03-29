@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from ws_manager import ConnectionManager
 from ws_routes import router as ws_router
 from game_routes import router as game_router
+from bot_routes import router as bot_router
 
 # ─── Logging Setup ──────────────────────────────────────────────────
 
@@ -182,6 +183,7 @@ app.add_middleware(RequestLoggingMiddleware)
 # Register routers — coinflip only
 app.include_router(ws_router)
 app.include_router(game_router)
+app.include_router(bot_router)  # MAT-355: Internal bot endpoints for reveal flow
 
 
 # ─── Global Error Handlers (MAT-227) ─────────────────────────────
@@ -231,6 +233,9 @@ async def root():
             "player_stats": "/player/stats/{address}",
             "player_comp": "/player/comp/{address}",
             "health": "/health",
+            "bot_pending_bets": "GET /api/bot/pending-bets",
+            "bot_build_reveal": "POST /api/bot/build-reveal-tx",
+            "bot_reveal_broadcast": "POST /api/bot/reveal-and-broadcast",
         },
     }
 

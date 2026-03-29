@@ -3,14 +3,16 @@ DuckPools Off-Chain Bot - Main Bot Script
 
 Monitors PendingBet boxes, reveals secrets, calculates RNG, and settles bets.
 
+MAT-355: Full reveal flow implementation
+  - Polls /api/bot/pending-bets for commit boxes
+  - Calls /api/bot/reveal-and-broadcast to settle bets
+  - Skips boxes past timeout (player should refund)
+
 Features:
 - Retry logic with exponential backoff for Ergo node API calls
 - Graceful shutdown on SIGINT/SIGTERM
 - Heartbeat file for liveness monitoring
 - Structured logging
-
-MAT-182: Structured logging and error recovery
-MAT-223: Add retry logic and graceful shutdown
 """
 
 import asyncio
@@ -39,8 +41,10 @@ logger = get_logger(__name__)
 # ─── Configuration ─────────────────────────────────────────────────────────
 
 # Load from environment variables
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 NODE_URL = os.getenv("NODE_URL", "http://localhost:9052")
 NODE_API_KEY = os.getenv("NODE_API_KEY", "")
+POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "10"))  # seconds between polls
 HEARTBEAT_FILE = os.getenv("HEARTBEAT_FILE", "/tmp/off-chain-bot-heartbeat.txt")
 HEARTBEAT_INTERVAL_SECONDS = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "30"))
 HEALTH_SERVER_PORT = int(os.getenv("HEALTH_SERVER_PORT", "8001"))
@@ -55,12 +59,6 @@ RETRY_MAX_WAIT_SECONDS = 4
 def is_retryable_error(exception: Exception) -> bool:
     """
     Check if an exception is retryable.
-
-    Args:
-        exception: The exception to check
-
-    Returns:
-        True if retryable, False otherwise
     """
     # Connection errors
     if isinstance(exception, (httpx.ConnectError, httpx.ConnectTimeout)):
@@ -80,9 +78,6 @@ def is_retryable_error(exception: Exception) -> bool:
 def get_retry_decorator():
     """
     Get a tenacity retry decorator with exponential backoff.
-
-    Returns:
-        Configured retry decorator
     """
 
     def log_retry_attempt(retry_state):
@@ -153,12 +148,7 @@ class HeartbeatManager:
         self._stop_event = asyncio.Event()
 
     async def start(self, interval_seconds: int = 30):
-        """
-        Start heartbeat file updates.
-
-        Args:
-            interval_seconds: Interval between heartbeat updates
-        """
+        """Start heartbeat file updates."""
         self._stop_event.clear()
         self._task = asyncio.create_task(
             self._heartbeat_loop(interval_seconds)
@@ -186,12 +176,7 @@ class HeartbeatManager:
                 logger.info("heartbeat_removed", file=str(self.heartbeat_file))
 
     async def _heartbeat_loop(self, interval_seconds: int):
-        """
-        Background task to update heartbeat file.
-
-        Args:
-            interval_seconds: Interval between updates
-        """
+        """Background task to update heartbeat file."""
         while not self._stop_event.is_set():
             try:
                 self.update()
@@ -204,7 +189,7 @@ class HeartbeatManager:
                     error=str(e),
                     exc_info=True
                 )
-                await asyncio.sleep(1)  # Brief pause before retry
+                await asyncio.sleep(1)
 
     def update(self):
         """Update heartbeat file with current timestamp."""
@@ -212,96 +197,52 @@ class HeartbeatManager:
         self.heartbeat_file.write_text(timestamp)
 
 
-# ─── Ergo Node Client ───────────────────────────────────────────────────
+# ─── Backend API Client ─────────────────────────────────────────────────
 
-class ErgoNodeClient:
-    """HTTP client for Ergo node API with retry logic."""
+class BackendClient:
+    """HTTP client for the DuckPools backend API."""
 
-    def __init__(self, node_url: str, api_key: str = ""):
-        self.node_url = node_url.rstrip("/")
-        self.api_key = api_key
+    def __init__(self, backend_url: str):
+        self.backend_url = backend_url.rstrip("/")
         self._client: Optional[httpx.AsyncClient] = None
 
     async def __aenter__(self):
-        """Enter context manager and create client."""
         await self.start()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Exit context manager and close client."""
         await self.stop()
 
     async def start(self):
-        """Create HTTP client."""
         timeout = httpx.Timeout(30.0)
         self._client = httpx.AsyncClient(timeout=timeout)
-        logger.info("ergo_client_started", node_url=self.node_url)
+        logger.info("backend_client_started", url=self.backend_url)
 
     async def stop(self):
-        """Close HTTP client."""
         if self._client:
             await self._client.aclose()
             self._client = None
-            logger.info("ergo_client_stopped")
 
     @get_retry_decorator()
-    async def get(self, endpoint: str) -> dict:
-        """
-        Make GET request to Ergo node API with retry.
-
-        Args:
-            endpoint: API endpoint path
-
-        Returns:
-            JSON response as dict
-
-        Raises:
-            httpx.HTTPError: If all retries fail
-        """
+    async def get_pending_bets(self) -> list:
+        """Fetch pending bets from the backend."""
         if not self._client:
             raise RuntimeError("Client not started")
-
-        url = f"{self.node_url}{endpoint}"
-        headers = {}
-        if self.api_key:
-            headers["api_key"] = self.api_key
-
-        logger.debug("ergo_api_request", method="GET", url=url)
-
-        response = await self._client.get(url, headers=headers)
-        response.raise_for_status()
-
-        return response.json()
+        resp = await self._client.get(f"{self.backend_url}/api/bot/pending-bets")
+        resp.raise_for_status()
+        return resp.json()
 
     @get_retry_decorator()
-    async def post(self, endpoint: str, data: dict = None) -> dict:
-        """
-        Make POST request to Ergo node API with retry.
-
-        Args:
-            endpoint: API endpoint path
-            data: Request body data
-
-        Returns:
-            JSON response as dict
-
-        Raises:
-            httpx.HTTPError: If all retries fail
-        """
+    async def reveal_and_broadcast(self, box_id: str) -> dict:
+        """Trigger reveal and broadcast for a commit box."""
         if not self._client:
             raise RuntimeError("Client not started")
-
-        url = f"{self.node_url}{endpoint}"
-        headers = {}
-        if self.api_key:
-            headers["api_key"] = self.api_key
-
-        logger.debug("ergo_api_request", method="POST", url=url)
-
-        response = await self._client.post(url, json=data, headers=headers)
-        response.raise_for_status()
-
-        return response.json()
+        resp = await self._client.post(
+            f"{self.backend_url}/api/bot/reveal-and-broadcast",
+            json={"box_id": box_id},
+        )
+        resp.raise_for_status()
+        return resp.json()
 
 
 # ─── Bot Logic ───────────────────────────────────────────────────────────
@@ -311,23 +252,23 @@ class OffChainBot:
 
     def __init__(
         self,
-        node_url: str,
-        api_key: str,
+        backend_url: str,
         heartbeat_file: str,
         heartbeat_interval_seconds: int = 30,
         health_server_port: int = 8001,
+        poll_interval: int = 10,
     ):
-        self.node_url = node_url
-        self.api_key = api_key
+        self.backend_url = backend_url
         self.shutdown_manager = ShutdownManager()
         self.heartbeat_manager = HeartbeatManager(heartbeat_file)
         self.heartbeat_interval_seconds = heartbeat_interval_seconds
-        self.client: Optional[ErgoNodeClient] = None
         self.health_server = HealthServer(port=health_server_port)
+        self.poll_interval = poll_interval
+        self.backend_client: Optional[BackendClient] = None
 
     async def run(self):
         """Run the off-chain bot main loop."""
-        logger.info("bot_starting", node_url=self.node_url)
+        logger.info("bot_starting", backend_url=self.backend_url)
 
         # Setup graceful shutdown
         self.shutdown_manager.setup_signal_handlers()
@@ -335,9 +276,9 @@ class OffChainBot:
         # Start health server
         await self.health_server.start()
 
-        # Create Ergo node client
-        async with ErgoNodeClient(self.node_url, self.api_key) as client:
-            self.client = client
+        # Create backend client
+        async with BackendClient(self.backend_url) as client:
+            self.backend_client = client
 
             # Start heartbeat
             await self.heartbeat_manager.start(self.heartbeat_interval_seconds)
@@ -358,12 +299,10 @@ class OffChainBot:
 
     async def main_loop(self):
         """Main bot processing loop."""
-        logger.info("main_loop_started")
+        logger.info("main_loop_started", poll_interval=self.poll_interval)
 
         while not self.shutdown_manager.is_shutdown_requested():
             try:
-                # TODO: Implement actual bet monitoring logic
-                # This is a placeholder that will be replaced with real bet processing
                 await self.process_bets()
 
                 # Check for shutdown before sleeping
@@ -372,7 +311,7 @@ class OffChainBot:
                     break
 
                 # Sleep before next iteration
-                await asyncio.sleep(5)
+                await asyncio.sleep(self.poll_interval)
 
             except asyncio.CancelledError:
                 logger.info("main_loop_cancelled")
@@ -384,40 +323,75 @@ class OffChainBot:
                     exc_info=True
                 )
                 # Sleep briefly before retrying to avoid tight error loop
-                await asyncio.sleep(5)
+                await asyncio.sleep(self.poll_interval)
 
     async def process_bets(self):
         """
-        Process pending bets.
-
-        This is a placeholder - real implementation will:
-        1. Query for PendingBet boxes
-        2. Reveal secrets
-        3. Calculate RNG
-        4. Settle bets
+        Process pending bets by:
+        1. Fetching pending commit boxes from the backend
+        2. Calling reveal-and-broadcast for each box
         """
-        # Placeholder: log that we're checking for bets
-        logger.debug("checking_for_pending_bets")
-
-        # Example node API call with retry
         try:
-            # Get node info to test connectivity
-            info = await self.client.get("/info")
-            logger.debug("node_info", full_height=info.get("fullHeight"))
-            
-            # In a real implementation, this would be where we:
-            # 1. Query for PendingBet boxes
-            # 2. Process each bet
-            # 3. Increment the counter for each successful bet
-            
-            # For demo purposes, simulate a bet being processed
-            # In the real implementation, this would be inside the bet processing loop
-            self.health_server.increment_bets_processed()
-            logger.debug("bet_processed_counter_incremented")
-            
+            pending = await self.backend_client.get_pending_bets()
         except httpx.HTTPError as e:
-            logger.error("node_api_error", error=str(e))
-            raise
+            logger.error("fetch_pending_bets_error", error=str(e))
+            return
+
+        if not pending:
+            logger.debug("no_pending_bets")
+            return
+
+        logger.info("found_pending_bets", count=len(pending))
+
+        for bet in pending:
+            if self.shutdown_manager.is_shutdown_requested():
+                logger.info("shutdown_during_bet_processing")
+                break
+
+            box_id = bet.get("box_id", "")
+            if not box_id:
+                continue
+
+            try:
+                logger.info(
+                    "processing_bet",
+                    box_id=box_id[:16] + "...",
+                    player_choice=bet.get("player_choice"),
+                    value=bet.get("value"),
+                )
+
+                result = await self.backend_client.reveal_and_broadcast(box_id)
+
+                if result.get("success"):
+                    logger.info(
+                        "bet_revealed",
+                        box_id=box_id[:16] + "...",
+                        tx_id=result.get("tx_id", ""),
+                        player_wins=result.get("player_wins"),
+                        payout=result.get("payout_amount"),
+                    )
+                    self.health_server.increment_bets_processed()
+                else:
+                    logger.error(
+                        "reveal_failed",
+                        box_id=box_id[:16] + "...",
+                        message=result.get("message", "unknown error"),
+                    )
+
+            except httpx.HTTPStatusError as e:
+                logger.error(
+                    "reveal_http_error",
+                    box_id=box_id[:16] + "...",
+                    status=e.response.status_code,
+                    body=e.response.text[:200],
+                )
+            except Exception as e:
+                logger.error(
+                    "reveal_error",
+                    box_id=box_id[:16] + "...",
+                    error=str(e),
+                    exc_info=True,
+                )
 
 
 # ─── Main ────────────────────────────────────────────────────────────────
@@ -425,11 +399,11 @@ class OffChainBot:
 async def main():
     """Main entry point."""
     bot = OffChainBot(
-        node_url=NODE_URL,
-        api_key=NODE_API_KEY,
+        backend_url=BACKEND_URL,
         heartbeat_file=HEARTBEAT_FILE,
         heartbeat_interval_seconds=HEARTBEAT_INTERVAL_SECONDS,
         health_server_port=HEALTH_SERVER_PORT,
+        poll_interval=POLL_INTERVAL,
     )
 
     try:
