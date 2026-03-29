@@ -177,6 +177,13 @@
   color: var(--accent-gold, #f0b429);
 }
 
+.gh-tx-pending {
+  color: #f0b429;
+  font-size: 0.78rem;
+  font-style: italic;
+  animation: gh-pulse 1.5s ease-in-out infinite;
+}
+
 /* ── Empty State ────────────────────────────────── */
 
 .gh-empty {
