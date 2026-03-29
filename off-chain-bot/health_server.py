@@ -7,6 +7,7 @@ MAT-224: Add bot heartbeat/health endpoint for backend monitoring
 """
 
 import asyncio
+import os
 import time
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
@@ -40,14 +41,24 @@ class HealthServer:
             web.get('/health', self.health_handler),
         ])
 
-        # Enable CORS for health endpoint (restricted, no credentials)
-        cors = aiohttp_cors.setup(self.app, defaults={
-            "*": aiohttp_cors.ResourceOptions(
-                allow_credentials=False,
+        # Enable CORS for health endpoint with explicit origin allowlist.
+        # SEC-MEDIUM-4: Wildcard ("*") + allow_credentials=True is a
+        # misconfiguration per OWASP. Read origins from env var, same
+        # pattern as backend/api_server.py CORS_ORIGINS_STR.
+        cors_allowed_origins_str = os.getenv(
+            "CORS_ALLOWED_ORIGINS", "http://localhost:3000"
+        )
+        cors_origins = [o.strip() for o in cors_allowed_origins_str.split(",") if o.strip()]
+
+        cors_config = {
+            origin: aiohttp_cors.ResourceOptions(
+                allow_credentials=True,
                 expose_headers="*",
                 allow_headers="*",
             )
-        })
+            for origin in cors_origins
+        }
+        cors = aiohttp_cors.setup(self.app, defaults=cors_config)
         
         for route in list(self.app.router.routes()):
             cors.add(route)

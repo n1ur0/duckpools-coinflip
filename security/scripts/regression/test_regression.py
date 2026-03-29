@@ -401,44 +401,78 @@ def test_dice_rng_no_modulo_bias():
 # 6. CORS CONFIGURATION SAFETY (SEC-3)
 # ═══════════════════════════════════════════════════════════════
 
+def _check_cors_wildcard_with_credentials(source: str, label: str) -> None:
+    """Fail if source contains wildcard CORS origin combined with credentials."""
+    lines = source.split("\n")
+
+    # Detect aiohttp_cors wildcard pattern: defaults={ "*": ... allow_credentials=True }
+    in_aiohttp_cors_defaults = False
+    for i, line in enumerate(lines):
+        if "aiohttp_cors.setup" in line and "defaults" in line:
+            in_aiohttp_cors_defaults = True
+        if in_aiohttp_cors_defaults:
+            if '"*"' in line or "'*'" in line:
+                # Check if allow_credentials=True appears in the same block
+                block = "\n".join(lines[i:i+10])
+                if "allow_credentials=True" in block or "allow_credentials=***" in block:
+                    pytest.fail(
+                        f"SEC-3: {label} uses wildcard CORS origin ('*') with "
+                        "allow_credentials=True. This is a misconfiguration per OWASP."
+                    )
+            if "})" in line or line.strip() == ")" or line.strip().endswith("})"):
+                in_aiohttp_cors_defaults = False
+
+    # Detect FastAPI CORSMiddleware wildcard pattern
+    in_cors_block = False
+    for line in lines:
+        if "CORSMiddleware" in line:
+            in_cors_block = True
+        if in_cors_block:
+            if "allow_origins" in line and ('"*"' in line or "'*'" in line):
+                rest = source.split("allow_origins")[1][:200]
+                if "allow_credentials" in rest:
+                    pytest.fail(
+                        f"SEC-3: {label} configured with wildcard origins + "
+                        "allow_credentials=True. This is a CSRF vulnerability."
+                    )
+            if line.strip() == ")" or "app.include_router" in line:
+                in_cors_block = False
+
+
 def test_cors_not_wildcard_with_credentials():
     """
     SEC-3: CORS must not allow credentials with wildcard origins.
-    
+
     allow_origins=["*"] + allow_credentials=True = CSRF vulnerability.
+    Scans both backend/api_server.py and off-chain-bot/health_server.py.
     """
+    # --- Check backend/api_server.py ---
     api_server_path = os.path.join(
         os.path.dirname(__file__), "..", "..", "..",
         "backend", "api_server.py"
     )
     api_server_path = os.path.normpath(api_server_path)
-    
-    if not os.path.exists(api_server_path):
+
+    if os.path.exists(api_server_path):
+        with open(api_server_path, "r") as f:
+            source = f.read()
+        _check_cors_wildcard_with_credentials(source, "backend/api_server.py")
+    else:
         pytest.skip(f"api_server.py not found at {api_server_path}")
-    
-    with open(api_server_path, "r") as f:
-        source = f.read()
-    
-    # Extract the CORS middleware block
-    has_wildcard_origin = '"*"' in source or "'*'" in source
-    has_credentials = "allow_credentials" in source and "True" in source
-    
-    if has_wildcard_origin and has_credentials:
-        # Check if wildcard is actually used for origins (not just elsewhere)
-        lines = source.split("\n")
-        in_cors_block = False
-        for line in lines:
-            if "CORSMiddleware" in line:
-                in_cors_block = True
-            if in_cors_block:
-                if "allow_origins" in line and ('"*"' in line or "'*'" in line):
-                    if "allow_credentials" in source.split("allow_origins")[1][:200]:
-                        pytest.fail(
-                            "SEC-3: CORS configured with wildcard origins + "
-                            "allow_credentials=True. This is a CSRF vulnerability."
-                        )
-                if line.strip() == ")" or (in_cors_block and "app.include_router" in line):
-                    in_cors_block = False
+
+    # --- Check off-chain-bot/health_server.py ---
+    health_server_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..",
+        "off-chain-bot", "health_server.py"
+    )
+    health_server_path = os.path.normpath(health_server_path)
+
+    if os.path.exists(health_server_path):
+        with open(health_server_path, "r") as f:
+            source = f.read()
+        _check_cors_wildcard_with_credentials(source, "off-chain-bot/health_server.py")
+    else:
+        pytest.skip(f"health_server.py not found at {health_server_path}")
 
 
 # ═══════════════════════════════════════════════════════════════
