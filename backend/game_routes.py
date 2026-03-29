@@ -363,6 +363,18 @@ async def place_bet(req: PlaceBetRequest):
     """Place a coinflip bet from BetForm.tsx / CoinFlipGame.tsx."""
     now = datetime.now(timezone.utc).isoformat()
 
+    # Check for bet deduplication - prevent same betId from being submitted multiple times
+    existing_bet = next((b for b in _bets if b["betId"] == req.betId), None)
+    if existing_bet:
+        # If bet already exists, return error or update existing bet
+        # For this implementation, we'll return an error to prevent duplicate bets
+        return PlaceBetResponse(
+            success=False,
+            txId="",
+            betId=req.betId,
+            message=f"Bet with ID {req.betId} already exists. Please use a unique bet ID.",
+        )
+
     side = "heads" if req.choice == 0 else "tails"
 
     bet = {
