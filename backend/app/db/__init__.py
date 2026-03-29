@@ -1,4 +1,4 @@
-"""Database module for DuckPools bankroll management."""
+"""Database module for DuckPools."""
 
 import os
 
