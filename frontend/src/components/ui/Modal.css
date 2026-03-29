@@ -113,3 +113,39 @@
 body.ui-modal-locked {
   overflow: hidden;
 }
+
+/* ── Mobile Responsive ─────────────────────────── */
+
+@media (max-width: 640px) {
+  .ui-modal-backdrop {
+    padding: 8px;
+    align-items: flex-end;
+  }
+
+  .ui-modal {
+    border-radius: 16px 16px 0 0;
+    max-height: 90vh;
+  }
+
+  .ui-modal--sm,
+  .ui-modal--md,
+  .ui-modal--lg {
+    max-width: 100%;
+  }
+
+  .ui-modal__header {
+    padding: 16px 16px 0;
+  }
+
+  .ui-modal__title {
+    font-size: 1.1rem;
+  }
+
+  .ui-modal__body {
+    padding: 12px 16px;
+  }
+
+  .ui-modal__footer {
+    padding: 0 16px 16px;
+  }
+}

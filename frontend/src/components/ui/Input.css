@@ -107,3 +107,20 @@
   flex-shrink: 0;
   margin-left: 8px;
 }
+
+/* ── Mobile Responsive ─────────────────────────── */
+
+@media (max-width: 640px) {
+  .ui-input {
+    padding: 10px 14px;
+    font-size: 0.9rem;
+  }
+
+  .ui-input__label {
+    font-size: 0.8rem;
+  }
+
+  .ui-input__error {
+    font-size: 0.72rem;
+  }
+}

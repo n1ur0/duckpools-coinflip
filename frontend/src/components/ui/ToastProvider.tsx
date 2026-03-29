@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useReducer, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Toast, { ToastType, ToastPosition } from './Toast';
+import './ToastProvider.css';
 
 /** Individual toast item with unique ID */
 export interface ToastItem {
@@ -149,7 +151,23 @@ export const useToast = (): ToastContextType => {
   return context;
 };
 
-/** Toast Container component for rendering multiple toasts */
+/** Single toast wrapper animation variants */
+const toastItemVariants = {
+  initial: { opacity: 0, y: -20, scale: 0.95 },
+  animate: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { type: 'spring', stiffness: 400, damping: 25 },
+  },
+  exit: {
+    opacity: 0,
+    scale: 0.9,
+    transition: { duration: 0.15, ease: 'easeIn' },
+  },
+};
+
+/** Toast Container component for rendering multiple toasts with layout animations */
 const ToastContainer: React.FC<{
   toasts: ToastItem[];
   removeToast: (id: string) => void;
@@ -169,32 +187,33 @@ const ToastContainer: React.FC<{
         <div
           key={position}
           className={`toast-container toast-container--${position}`}
-          style={{
-            position: 'fixed',
-            zIndex: 9999,
-            ...(position === 'top-right' && { top: 20, right: 20 }),
-            ...(position === 'top-left' && { top: 20, left: 20 }),
-            ...(position === 'bottom-right' && { bottom: 20, right: 20 }),
-            ...(position === 'bottom-left' && { bottom: 20, left: 20 }),
-          }}
+          aria-live="polite"
+          aria-label="Notifications"
         >
-          {positionToasts.map((toast, index) => (
-            <div
-              key={toast.id}
-              style={{ marginBottom: index < positionToasts.length - 1 ? 12 : 0 }}
-            >
-              <Toast
-                message={toast.message}
-                type={toast.type}
-                isVisible={true}
-                onClose={() => removeToast(toast.id)}
-                duration={toast.duration}
-                position={toast.position as ToastPosition}
-                showCloseButton={toast.showCloseButton}
-                showIcon={toast.showIcon}
-              />
-            </div>
-          ))}
+          <AnimatePresence mode="popLayout">
+            {positionToasts.map((toast) => (
+              <motion.div
+                key={toast.id}
+                className="toast-container__item"
+                layout
+                variants={toastItemVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+              >
+                <Toast
+                  message={toast.message}
+                  type={toast.type}
+                  isVisible={true}
+                  onClose={() => removeToast(toast.id)}
+                  duration={toast.duration}
+                  position={toast.position as ToastPosition}
+                  showCloseButton={toast.showCloseButton}
+                  showIcon={toast.showIcon}
+                />
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
       ))}
     </>

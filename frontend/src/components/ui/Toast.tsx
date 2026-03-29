@@ -100,7 +100,6 @@ const Toast: React.FC<ToastProps> = ({
   const toastClasses = [
     'toast',
     `toast--${type}`,
-    `toast--${position}`,
     className,
   ].filter(Boolean).join(' ');
 

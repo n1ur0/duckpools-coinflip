@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion, type HTMLMotionProps } from 'framer-motion';
 import './Button.css';
 
 /** Available visual variants for the Button component. */
@@ -8,7 +9,7 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'succ
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 /** Props for the reusable Button component. */
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps extends Omit<HTMLMotionProps<'button'>, 'size'> {
   /** Visual style variant. Default: 'primary'. */
   variant?: ButtonVariant;
   /** Size preset. Default: 'md'. */
@@ -25,16 +26,6 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   children?: React.ReactNode;
 }
 
-/**
- * Reusable Button component supporting multiple variants, sizes, loading states, and icon slots.
- * Uses design tokens from CSS custom properties.
- *
- * @example
- * ```tsx
- * <Button variant="primary" size="lg" onClick={handleSubmit}>Place Bet</Button>
- * <Button variant="secondary" iconStart={<Icon />} loading={isPending}>Connect</Button>
- * ```
- */
 const Button: React.FC<ButtonProps> = ({
   variant = 'primary',
   size = 'md',
@@ -45,6 +36,9 @@ const Button: React.FC<ButtonProps> = ({
   children,
   disabled,
   className = '',
+  whileTap = { scale: 0.97 },
+  whileHover = !disabled && !loading ? { scale: 1.02 } : undefined,
+  transition = { type: 'spring' as const, stiffness: 400, damping: 20 },
   ...rest
 }) => {
   const classes = [
@@ -59,7 +53,14 @@ const Button: React.FC<ButtonProps> = ({
   const isDisabled = disabled || loading;
 
   return (
-    <button className={classes} disabled={isDisabled} {...rest}>
+    <motion.button
+      className={classes}
+      disabled={isDisabled}
+      whileTap={isDisabled ? undefined : whileTap}
+      whileHover={whileHover}
+      transition={transition}
+      {...rest}
+    >
       {loading ? (
         <span className="ui-btn__spinner" />
       ) : (
@@ -67,7 +68,7 @@ const Button: React.FC<ButtonProps> = ({
       )}
       {children && <span>{children}</span>}
       {!loading && iconEnd && <span className="ui-btn__icon ui-btn__icon--end">{iconEnd}</span>}
-    </button>
+    </motion.button>
   );
 };
 

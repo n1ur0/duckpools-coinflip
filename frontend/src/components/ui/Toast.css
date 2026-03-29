@@ -3,43 +3,18 @@
 /* ── Toast Container ───────────────────────────────── */
 
 .toast {
-  position: fixed;
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  min-width: 300px;
-  max-width: 500px;
+  width: 100%;
   border-radius: 8px;
   font-family: var(--font-body, 'Inter', system-ui, sans-serif);
   font-size: 0.875rem;
   line-height: 1.4;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  z-index: 1002;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-}
-
-/* ── Position Variants ───────────────────────────── */
-
-.toast--top-right {
-  top: 24px;
-  right: 24px;
-}
-
-.toast--top-left {
-  top: 24px;
-  left: 24px;
-}
-
-.toast--bottom-right {
-  bottom: 24px;
-  right: 24px;
-}
-
-.toast--bottom-left {
-  bottom: 24px;
-  left: 24px;
 }
 
 /* ── Type Variants ───────────────────────────────── */
@@ -187,38 +162,18 @@
   }
 }
 
-/* ── Responsive ─────────────────────────────────── */
+/* ── Mobile Responsive ──────────────────────────── */
 
 @media (max-width: 640px) {
   .toast {
-    min-width: auto;
-    max-width: calc(100vw - 48px);
-    left: 24px;
-    right: 24px;
-  }
-  
-  .toast--top-right,
-  .toast--top-left,
-  .toast--bottom-right,
-  .toast--bottom-left {
-    left: 24px;
-    right: 24px;
-  }
-  
-  .toast--top-right,
-  .toast--top-left {
-    top: 16px;
-  }
-  
-  .toast--bottom-right,
-  .toast--bottom-left {
-    bottom: 16px;
+    font-size: 0.8rem;
+    padding: 10px 12px;
+    gap: 8px;
   }
 }
 
 /* ── Animation Support ───────────────────────────── */
 
-/* These classes work with framer-motion for smooth animations */
 .toast[data-motion] {
   will-change: transform, opacity;
 }
@@ -236,7 +191,7 @@
   .toast {
     border-width: 2px;
   }
-  
+
   .toast__close {
     border-width: 2px;
   }
