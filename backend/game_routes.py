@@ -10,9 +10,10 @@ MAT-309: Rebuild backend API to match frontend contract.
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field, field_validator
 
+from rate_limits import limiter
 from validators import validate_ergo_address, ValidationError as ErgoValidationError
 
 router = APIRouter(tags=["game"])
@@ -359,7 +360,8 @@ async def contract_info():
 
 
 @router.post("/place-bet", response_model=PlaceBetResponse)
-async def place_bet(req: PlaceBetRequest):
+@limiter.limit("10/minute")
+async def place_bet(request: Request, req: PlaceBetRequest):
     """Place a coinflip bet from BetForm.tsx / CoinFlipGame.tsx."""
     now = datetime.now(timezone.utc).isoformat()
 

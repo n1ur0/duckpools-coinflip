@@ -17,6 +17,8 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -52,6 +54,11 @@ CORS_ORIGINS_STR = os.getenv("CORS_ORIGINS_STR", "http://localhost:3000")
 if not NODE_API_KEY:
     print("FATAL: NODE_API_KEY environment variable is required.", file=sys.stderr)
     sys.exit(1)
+
+
+# ─── Rate Limiting (MAT-195) ──────────────────────────────────────
+
+from rate_limits import limiter
 
 
 # ─── Security Headers Middleware ────────────────────────────────
@@ -154,6 +161,10 @@ app = FastAPI(
     version="0.2.0",
     lifespan=lifespan,
 )
+
+# Rate limiting — state + exception handler (MAT-195)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS — Explicit allowlist for methods and headers.
 CORS_ALLOW_METHODS = os.getenv(
