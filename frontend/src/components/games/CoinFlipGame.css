@@ -19,7 +19,7 @@
 }
 
 /* ── Game Layout ───────────────────────────────────────── */
-
+/* ── Game Layout ───────────────────────────────────────── */
 .coinflip-game-layout {
   display: flex;
   flex-direction: column;
@@ -29,16 +29,9 @@
 .coinflip-main-area {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  align-items: center;
+  gap: 24px;
 }
-
-.coinflip-bet-sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-/* ── Visual Area ───────────────────────────────────────── */
 
 .coinflip-visual-area {
   display: flex;
@@ -110,7 +103,7 @@
 }
 
 .coinflip-result-icon.tails {
-  color: var(--accent-tails, #63b3ed);
+  color: var(--accent-tails);
   text-shadow: 0 0 15px rgba(99, 179, 237, 0.5);
 }
 
@@ -128,7 +121,7 @@
 }
 
 .coinflip-result-text.tails {
-  color: var(--accent-tails, #63b3ed);
+  color: var(--accent-tails);
 }
 
 .coinflip-outcome {
@@ -367,55 +360,9 @@
   max-width: 140px;
   padding: 16px 24px;
   border: 2px solid var(--border-color, rgba(255, 255, 255, 0.08));
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  background: transparent;
   color: var(--text-secondary, #8892b0);
-  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  min-height: 44px;
-}
-
-.coinflip-choice-btn--heads {
-  border-color: rgba(240, 180, 41, 0.3);
-}
-
-.coinflip-choice-btn--heads:hover,
-.coinflip-choice-btn--heads.coinflip-choice-btn--selected {
-  background: rgba(240, 180, 41, 0.1);
-  border-color: var(--accent-gold, #f0b429);
-  color: var(--accent-gold, #f0b429);
-}
-
-.coinflip-choice-btn--tails {
-  border-color: rgba(99, 179, 237, 0.3);
-}
-
-.coinflip-choice-btn--tails:hover,
-.coinflip-choice-btn--tails.coinflip-choice-btn--selected {
-  background: rgba(99, 179, 237, 0.1);
-  border-color: var(--accent-tails, #63b3ed);
-  color: var(--accent-tails, #63b3ed);
-}
-
-.coinflip-choice-btn:active {
-  transform: scale(0.96);
-}
-
-.coinflip-choice-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ── Submit Button ─────────────────────────────────────── */
-
-.coinflip-submit-btn {
-  width: 100%;
-  padding: 16px;
-  border-radius: 12px;
-  border: none;
   font-family: var(--font-heading, 'Space Grotesk', sans-serif);
   font-size: 1.05rem;
   font-weight: 700;
@@ -426,6 +373,25 @@
   position: relative;
   overflow: hidden;
   min-height: 48px;
+}
+
+.coinflip-choice-btn--heads {
+  border-color: rgba(240, 180, 41, 0.3);
+}
+
+.coinflip-choice-btn--tails {
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.coinflip-choice-btn--tails:hover,
+.coinflip-choice-btn--tails.coinflip-choice-btn--selected {
+  background: rgba(99, 179, 237, 0.1);
+  border-color: var(--accent-tails);
+  color: var(--accent-tails);
+}
+
+.coinflip-choice-btn:active {
+  transform: scale(0.96);
 }
 
 .coinflip-submit-btn:not(:disabled) {
@@ -506,6 +472,18 @@
 }
 
 /* ── Pending Bet ───────────────────────────────────────── */
+
+.coinflip-max-bet-warning {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(240, 180, 41, 0.1);
+  border: 1px solid rgba(240, 180, 41, 0.25);
+  color: var(--accent-gold, #f0b429);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  text-align: center;
+}
 
 .coinflip-pending {
   margin-top: 20px;

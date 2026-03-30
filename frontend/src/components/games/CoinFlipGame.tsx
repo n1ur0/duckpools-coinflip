@@ -1,12 +1,13 @@
 import { useState, useCallback, useRef, TouchEvent } from 'react';
 import { useWallet } from '../../contexts/WalletContext';
-import CoinFlip from '../../components/animations/CoinFlip';
+import { CoinFlip } from '../../components/animations/CoinFlip';
 import { Button, Input } from '../../components/ui';
 import { bytesToHex, blake2b256, generateSecret } from '../../utils/crypto';
 import { ergToNanoErg, formatErg } from '../../utils/ergo';
 import { buildApiUrl } from '../../utils/network';
 import { isOnChainEnabled } from '../../config/contract';
 import { buildPlaceBetTx, verifyCommitment } from '../../services/coinflipService';
+import { useBankrollStatus } from '../../hooks/useBankrollStatus';
 import './CoinFlipGame.css';
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -48,6 +49,7 @@ interface CoinFlipGameProps {
 
 const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
   const { isConnected, walletAddress, connect, signTransaction, submitTransaction, getUtxos, getCurrentHeight, getChangeAddress } = useWallet();
+  const { maxBetErg, maxBetNanoErg } = useBankrollStatus();
 
   const [amount, setAmount] = useState('');
   const [choice, setChoice] = useState<0 | 1 | null>(null);
@@ -73,9 +75,11 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
   const amountNanoErg = ergToNanoErg(amount);
   const isValidAmount =
     amount !== '' && !isNaN(parseFloat(amount)) && parseFloat(amount) > 0;
+  const exceedsMaxBet = isValidAmount && BigInt(amountNanoErg) > BigInt(maxBetNanoErg);
   const canSubmit =
     isConnected &&
     isValidAmount &&
+    !exceedsMaxBet &&
     choice !== null &&
     !isSubmitting &&
     walletAddress !== undefined;
@@ -150,7 +154,9 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
 
       let txId = '';
 
-      if (isOnChainEnabled()) {
+      const onChainEnabled = isOnChainEnabled();
+      console.log('[CoinFlip] isOnChainEnabled result:', onChainEnabled);
+      if (onChainEnabled) {
         // ── ON-CHAIN FLOW ──────────────────────────────────────
         // Build unsigned EIP-12 transaction using Fleet SDK,
         // then sign via Nautilus and broadcast.
@@ -195,11 +201,13 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
           utxos: utxos as any, // Fleet SDK Box type compat
         });
 
-        // 2. Sign via Nautilus — THIS triggers the wallet popup
-        const signedTx = await signTransaction(unsignedTx as any);
-        if (!signedTx) {
-          throw new Error('Transaction signing was rejected or failed');
-        }
+// 2. Sign via Nautilus — THIS triggers the wallet popup
+      console.log('[CoinFlip] Attempting to sign transaction with Nautilus wallet...');
+      const signedTx = await signTransaction(unsignedTx as any);
+      if (!signedTx) {
+        throw new Error('Transaction signing was rejected or failed. Please ensure Nautilus wallet is connected and popups are not blocked.');
+      }
+      console.log('[CoinFlip] Transaction signed successfully!');
 
         // 3. Broadcast to the Ergo network
         txId = (await submitTransaction(signedTx as any)) ?? '';
@@ -285,12 +293,12 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
   // ── Render ──────────────────────────────────────────────────────
 
   return (
-    <div className={`coinflip-game-container ${className}`}>
+    <div className={`coinflip-game-container ${className}`} role="region" aria-label="Coin flip game">
       <h2 className="coinflip-title">Coin Flip</h2>
 
       {!isOnChainEnabled() && (
-        <div className="coinflip-offchain-banner">
-          ⚠️ Off-chain mode — contract not yet deployed (MAT-344)
+        <div className="coinflip-offchain-banner" role="status" aria-live="polite">
+          Off-chain mode — contract not yet deployed (MAT-344)
         </div>
       )}
 
@@ -389,17 +397,15 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
                 Swipe ↑↓ to adjust
               </span>
             </label>
-            <Input
-              className="coinflip-amount-input"
-              type="text"
-              inputMode="decimal"
-              placeholder="0.0"
-              value={amount}
-              onChange={(e) => handleAmountChange(e.target.value)}
-              disabled={isSubmitting}
-              suffix="ERG"
-              error={error || undefined}
-            />
+<Input
+            className="coinflip-amount-input"
+            type="text"
+            placeholder="0.0"
+            value={amount}
+            onChange={(e) => handleAmountChange(e.target.value)}
+            disabled={isSubmitting}
+            error={error || undefined}
+          />
             <div className="coinflip-quick-picks">
               {QUICK_PICK_VALUES.map((val) => (
                 <Button
@@ -430,6 +436,11 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
             disabled={!canSubmit}
             loading={isSubmitting}
             fullWidth
+            aria-label={isSubmitting
+              ? isOnChainEnabled() ? 'Signing transaction' : 'Flipping coin'
+              : choice !== null
+                ? `Flip ${choice === 0 ? 'heads' : 'tails'} for ${amount || '0'} ERG`
+                : 'Flip coin'}
           >
             {isSubmitting
               ? isOnChainEnabled() ? 'Signing...' : 'Flipping...'
@@ -447,16 +458,26 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
             <span className="coinflip-info-item">
               Win Payout: <strong>{PAYOUT_MULTIPLIER.toFixed(2)}x</strong>
             </span>
+            <span className="coinflip-info-item">
+              Max Bet: <strong>{maxBetErg.toFixed(2)} ERG</strong>
+            </span>
           </div>
         </div>
       </div>
 
       {/* ── Error ────────────────────────────────────────────────── */}
-      {error && <div className="coinflip-error">{error}</div>}
+      {error && <div className="coinflip-error" role="alert">{error}</div>}
+
+      {/* ── Max Bet Warning ─────────────────────────────────────── */}
+      {exceedsMaxBet && (
+        <div className="coinflip-max-bet-warning" role="alert">
+          Bet exceeds maximum of {maxBetErg.toFixed(2)} ERG
+        </div>
+      )}
 
       {/* ── Result Actions (for when on-chain reveal completes) ─── */}
       {!isFlipping && result && winOutcome && (
-        <div className="coinflip-result-actions">
+        <div className="coinflip-result-actions" role="status" aria-live="polite">
           <button
             className="coinflip-flip-again-btn"
             onClick={() => {
@@ -473,7 +494,7 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
 
       {/* ── Bet Placed — Pending On-Chain Reveal ─────────────── */}
       {betPlaced && !result && (
-        <div className="coinflip-pending">
+        <div className="coinflip-pending" role="status" aria-live="polite">
           <div className="coinflip-pending-title">
             <span className="coinflip-pending-spinner" />
             Bet Placed — Awaiting On-Chain Reveal

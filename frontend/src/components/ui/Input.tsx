@@ -1,78 +1,95 @@
 import React from 'react';
 import './Input.css';
 
-/** Props for the reusable Input component. */
-export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
-  /** Label text displayed above the input. */
+export interface InputProps {
+  /** Input label */
   label?: string;
-  /** Error message displayed below the input. Triggers error styling when set. */
+  /** Error message */
   error?: string;
-  /** Icon element placed inside the input on the left. */
+  /** Disabled state */
+  disabled?: boolean;
+  /** Icon prefix */
   icon?: React.ReactNode;
-  /** Suffix text (e.g. "ERG") displayed after the input. */
-  suffix?: string;
-  /** Uses body font instead of monospace. Useful for text inputs. */
-  textMode?: boolean;
+  /** Input type */
+  type?: 'text' | 'password' | 'email' | 'number' | 'tel';
+  /** Placeholder text */
+  placeholder?: string;
+  /** Input value */
+  value?: string | number;
+  /** Change handler */
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  /** Focus handler */
+  onFocus?: (e: React.FocusEvent<HTMLInputElement>) => void;
+  /** Blur handler */
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
+  /** Input mode for mobile keyboards */
+  inputMode?: 'text' | 'numeric' | 'decimal' | 'tel' | 'search' | 'email' | 'url' | 'none';
+  /** Additional className */
+  className?: string;
 }
 
-/**
- * Reusable Input component with label, error state, icon prefix, and suffix support.
- * Matches the existing input patterns from BetForm.
- *
- * @example
- * ```tsx
- * <Input label="Bet Amount" placeholder="0.0" suffix="ERG" error="Insufficient balance" />
- * <Input label="Memo" placeholder="Optional note" textMode />
- * ```
- */
-const Input = React.forwardRef<HTMLInputElement, InputProps>(({
+export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
   label,
   error,
+  disabled = false,
   icon,
-  suffix,
-  textMode = false,
-  disabled,
+  type = 'text',
+  placeholder,
+  value,
+  onChange,
+  onFocus,
+  onBlur,
+  inputMode,
   className = '',
-  id,
-  ...rest
 }, ref) => {
-  const inputId = id || (label ? `ui-input-${label.replace(/\s+/g, '-').toLowerCase()}` : undefined);
-  const hasError = !!error;
-  const hasIcon = !!icon;
-  const hasSuffix = !!suffix;
+  const baseClasses = 'ui-input';
+  const errorClass = error ? 'ui-input--error' : '';
+  const disabledClass = disabled ? 'ui-input--disabled' : '';
+  const iconClass = icon ? 'ui-input--with-icon' : '';
+  const numberClass = type === 'number' ? 'ui-input--number' : '';
+
+  const classes = [
+    baseClasses,
+    errorClass,
+    disabledClass,
+    iconClass,
+    numberClass,
+    className,
+  ].filter(Boolean).join(' ');
 
   return (
-    <div className="ui-input-group">
+    <div className="ui-input__container">
       {label && (
-        <label className="ui-input__label" htmlFor={inputId}>
+        <label className="ui-input__label">
           {label}
         </label>
       )}
-      <div className={[
-        'ui-input__row',
-        hasIcon && 'ui-input__row--has-icon-start',
-      ].filter(Boolean).join(' ')}>
-        {hasIcon && <span className="ui-input__icon-start">{icon}</span>}
+      <div className="ui-input__wrapper">
         <input
           ref={ref}
-          id={inputId}
-          className={[
-            'ui-input',
-            hasError && 'ui-input--error',
-            textMode && 'ui-input--text',
-            className,
-          ].filter(Boolean).join(' ')}
+          type={type}
+          inputMode={inputMode}
+          placeholder={placeholder}
+          value={value}
+          onChange={onChange}
+          onFocus={onFocus}
+          onBlur={onBlur}
           disabled={disabled}
-          aria-invalid={hasError}
-          aria-describedby={hasError ? `${inputId}-error` : undefined}
-          {...rest}
+          className={classes}
+          aria-label={label}
+          aria-describedby={error ? 'input-error' : undefined}
+          aria-invalid={!!error}
         />
-        {hasSuffix && <span className="ui-input__suffix">{suffix}</span>}
+        {icon && (
+          <div className="ui-input__icon">
+            {icon}
+          </div>
+        )}
       </div>
-      {hasError && (
-        <span className="ui-input__error" id={`${inputId}-error`} role="alert">
+      {error && (
+        <div id="input-error" className="ui-input__error">
           {error}
-        </span>
+        </div>
       )}
     </div>
   );

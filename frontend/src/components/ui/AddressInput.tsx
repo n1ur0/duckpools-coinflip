@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import Input, { InputProps } from './Input';
+import { Input, InputProps } from './Input';
 import { Copy, Check } from 'lucide-react';
 
 /** Props for the AddressInput component */
