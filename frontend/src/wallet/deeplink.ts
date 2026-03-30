@@ -13,6 +13,7 @@ const DEEP_LINK_SCHEMES: Record<WalletId, string> = {
   nautilus: 'https://nautiluswallet.io/',
   safew: 'safew://',
   minotaur: 'minotaur://',
+  ergopay: 'https://paid.ergoplatform.com/',
 };
 
 /**
@@ -37,6 +38,8 @@ export function isInWalletBrowser(walletId?: WalletId): boolean {
       return /SAFEW/i.test(ua);
     case 'minotaur':
       return /Minotaur/i.test(ua);
+    case 'ergopay':
+      return false; // ErgoPay doesn't have an in-app browser
     default:
       return /Nautilus|SAFEW|Minotaur/i.test(ua);
   }

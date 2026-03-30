@@ -26,8 +26,8 @@ export interface UseWalletManagerReturn {
   selectWallet: (key: string) => void;
   /** Deselect the current wallet */
   deselectWallet: () => void;
-  /** Manually refresh detected wallets */
-  refreshAvailable: () => Promise<void>;
+  /** Manually refresh detected wallets; returns the list of detected wallet keys */
+  refreshAvailable: () => Promise<string[]>;
   /** Persisted wallet preference key for localStorage */
   STORAGE_KEY: string;
 }
@@ -44,10 +44,11 @@ export function useWalletManager(): UseWalletManagerReturn {
 
   const refreshAvailable = useCallback(async () => {
     const detected = await detectAvailableWallets();
-    if (!mountedRef.current) return;
+    if (!mountedRef.current) return [];
     setAvailableWallets(detected);
     setIsDetecting(false);
     log.log('[WalletManager] Detected wallets:', detected);
+    return detected;
   }, []);
 
   useEffect(() => {

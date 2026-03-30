@@ -29,7 +29,7 @@ interface WalletContextValue {
   refreshBalance: () => Promise<void>;
   selectWallet: (key: string) => void;
   deselectWallet: () => void;
-  refreshAvailable: () => Promise<void>;
+  refreshAvailable: () => Promise<string[]>;
 
   // EIP-12 operations
   getUtxos: () => Promise<ErgoBox[]>;

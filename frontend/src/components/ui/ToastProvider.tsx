@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, useCallback } from 'react';
 import Toast, { ToastType, ToastPosition } from './Toast';
+import { generateUUID } from '../../utils/crypto';
 
 /** Individual toast item with unique ID */
 export interface ToastItem {
@@ -45,7 +46,7 @@ function toastReducer(state: ToastState, action: ToastAction): ToastState {
     case 'ADD_TOAST':
       return {
         ...state,
-        toasts: [...state.toasts, { ...action.payload, id: crypto.randomUUID() }],
+        toasts: [...state.toasts, { ...action.payload, id: generateUUID() }],
       };
     case 'REMOVE_TOAST':
       return {

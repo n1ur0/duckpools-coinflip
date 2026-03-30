@@ -1,0 +1,53 @@
+.coinflip-page {
+  padding: var(--space-6) var(--space-4);
+}
+
+.page-content {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.game-container {
+  margin-bottom: var(--space-8);
+}
+
+.bet-form-highlight {
+  animation: pulseGlow 2s ease-in-out;
+}
+
+.stats-section {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+  margin-top: var(--space-8);
+}
+
+/* Tablet and up: side by side */
+@media (min-width: 768px) {
+  .stats-section {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Larger screens: slightly more padding */
+@media (min-width: 1440px) {
+  .coinflip-page {
+    padding: var(--space-8) var(--space-6);
+  }
+}
+
+/* Mobile: tighter spacing */
+@media (max-width: 640px) {
+  .coinflip-page {
+    padding: var(--space-4) var(--space-3);
+  }
+
+  .game-container {
+    margin-bottom: var(--space-6);
+  }
+
+  .stats-section {
+    margin-top: var(--space-6);
+    gap: var(--space-4);
+  }
+}

@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Wallet, LogOut, Copy, Check, AlertCircle, RefreshCw, ChevronDown, Smartphone, ExternalLink } from 'lucide-react';
+import { Wallet, LogOut, Copy, Check, AlertCircle, RefreshCw, ChevronDown, Smartphone, ExternalLink, QrCode } from 'lucide-react';
 import { useWallet } from '../contexts/WalletContext';
 import { formatErg, formatAddress, copyToClipboard } from '../utils';
 import { isMobileDevice, getMobileConnectUrl } from '../wallet/adapters';
@@ -25,6 +25,7 @@ export default function WalletConnector() {
     disconnect,
     clearError,
     selectWallet,
+    refreshAvailable,
   } = useWallet();
 
   const [errorVisible, setErrorVisible] = useState(false);
@@ -32,6 +33,8 @@ export default function WalletConnector() {
   const [showTokens, setShowTokens] = useState(false);
   const [flash, setFlash] = useState(false);
   const [showSelector, setShowSelector] = useState(false);
+  const [showErgoPayInput, setShowErgoPayInput] = useState(false);
+  const [ergoPayAddress, setErgoPayAddress] = useState('');
   const wasConnecting = useRef(false);
   const selectorRef = useRef<HTMLDivElement>(null);
   const isMobile = isMobileDevice();
@@ -92,12 +95,54 @@ export default function WalletConnector() {
     }
   }, []);
 
+  const handleErgoPayConnect = useCallback(() => {
+    selectWallet('ergopay');
+    setShowErgoPayInput(true);
+  }, [selectWallet]);
+
+  const handleErgoPaySubmit = useCallback(async () => {
+    if (!ergoPayAddress.trim()) return;
+    selectWallet('ergopay');
+    setShowErgoPayInput(false);
+    // The useErgoWallet hook needs the address to connect.
+    // We store it in a data attribute on the connect flow.
+    // The useErgoWallet connect function checks for ergopay and reads from localStorage.
+    try {
+      localStorage.setItem('duckpools:ergopay-pending-address', ergoPayAddress.trim());
+    } catch {
+      // ignore
+    }
+    // Trigger connect via a small delay to let state propagate
+    setTimeout(() => connect(), 100);
+  }, [ergoPayAddress, selectWallet, connect]);
+
   // Auto-select first available wallet if none selected
   useEffect(() => {
     if (!isDetecting && !activeWalletKey && availableWallets.length > 0) {
       selectWallet(availableWallets[0]);
     }
   }, [isDetecting, activeWalletKey, availableWallets, selectWallet]);
+
+  // Re-detect wallets when connect is clicked but no wallet is selected.
+  // This handles the case where the initial detection (2-5s timeout) was too short
+  // and the extension hadn't injected yet. On retry, we poll for longer.
+  const handleConnect = useCallback(async () => {
+    // If no wallet is selected but we haven't detected any, try re-detecting
+    // with a longer timeout before falling back to the regular connect flow.
+    if (!activeWalletKey && availableWallets.length === 0 && !isDetecting) {
+      const detected = await refreshAvailable();
+      if (detected.length > 0) {
+        selectWallet(detected[0]);
+        // The walletKey change effect in useErgoWallet will NOT auto-connect.
+        // We need to wait for the state to propagate and then call connect.
+        // However, returning here means the user needs to click Connect again.
+        // Instead, we let the auto-select effect fire and the user clicks again.
+        // This is better than a race condition.
+        return;
+      }
+    }
+    connect();
+  }, [activeWalletKey, availableWallets, isDetecting, refreshAvailable, selectWallet, connect]);
 
   // ─── Not connected state ──────────────────────────────────────
 
@@ -116,19 +161,67 @@ export default function WalletConnector() {
             </p>
             <div className="wc-mobile-wallet-list">
               {knownWallets.filter(w => w.mobileScheme).map(wallet => (
-                <button
-                  key={wallet.key}
-                  className="wc-mobile-wallet-btn"
-                  onClick={() => handleMobileConnect(wallet)}
-                  style={{ '--wallet-color': wallet.color } as React.CSSProperties}
-                >
-                  <span className="wc-mobile-wallet-icon">{wallet.icon}</span>
-                  <span className="wc-mobile-wallet-name">{wallet.name}</span>
-                  <ExternalLink size={14} />
-                </button>
+                wallet.key === 'ergopay' ? (
+                  <button
+                    key={wallet.key}
+                    className="wc-mobile-wallet-btn"
+                    onClick={handleErgoPayConnect}
+                    style={{ '--wallet-color': wallet.color } as React.CSSProperties}
+                  >
+                    <span className="wc-mobile-wallet-icon">{wallet.icon}</span>
+                    <span className="wc-mobile-wallet-name">{wallet.name}</span>
+                    <QrCode size={14} />
+                  </button>
+                ) : (
+                  <button
+                    key={wallet.key}
+                    className="wc-mobile-wallet-btn"
+                    onClick={() => handleMobileConnect(wallet)}
+                    style={{ '--wallet-color': wallet.color } as React.CSSProperties}
+                  >
+                    <span className="wc-mobile-wallet-icon">{wallet.icon}</span>
+                    <span className="wc-mobile-wallet-name">{wallet.name}</span>
+                    <ExternalLink size={14} />
+                  </button>
+                )
               ))}
             </div>
           </div>
+
+          {showErgoPayInput && (
+            <div className="wc-ergopay-modal">
+              <div className="wc-ergopay-modal-content">
+                <div className="wc-ergopay-modal-header">
+                  <QrCode size={20} />
+                  <span>Connect via ErgoPay</span>
+                </div>
+                <p className="wc-ergopay-modal-desc">
+                  Enter your Ergo address to connect via ErgoPay. Transactions will be signed on your mobile wallet.
+                </p>
+                <input
+                  type="text"
+                  className="wc-ergopay-address-input"
+                  placeholder="9xxx... (Ergo address)"
+                  value={ergoPayAddress}
+                  onChange={(e) => setErgoPayAddress(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleErgoPaySubmit(); }}
+                  autoFocus
+                />
+                <div className="wc-ergopay-modal-actions">
+                  <button className="wc-ergopay-cancel-btn" onClick={() => setShowErgoPayInput(false)}>
+                    Cancel
+                  </button>
+                  <button
+                    className="wc-ergopay-connect-btn"
+                    onClick={handleErgoPaySubmit}
+                    disabled={!ergoPayAddress.trim()}
+                  >
+                    Connect
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {errorVisible && error && (
             <div className="wc-error-toast">
@@ -148,8 +241,8 @@ export default function WalletConnector() {
       <div className="wc-wrapper">
         <div className="wc-connect-row">
           <button
-            onClick={connect}
-            disabled={isConnecting || !activeWalletKey}
+            onClick={handleConnect}
+            disabled={isConnecting}
             className={`wc-connect-pill${isConnecting ? ' wc-connecting' : ''}`}
             aria-label="Connect Wallet"
           >
@@ -166,7 +259,7 @@ export default function WalletConnector() {
             )}
           </button>
 
-          {availableWallets.length > 1 && (
+          {(availableWallets.length > 1 || knownWallets.some(w => w.mobileScheme && !availableWallets.includes(w.key))) && (
             <div className="wc-wallet-selector" ref={selectorRef}>
               <button
                 className="wc-selector-toggle"
@@ -203,22 +296,28 @@ export default function WalletConnector() {
                   {!isMobile && (
                     <>
                       <div className="wc-selector-divider" />
-                      <div className="wc-selector-header">Mobile</div>
+                      <div className="wc-selector-header">Mobile / URL</div>
                       {knownWallets.filter(w => w.mobileScheme && !availableWallets.includes(w.key)).map(wallet => (
                         <button
                           key={`mobile-${wallet.key}`}
                           className="wc-selector-item wc-selector-item-mobile"
                           onClick={() => {
                             setShowSelector(false);
-                            handleMobileConnect(wallet);
+                            if (wallet.key === 'ergopay') {
+                              handleErgoPayConnect();
+                            } else {
+                              handleMobileConnect(wallet);
+                            }
                           }}
                         >
                           <span className="wc-selector-wallet-icon">{wallet.icon}</span>
                           <div className="wc-selector-wallet-info">
                             <span className="wc-selector-wallet-name">{wallet.name}</span>
-                            <span className="wc-selector-mobile-label">Open on phone</span>
+                            <span className="wc-selector-mobile-label">
+                              {wallet.key === 'ergopay' ? 'Enter address' : 'Open on phone'}
+                            </span>
                           </div>
-                          <ExternalLink size={12} className="wc-selector-external" />
+                          {wallet.key === 'ergopay' ? <QrCode size={12} className="wc-selector-external" /> : <ExternalLink size={12} className="wc-selector-external" />}
                         </button>
                       ))}
                     </>
@@ -237,10 +336,45 @@ export default function WalletConnector() {
                 {error.suggestions.map((s, i) => <li key={i}>{s}</li>)}
               </ul>
             )}
-            <button className="wc-retry-btn" onClick={() => { setErrorVisible(false); clearError(); connect(); }}>
+            <button className="wc-retry-btn" onClick={() => { setErrorVisible(false); clearError(); handleConnect(); }}>
               <RefreshCw size={13} />
               <span>Retry Connection</span>
             </button>
+          </div>
+        )}
+
+        {showErgoPayInput && (
+          <div className="wc-ergopay-modal">
+            <div className="wc-ergopay-modal-content">
+              <div className="wc-ergopay-modal-header">
+                <QrCode size={20} />
+                <span>Connect via ErgoPay</span>
+              </div>
+              <p className="wc-ergopay-modal-desc">
+                Enter your Ergo address to connect via ErgoPay. Transactions will be signed on your mobile wallet.
+              </p>
+              <input
+                type="text"
+                className="wc-ergopay-address-input"
+                placeholder="9xxx... (Ergo address)"
+                value={ergoPayAddress}
+                onChange={(e) => setErgoPayAddress(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleErgoPaySubmit(); }}
+                autoFocus
+              />
+              <div className="wc-ergopay-modal-actions">
+                <button className="wc-ergopay-cancel-btn" onClick={() => setShowErgoPayInput(false)}>
+                  Cancel
+                </button>
+                <button
+                  className="wc-ergopay-connect-btn"
+                  onClick={handleErgoPaySubmit}
+                  disabled={!ergoPayAddress.trim()}
+                >
+                  Connect
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -280,7 +414,7 @@ export default function WalletConnector() {
         )}
 
         {/* Wallet switcher (when connected, this disconnects first) */}
-        {availableWallets.length > 1 && (
+        {(availableWallets.length > 1 || (activeWalletKey === 'ergopay' && availableWallets.length > 0)) && (
           <div className="wc-wallet-selector" ref={selectorRef}>
             <button
               className="wc-selector-toggle wc-selector-toggle-small"
@@ -319,6 +453,31 @@ export default function WalletConnector() {
                     </button>
                   );
                 })}
+
+                {/* Show ErgoPay option if not in availableWallets */}
+                {!availableWallets.includes('ergopay') && (
+                  <>
+                    <div className="wc-selector-divider" />
+                    <button
+                      key="ergopay"
+                      className={`wc-selector-item${activeWalletKey === 'ergopay' ? ' wc-selector-item-active' : ''}`}
+                      onClick={() => {
+                        setShowSelector(false);
+                        if (activeWalletKey !== 'ergopay') {
+                          disconnect().then(() => {
+                            handleErgoPayConnect();
+                          });
+                        }
+                      }}
+                    >
+                      <span className="wc-selector-wallet-icon">📱</span>
+                      <div className="wc-selector-wallet-info">
+                        <span className="wc-selector-wallet-name">ErgoPay</span>
+                        {activeWalletKey === 'ergopay' && <span className="wc-selector-active-badge">Connected</span>}
+                      </div>
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -359,7 +518,7 @@ export default function WalletConnector() {
               {error.suggestions.map((s, i) => <li key={i}>{s}</li>)}
             </ul>
           )}
-          <button className="wc-retry-btn" onClick={() => { setErrorVisible(false); clearError(); connect(); }}>
+          <button className="wc-retry-btn" onClick={() => { setErrorVisible(false); clearError(); handleConnect(); }}>
             <RefreshCw size={13} />
             <span>Retry</span>
           </button>

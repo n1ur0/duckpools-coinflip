@@ -1,0 +1,32 @@
+=== Contract Deployment Report ===
+
+coinflip_v1: compile_failed
+  Transaction ID: N/A
+  Error: Compilation failed
+
+coinflip_v2: compile_failed
+  Transaction ID: N/A
+  Error: Compilation failed
+
+coinflip_v3: compile_failed
+  Transaction ID: N/A
+  Error: Compilation failed
+
+dice_v1: compile_failed
+  Transaction ID: N/A
+  Error: Compilation failed
+
+plinko_v1: compile_failed
+  Transaction ID: N/A
+  Error: Compilation failed
+
+test_nft_preservation: compile_failed
+  Transaction ID: N/A
+  Error: Compilation failed
+
+test_nft_refund_preservation: compile_failed
+  Transaction ID: N/A
+  Error: Compilation failed
+
+
+Summary: 0 successful, 7 failed out of 7 contracts

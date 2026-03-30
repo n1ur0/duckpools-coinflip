@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, TouchEvent } from 'react';
 import { useWallet } from '../contexts/WalletContext';
-import { generateSecret, bytesToHex, blake2b256 } from '../utils/crypto';
+import { generateSecret, bytesToHex, blake2b256, generateUUID } from '../utils/crypto';
 import { ergToNanoErg, formatErg } from '../utils/ergo';
 import { buildApiUrl } from '../utils/network';
 import './BetForm.css';
@@ -8,7 +8,7 @@ import './BetForm.css';
 // ─── Helpers (until utils are expanded) ─────────────────────────────
 
 function generateBetId(): string {
-  return crypto.randomUUID();
+  return generateUUID();
 }
 
 function generateCommitment(

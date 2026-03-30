@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Test Tokens</title>
+    <link rel="stylesheet" href="src/tokens.css">
+    <style>
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+        }
+        .test-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-md);
+            padding: var(--space-4);
+            margin: var(--space-4);
+        }
+        .test-button {
+            background: var(--accent-gold);
+            color: var(--text-inverse);
+            border: none;
+            border-radius: var(--radius-md);
+            padding: var(--space-2) var(--space-4);
+            font-weight: var(--font-semibold);
+        }
+    </style>
+</head>
+<body>
+    <div class="test-card">
+        <h1 style="font-family: var(--font-heading);">Test Tokens</h1>
+        <p>This is a test of the design tokens.</p>
+        <button class="test-button">Test Button</button>
+    </div>
+</body>
+</html>

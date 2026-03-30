@@ -2,17 +2,18 @@ import { useState, useCallback, useRef, TouchEvent } from 'react';
 import { useWallet } from '../../contexts/WalletContext';
 import CoinFlip from '../../components/animations/CoinFlip';
 import { Button, Input } from '../../components/ui';
-import { bytesToHex, blake2b256, generateSecret } from '../../utils/crypto';
+import { bytesToHex, blake2b256, generateSecret, generateUUID } from '../../utils/crypto';
 import { ergToNanoErg, formatErg } from '../../utils/ergo';
 import { buildApiUrl } from '../../utils/network';
 import { isOnChainEnabled } from '../../config/contract';
 import { buildPlaceBetTx, verifyCommitment } from '../../services/coinflipService';
+import { ErgoAddress } from '@fleet-sdk/core';
 import './CoinFlipGame.css';
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
 function generateBetId(): string {
-  return crypto.randomUUID();
+  return generateUUID();
 }
 
 function generateCommitment(
@@ -170,16 +171,38 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
           throw new Error('No UTXOs available in wallet. Fund your wallet first.');
         }
 
-        // TODO: Get player's compressed public key from wallet.
-        //       EIP-12 doesn't expose this directly. Options:
-        //       (a) Derive from first UTXO's ergoTree (P2PK: 0008cd<pk>)
-        //       (b) Backend provides player pub key lookup
-        //       (c) Use sign_data to get a signature, derive pub key
-        // For now, extract from first UTXO's ergoTree if P2PK.
-        const playerPubKey = extractPubKeyFromUtxo(utxos[0]);
+        // Derive player's compressed public key from the wallet address.
+        // Fleet SDK's ErgoAddress.decode() + getPublicKeys() extracts
+        // the compressed pubkey(s) directly, without fragile hex parsing.
+        let playerPubKey: string | null = null;
+
+        // Primary: derive from wallet change address
+        try {
+          const decoded = ErgoAddress.decode(changeAddress);
+          const pubKeys = decoded.getPublicKeys();
+          if (pubKeys.length > 0) {
+            // Convert first compressed pubkey (33 bytes) to hex
+            playerPubKey = bytesToHex(pubKeys[0]);
+          }
+        } catch (e) {
+          console.warn('[CoinFlip] Failed to decode change address for pubkey extraction:', e);
+        }
+
+        // Fallback: try extracting from UTXOs' ergoTree (handles P2SH wallets
+        // whose change address wraps a P2PK, and also Nautilus UTXO formats)
+        if (!playerPubKey) {
+          for (const utxo of utxos) {
+            const pk = extractPubKeyFromErgoTree(utxo.ergoTree);
+            if (pk) {
+              playerPubKey = pk;
+              break;
+            }
+          }
+        }
+
         if (!playerPubKey) {
           throw new Error(
-            'Could not determine player public key. Ensure your UTXO is a P2PK address.'
+            'Could not determine player public key. Ensure your wallet uses a P2PK address.'
           );
         }
 
@@ -529,23 +552,53 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
   );
 };
 
-// ── Utility: Extract player public key from P2PK UTXO ──────────────
+// ── Utility: Extract player public key from P2PK ergoTree ──────────
 
 /**
- * Extract the 33-byte compressed public key from a P2PK UTXO's ergoTree.
+ * Extract the 33-byte compressed public key from a P2PK ergoTree.
  *
  * P2PK ErgoTree format: 0008cd<33-byte-pk>
- * The public key is bytes 4..37 of the ergoTree hex string.
+ *   - 00 = constant opcode
+ *   - 08 = 8 bytes follow (1 type byte + 33 pubkey bytes)
+ *   - cd = SigmaProp(ProveDlog) constant type
+ *   - next 33 bytes = compressed secp256k1 public key
  *
- * Returns null if the UTXO is not a standard P2PK box.
+ * The ergoTree may be in hex (from Fleet SDK) or base64 (from Nautilus
+ * EIP-12 get_utxos()). We detect the format and handle both.
+ *
+ * For hex: prefix "0008cd" is 6 hex chars, pubkey at index 6, 66 hex chars.
+ * For base64: prefix decodes to 0008cd, pubkey is the remaining 33 bytes.
+ *
+ * Returns null if the ergoTree is not a standard P2PK tree.
  */
-function extractPubKeyFromUtxo(utxo: { ergoTree?: string }): string | null {
-  const tree = utxo.ergoTree;
-  if (!tree || tree.length < 74) return null; // 4 + 66 hex chars minimum
-  if (tree.startsWith('0008cd')) {
-    return tree.slice(4, 4 + 66); // 33 bytes = 66 hex chars
+function extractPubKeyFromErgoTree(ergoTree?: string): string | null {
+  if (!ergoTree) return null;
+
+  // Detect format: base64 ergoTrees from Nautilus EIP-12 contain only
+  // base64 chars and are typically longer. Hex ergoTrees from Fleet SDK
+  // contain only [0-9a-f].
+  const isHex = /^[0-9a-f]+$/i.test(ergoTree);
+
+  if (isHex) {
+    // Fleet SDK hex format: 0008cd<pubkey 66 hex chars>
+    if (ergoTree.length < 72 || !ergoTree.startsWith('0008cd')) return null;
+    return ergoTree.slice(6, 6 + 66);
+  } else {
+    // Nautilus EIP-12 base64 format: base64(0008cd<pubkey 33 bytes>)
+    try {
+      const raw = Uint8Array.from(atob(ergoTree), c => c.charCodeAt(0));
+      // Minimum: 3 bytes header (0008cd) + 33 bytes pubkey = 36 bytes
+      if (raw.length < 36) return null;
+      // Check header: 0x00, 0x08, 0xcd
+      if (raw[0] !== 0x00 || raw[1] !== 0x08 || raw[2] !== 0xcd) return null;
+      // Extract 33-byte pubkey and convert to hex
+      return Array.from(raw.slice(3, 3 + 33))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    } catch {
+      return null;
+    }
   }
-  return null;
 }
 
 export default CoinFlipGame;

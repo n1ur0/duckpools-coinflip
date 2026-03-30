@@ -4,7 +4,7 @@
  */
 import type { EIP12ContextAPI, ErgoBox, SignedTransaction, UnsignedTransaction } from '../../types/eip12';
 
-export type WalletId = 'nautilus' | 'safew' | 'minotaur';
+export type WalletId = 'nautilus' | 'safew' | 'minotaur' | 'ergopay';
 
 export interface WalletInfo {
   id: WalletId;

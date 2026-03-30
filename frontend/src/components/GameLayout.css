@@ -1,0 +1,77 @@
+.game-layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.game-header {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-4);
+}
+
+.header-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.header-logo {
+  font-size: var(--text-2xl);
+}
+
+.header-title {
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+}
+
+.game-nav {
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-3) 0;
+}
+
+.nav-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  gap: var(--space-4);
+}
+
+.nav-item {
+  background: transparent;
+  border: none;
+  padding: var(--space-2) var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-normal);
+}
+
+.nav-item:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.nav-item.active {
+  background: var(--accent-gold);
+  color: var(--text-inverse);
+}
+
+.game-main {
+  flex: 1;
+  padding: var(--space-6) var(--space-4);
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}

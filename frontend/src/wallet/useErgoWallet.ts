@@ -25,7 +25,7 @@ import type {
 import type { Asset } from '../types';
 import { createWalletError } from '../types';
 import { getExpectedNetworkType, getNetworkFromAddress } from '../utils/network';
-import { getWalletConnection, waitForConnector, getWalletInfo } from './adapters';
+import { getWalletConnection, waitForConnector, waitForWalletKey, getWalletInfo } from './adapters';
 import { useWalletSessionPersistence } from './useWalletSessionPersistence';
 
 // Use a simple flag for logging - in production this would be false
@@ -167,6 +167,67 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
     let cancelled = false;
 
     const restore = async () => {
+      // ── ErgoPay session restore ──
+      // ErgoPay doesn't use window.ergoConnector, so we handle it separately.
+      // We restore from persisted session and refresh balance from the explorer API.
+      if (walletKey === 'ergopay') {
+        const persistedSession = hasSession(walletKey) ? restoreSession(walletKey) : null;
+        if (persistedSession && persistedSession.walletAddress) {
+          log.log('[Wallet] Restoring ErgoPay session:', { address: persistedSession.walletAddress });
+
+          // Import ErgoPayAdapter and restore
+          const { ErgoPayAdapter } = await import('./adapters/ergopay');
+          const adapter = new ErgoPayAdapter();
+          const connected = await adapter.connect(persistedSession.walletAddress);
+          if (connected && !cancelled) {
+            const ctx = await adapter.getContext();
+            if (ctx) {
+              setErgo(ctx);
+
+              // Refresh balance from explorer API
+              let bal = persistedSession.balance || 0;
+              let tokens: Asset[] = persistedSession.tokens || [];
+              try {
+                const balResp = await fetch(`https://api.ergoplatform.com/api/v1/addresses/${persistedSession.walletAddress}/balance`);
+                if (balResp.ok) {
+                  const balData = await balResp.json();
+                  bal = balData.confirmed ? Number(balData.confirmed.nanoErgs) : 0;
+              tokens = (balData.confirmed?.tokens || []).map((t: any) => ({
+                    tokenId: t.tokenId,
+                    amount: t.amount,
+                    name: t.name,
+                    decimals: t.decimals,
+                  }));
+                }
+              } catch { /* ignore */ }
+
+              setState(prev => ({
+                ...prev,
+                isConnected: true,
+                isLocked: false,
+                walletAddress: persistedSession.walletAddress,
+                balance: isNaN(bal) ? undefined : bal,
+                network: persistedSession.network,
+                tokens,
+              }));
+              saveSession(walletKey, {
+                isConnected: true,
+                isConnecting: false,
+                isLocked: false,
+                walletAddress: persistedSession.walletAddress,
+                balance: isNaN(bal) ? undefined : bal,
+                network: persistedSession.network,
+                error: undefined,
+              }, tokens);
+            }
+          } else {
+            clearSession(walletKey);
+          }
+        }
+        return;
+      }
+
+      // ── Standard EIP-12 extension wallets ──
       const available = await waitForConnector(3000);
       if (cancelled) return;
       const conn = getWalletConnection(walletKey);
@@ -273,8 +334,123 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
 
     if (connectTimer.current) { clearTimeout(connectTimer.current); connectTimer.current = null; }
 
-    // Wait for the extension to inject window.ergoConnector
-    const available = await waitForConnector(5000);
+    // Wait for the extension to inject the specific wallet key into window.ergoConnector.
+    // We poll for the specific wallet key (e.g. 'nautilus') rather than just the top-level
+    // ergoConnector object, because the extension may inject the top-level object first
+    // and populate wallet keys asynchronously.
+
+    // ── ErgoPay special handling ──
+    // ErgoPay is a URL-based protocol, not a browser extension.
+    // It doesn't use window.ergoConnector. Instead, the user provides
+    // their address, and we create a stub context for balance/UTXO queries.
+    if (walletKey === 'ergopay') {
+      // Set connecting state for UI feedback
+      connectGuard.current = true;
+      setState(prev => {
+        const { error: _e, ...rest } = prev;
+        return { ...rest, isConnecting: true };
+      });
+
+      const pendingAddress = (() => {
+        try {
+          return localStorage.getItem('duckpools:ergopay-pending-address');
+        } catch {
+          return null;
+        }
+      })();
+
+      if (!pendingAddress) {
+        setState(prev => ({
+          ...prev,
+          isConnecting: false,
+          error: createWalletError('wallet_not_found', 'No Ergo address provided', ['Enter your Ergo address to connect via ErgoPay']),
+        }));
+        return;
+      }
+
+      // Clear the pending address
+      try { localStorage.removeItem('duckpools:ergopay-pending-address'); } catch { /* ignore */ }
+
+      // Import ErgoPayAdapter dynamically to avoid circular deps
+      const { ErgoPayAdapter } = await import('./adapters/ergopay');
+      const adapter = new ErgoPayAdapter();
+
+      try {
+        const connected = await adapter.connect(pendingAddress);
+        if (!connected) {
+          setState(prev => ({
+            ...prev,
+            isConnecting: false,
+            error: createWalletError('wallet_error', 'Failed to connect via ErgoPay', ['Check your Ergo address and try again']),
+          }));
+          return;
+        }
+
+        const ctx = await adapter.getContext();
+        if (!ctx) {
+          setState(prev => ({
+            ...prev,
+            isConnecting: false,
+            error: createWalletError('wallet_error', 'Failed to get ErgoPay context'),
+          }));
+          return;
+        }
+
+        setErgo(ctx);
+        const address = await ctx.get_change_address();
+        await ctx.get_current_height();
+
+        // For ErgoPay, we need to fetch balance from the Ergo explorer API
+        // since the stub context returns '0'
+        let bal = 0;
+        let tokens: Asset[] = [];
+        try {
+          const balResp = await fetch(`https://api.ergoplatform.com/api/v1/addresses/${address}/balance`);
+          if (balResp.ok) {
+            const balData = await balResp.json();
+            bal = balData.confirmed ? Number(balData.confirmed.nanoErgs) : 0;
+              tokens = (balData.confirmed?.tokens || []).map((t: any) => ({
+              tokenId: t.tokenId,
+              amount: t.amount,
+              name: t.name,
+              decimals: t.decimals,
+            }));
+          }
+        } catch {
+          // Balance fetch failed, use 0
+        }
+
+        const walletNetwork = getNetworkFromAddress(address);
+
+        const finalState = {
+          isConnected: true,
+          isConnecting: false,
+          isLocked: false,
+          walletAddress: address,
+          balance: isNaN(bal) ? undefined : bal,
+          network: walletNetwork,
+          tokens,
+          error: undefined,
+        };
+
+        setState(prev => ({ ...prev, ...finalState }));
+        saveSession(walletKey, finalState, tokens);
+        log.log('[Wallet] ErgoPay connection complete:', { address, balance: bal, network: walletNetwork });
+      } catch (error: any) {
+        log.error('[Wallet] ErgoPay connection error:', error);
+        setState(prev => ({
+          ...prev,
+          isConnecting: false,
+          error: createWalletError('wallet_error', error?.message || 'Failed to connect via ErgoPay', ['Check your address and try again']),
+        }));
+      } finally {
+        connectGuard.current = false;
+      }
+      return;
+    }
+
+    // ── Standard EIP-12 extension wallets ──
+    const available = await waitForWalletKey(walletKey, 8000);
     const conn = getWalletConnection(walletKey);
 
     if (!available || !conn) {
@@ -286,6 +462,7 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
             `Install ${walletDisplayName} from the Chrome Web Store`,
             'Enable the extension in chrome://extensions',
             'Refresh this page after enabling',
+            'Make sure the wallet extension is unlocked',
           ]),
       }));
       return;
@@ -436,9 +613,12 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
 
   const disconnect = useCallback(async () => {
     if (walletKey) {
-      const conn = getWalletConnection(walletKey);
-      if (conn) {
-        try { await conn.disconnect(); } catch (e) { console.error('Disconnect error:', e); }
+      // ErgoPay doesn't use ergoConnector
+      if (walletKey !== 'ergopay') {
+        const conn = getWalletConnection(walletKey);
+        if (conn) {
+          try { await conn.disconnect(); } catch (e) { console.error('Disconnect error:', e); }
+        }
       }
       // Clear the persisted session
       clearSession(walletKey);
@@ -505,11 +685,29 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
   const refreshBalance = useCallback(async () => {
     if (!ergo || !state.isConnected) return;
     try {
-      const bal = parseNanoErg(await ergo.get_balance());
-      const utxos = await ergo.get_utxos();
-      const tokens = extractTokens(utxos);
-      if (!isNaN(bal)) {
-        setState(prev => ({ ...prev, balance: bal, tokens }));
+      if (walletKey === 'ergopay' && state.walletAddress) {
+        // ErgoPay uses explorer API for balance since stub context returns '0'
+        const balResp = await fetch(`https://api.ergoplatform.com/api/v1/addresses/${state.walletAddress}/balance`);
+        if (balResp.ok) {
+          const balData = await balResp.json();
+          const bal = balData.confirmed ? Number(balData.confirmed.nanoErgs) : 0;
+          const tokens = (balData.confirmed?.tokens || []).map((t: any) => ({
+            tokenId: t.tokenId,
+            amount: t.amount,
+            name: t.name,
+            decimals: t.decimals,
+          }));
+          if (!isNaN(bal)) {
+            setState(prev => ({ ...prev, balance: bal, tokens }));
+          }
+        }
+      } else {
+        const bal = parseNanoErg(await ergo.get_balance());
+        const utxos = await ergo.get_utxos();
+        const tokens = extractTokens(utxos);
+        if (!isNaN(bal)) {
+          setState(prev => ({ ...prev, balance: bal, tokens }));
+        }
       }
     } catch (error: any) {
       console.error('Failed to refresh balance:', error);
@@ -517,7 +715,7 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
         setState(prev => ({ ...prev, isLocked: true }));
       }
     }
-  }, [ergo, state.isConnected]);
+  }, [ergo, state.isConnected, walletKey, state.walletAddress]);
 
   // ─── clearError ───────────────────────────────────────────────
 

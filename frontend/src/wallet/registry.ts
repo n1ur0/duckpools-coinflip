@@ -10,6 +10,7 @@
 import { NautilusAdapter } from './adapters/nautilus';
 import { SafewAdapter } from './adapters/safew';
 import { MinotaurAdapter } from './adapters/minotaur';
+import { ErgoPayAdapter } from './adapters/ergopay';
 import type { WalletAdapter, WalletId, WalletInfo } from './adapters/types';
 
 export type WalletRegistryEvents = {
@@ -34,6 +35,7 @@ class WalletRegistry {
     this.adapters.set('nautilus', new NautilusAdapter());
     this.adapters.set('safew', new SafewAdapter());
     this.adapters.set('minotaur', new MinotaurAdapter());
+    this.adapters.set('ergopay', new ErgoPayAdapter());
   }
 
   static getInstance(): WalletRegistry {

@@ -61,6 +61,16 @@ export const KNOWN_WALLETS: WalletInfo[] = [
     installUrl: 'https://chromewebstore.google.com/detail/minotaur-wallet/cpgeilhbgkmpnlhkhdjmkeoanibgmhpk',
     mobileScheme: 'https://minotaurwallet.io',
   },
+  {
+    key: 'ergopay',
+    name: 'ErgoPay',
+    shortName: 'ErgoPay',
+    icon: '📱',
+    color: '#8B5CF6',
+    installUrl: 'https://docs.ergoplatform.com/developer-tools/ergopay/',
+    mobileScheme: 'https://paid.ergoplatform.com',
+    isMobile: true,
+  },
 ];
 
 /** Quick lookup by key */
@@ -88,6 +98,22 @@ export function waitForConnector(timeoutMs = 3000): Promise<boolean> {
 }
 
 /**
+ * Poll for a specific wallet key in window.ergoConnector.
+ * Unlike waitForConnector which checks for the top-level object,
+ * this checks for a specific wallet entry (e.g. 'nautilus').
+ */
+export function waitForWalletKey(key: string, timeoutMs = 5000): Promise<boolean> {
+  return new Promise(resolve => {
+    if (window.ergoConnector?.[key]) return resolve(true);
+    const t0 = Date.now();
+    const id = setInterval(() => {
+      if (window.ergoConnector?.[key]) { clearInterval(id); resolve(true); }
+      else if (Date.now() - t0 >= timeoutMs) { clearInterval(id); resolve(false); }
+    }, 100);
+  });
+}
+
+/**
  * Get the EIP-12 connection for a specific wallet.
  * Returns null if the wallet extension is not installed.
  */
@@ -98,9 +124,10 @@ export function getWalletConnection(key: string): EIP12Connection | null {
 /**
  * Detect which wallet extensions are installed.
  * Returns a list of wallet keys that are available.
+ * Uses a longer timeout (5s) since extensions can be slow to inject.
  */
-export async function detectAvailableWallets(): Promise<string[]> {
-  await waitForConnector(2000);
+export async function detectAvailableWallets(timeoutMs = 5000): Promise<string[]> {
+  await waitForConnector(timeoutMs);
   if (!window.ergoConnector) return [];
 
   const available: string[] = [];

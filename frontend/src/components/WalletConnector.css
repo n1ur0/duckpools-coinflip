@@ -557,3 +557,121 @@
   text-align: left;
   font-weight: 500;
 }
+
+/* ─── ErgoPay modal ───────────────────────────────────────── */
+
+.wc-ergopay-modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 200;
+  animation: wc-fadeIn 0.15s ease;
+}
+
+@keyframes wc-fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.wc-ergopay-modal-content {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 1.5rem;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  animation: wc-slideIn 0.2s ease;
+}
+
+.wc-ergopay-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.wc-ergopay-modal-desc {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0 0 1rem 0;
+}
+
+.wc-ergopay-address-input {
+  width: 100%;
+  padding: 0.65rem 0.8rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  outline: none;
+  transition: border-color 0.2s ease;
+  box-sizing: border-box;
+}
+
+.wc-ergopay-address-input:focus {
+  border-color: #8B5CF6;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+}
+
+.wc-ergopay-address-input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+.wc-ergopay-modal-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  justify-content: flex-end;
+}
+
+.wc-ergopay-cancel-btn {
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wc-ergopay-cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.wc-ergopay-connect-btn {
+  padding: 0.5rem 1.2rem;
+  background: rgba(139, 92, 246, 0.15);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 8px;
+  color: #8B5CF6;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wc-ergopay-connect-btn:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.25);
+  border-color: rgba(139, 92, 246, 0.5);
+}
+
+.wc-ergopay-connect-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

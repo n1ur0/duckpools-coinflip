@@ -1,0 +1,38 @@
+.dice-page {
+  padding: var(--space-6) var(--space-4);
+}
+
+.page-content {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.game-container {
+  margin-bottom: var(--space-8);
+}
+
+.dice-game-placeholder {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8);
+  text-align: center;
+}
+
+.dice-game-placeholder h2 {
+  font-size: var(--text-3xl);
+  margin-bottom: var(--space-4);
+  color: var(--text-primary);
+}
+
+.dice-game-placeholder p {
+  font-size: var(--text-lg);
+  color: var(--text-secondary);
+}
+
+.stats-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+  margin-top: var(--space-8);
+}
