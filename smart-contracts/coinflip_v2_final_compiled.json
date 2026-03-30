@@ -1,8 +1,12 @@
 {
-  "contractName": "coinflip_v2_final",
+  "contract": "coinflip_v2_final",
+  "version": "v2-final-with-reveal-window",
+  "address": "PENDING_RECOMPILATION_REQUIRED",
+  "compiledAt": "2026-03-30T17:45:00Z",
   "network": "testnet",
-  "p2sAddress": "PENDING_RECOMPILATION_REQUIRED",
-  "ergoTreeHex": "PENDING_RECOMPILATION_REQUIRED",
+  "treeVersion": 1,
+  "status": "needs_recompilation",
+  "changeFromPrevious": "Added R10 (rngBlockHeight) for reveal window enforcement. Limits house block-grinding window to (timeoutHeight - rngBlockHeight) blocks.",
   "registerLayout": {
     "R4": "housePubKey (Coll[Byte]) - house compressed PK (33 bytes)",
     "R5": "playerPubKey (Coll[Byte]) - player compressed PK (33 bytes)",
@@ -16,7 +20,9 @@
   "refundFee": 0.02,
   "timeoutBlocks": 100,
   "revealWindowBlocks": 30,
-  "compiledAt": "2026-03-30T17:45:00Z",
-  "status": "needs_recompilation",
-  "note": "v2-final updated with v3 reveal window (R10 register). Requires sigma-rust compilation and Ergo node for testnet deployment."
+  "securityImprovements": [
+    "Reveal height pre-commitment (R10) limits house block-grinding",
+    "Shorter effective grinding window (30 blocks vs unbounded in v2)",
+    "Reveal window enforced on-chain: HEIGHT >= rngBlockHeight && HEIGHT <= timeoutHeight"
+  ]
 }
