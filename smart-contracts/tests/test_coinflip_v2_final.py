@@ -53,11 +53,16 @@ class CoinflipV2Final:
     """
     Pure-Python replica of the coinflip_v2_final.es contract.
     Every computation here MUST match the on-chain ErgoScript exactly.
+
+    v2_final includes a REVEAL WINDOW:
+      rngBlockHeight = timeoutHeight - REVEAL_WINDOW (30 blocks)
+      House can only reveal when: HEIGHT >= rngBlockHeight && HEIGHT <= timeoutHeight
     """
 
     HOUSE_EDGE_NUM = 97   # numerator for win payout: bet * 97 / 50
     HOUSE_EDGE_DEN = 50   # denominator
     REFUND_FEE_DEN = 50   # refund = bet - bet/50
+    REVEAL_WINDOW = 30    # blocks before timeout where house can reveal
 
     def __init__(self, house_pk: bytes, player_pk: bytes,
                  commitment_hash: bytes, player_choice: int,
@@ -71,6 +76,11 @@ class CoinflipV2Final:
         self.player_secret = player_secret
         self.bet_amount = bet_amount
         self.current_height = current_height
+
+    @property
+    def rng_block_height(self) -> int:
+        """On-chain: val rngBlockHeight = timeoutHeight - REVEAL_WINDOW"""
+        return self.timeout_height - self.REVEAL_WINDOW
 
     def verify_commitment(self) -> bool:
         """On-chain: computedHash = blake2b256(playerSecret ++ Coll(choiceByte))"""
@@ -91,12 +101,19 @@ class CoinflipV2Final:
         """On-chain: betAmount - betAmount / 50L"""
         return self.bet_amount - self.bet_amount // self.REFUND_FEE_DEN
 
+    def in_reveal_window(self) -> bool:
+        """On-chain: (HEIGHT >= rngBlockHeight) && (HEIGHT <= timeoutHeight)"""
+        return (self.current_height >= self.rng_block_height and
+                self.current_height <= self.timeout_height)
+
     def can_reveal(self, spender_pk: bytes, block_id: bytes,
                    output_pk: bytes, output_value: int) -> bool:
-        """Evaluate the REVEAL spending path."""
+        """Evaluate the REVEAL spending path (with reveal window check)."""
         if spender_pk != self.house_pk:
             return False
         if not self.verify_commitment():
+            return False
+        if not self.in_reveal_window():
             return False
 
         flip = self.compute_rng(block_id)
@@ -311,7 +328,8 @@ class TestRevealPath:
 
     def _make_contract(self, secret: bytes, choice: int,
                        block_id: bytes, bet: int = 1_000_000_000,
-                       height: int = 500, timeout: int = 1000):
+                       height: int = 980, timeout: int = 1000):
+        """Create contract with height inside reveal window [970, 1000]."""
         commitment = make_commitment(secret, choice)
         return CoinflipV2Final(HOUSE_PK, PLAYER_PK, commitment, choice,
                                timeout, secret, bet, height)
@@ -450,6 +468,108 @@ class TestRefundPath:
         assert c.can_refund(PLAYER_PK, PLAYER_PK, 1_000_000_000)
 
 
+# ─── Reveal Window Tests ────────────────────────────────────────────
+
+class TestRevealWindow:
+    """Test the reveal window constraint in coinflip_v2_final.es.
+    
+    The contract derives: rngBlockHeight = timeoutHeight - REVEAL_WINDOW (30)
+    House can only reveal when: HEIGHT >= rngBlockHeight && HEIGHT <= timeoutHeight
+    
+    For timeout=1000: window is [970, 1000].
+    Before 970: house cannot reveal (too early).
+    After 1000: house cannot reveal (timeout, player refunds).
+    """
+
+    def _find_winning_block(self, secret: bytes, choice: int) -> bytes:
+        """Find a block_id that produces player_wins for given choice."""
+        for i in range(10000):
+            block_id = i.to_bytes(32, 'big')
+            c = CoinflipV2Final(HOUSE_PK, PLAYER_PK, b'\x00' * 32, choice,
+                                1000, secret, 1_000_000_000, 980)
+            if c.compute_rng(block_id) == choice:
+                return block_id
+        pytest.fail("Could not find winning block in 10k iterations")
+
+    def test_reveal_inside_window_succeeds(self):
+        """House can reveal at height 980 (window: [970, 1000])."""
+        secret = os.urandom(32)
+        block_id = self._find_winning_block(secret, 0)
+        commitment = make_commitment(secret, 0)
+        c = CoinflipV2Final(HOUSE_PK, PLAYER_PK, commitment, 0,
+                            1000, secret, 1_000_000_000, 980)
+        assert c.in_reveal_window() is True
+        assert c.can_reveal(HOUSE_PK, block_id, PLAYER_PK,
+                           c.compute_win_payout())
+
+    def test_reveal_at_window_start_succeeds(self):
+        """House can reveal at exact window start (height 970)."""
+        secret = os.urandom(32)
+        block_id = self._find_winning_block(secret, 1)
+        commitment = make_commitment(secret, 1)
+        c = CoinflipV2Final(HOUSE_PK, PLAYER_PK, commitment, 1,
+                            1000, secret, 1_000_000_000, 970)
+        assert c.in_reveal_window() is True
+        assert c.can_reveal(HOUSE_PK, block_id, PLAYER_PK,
+                           c.compute_win_payout())
+
+    def test_reveal_at_window_end_succeeds(self):
+        """House can reveal at exact timeout (height 1000)."""
+        secret = os.urandom(32)
+        block_id = self._find_winning_block(secret, 0)
+        commitment = make_commitment(secret, 0)
+        c = CoinflipV2Final(HOUSE_PK, PLAYER_PK, commitment, 0,
+                            1000, secret, 1_000_000_000, 1000)
+        assert c.in_reveal_window() is True
+        assert c.can_reveal(HOUSE_PK, block_id, PLAYER_PK,
+                           c.compute_win_payout())
+
+    def test_reveal_before_window_fails(self):
+        """House cannot reveal before window (height 969)."""
+        secret = os.urandom(32)
+        block_id = self._find_winning_block(secret, 0)
+        commitment = make_commitment(secret, 0)
+        c = CoinflipV2Final(HOUSE_PK, PLAYER_PK, commitment, 0,
+                            1000, secret, 1_000_000_000, 969)
+        assert c.in_reveal_window() is False
+        assert not c.can_reveal(HOUSE_PK, block_id, PLAYER_PK,
+                               c.compute_win_payout())
+
+    def test_reveal_after_timeout_fails(self):
+        """House cannot reveal after timeout (height 1001)."""
+        secret = os.urandom(32)
+        block_id = self._find_winning_block(secret, 0)
+        commitment = make_commitment(secret, 0)
+        c = CoinflipV2Final(HOUSE_PK, PLAYER_PK, commitment, 0,
+                            1000, secret, 1_000_000_000, 1001)
+        assert c.in_reveal_window() is False
+        # After timeout, player can refund but house cannot reveal
+        assert not c.can_reveal(HOUSE_PK, block_id, PLAYER_PK,
+                               c.compute_win_payout())
+        assert c.can_refund(PLAYER_PK, PLAYER_PK, 980_000_000)
+
+    def test_reveal_way_before_window_fails(self):
+        """House cannot reveal way before window (height 500)."""
+        secret = os.urandom(32)
+        block_id = self._find_winning_block(secret, 0)
+        commitment = make_commitment(secret, 0)
+        c = CoinflipV2Final(HOUSE_PK, PLAYER_PK, commitment, 0,
+                            1000, secret, 1_000_000_000, 500)
+        assert not c.can_reveal(HOUSE_PK, block_id, PLAYER_PK,
+                               c.compute_win_payout())
+
+    def test_window_limits_block_grinding(self):
+        """With 30-block window, grinding is limited to 30 block hashes."""
+        secret = os.urandom(32)
+        commitment = make_commitment(secret, 0)
+        c = CoinflipV2Final(HOUSE_PK, PLAYER_PK, commitment, 0,
+                            1000, secret, 1_000_000_000, 970)
+        # Window is [970, 1000] = 31 possible blocks (inclusive)
+        assert c.rng_block_height == 970
+        assert c.timeout_height == 1000
+        # Grinding limited to ~31 attempts (one per block)
+
+
 # ─── Integration / End-to-End Tests ──────────────────────────────────
 
 class TestEndToEnd:
@@ -461,12 +581,12 @@ class TestEndToEnd:
         commitment = make_commitment(secret, choice)
         bet = 5_000_000_000  # 5 ERG
 
-        # Create bet box
+        # Create bet box (height inside reveal window [970, 1000])
         c = CoinflipV2Final(HOUSE_PK, PLAYER_PK, commitment, choice,
-                            1000, secret, bet, 500)
+                            1000, secret, bet, 980)
 
-        # House reveals at height 600 (before timeout)
-        c.current_height = 600
+        # House reveals at height 990 (inside reveal window [970, 1000])
+        c.current_height = 990
 
         # Find block that makes player win
         for i in range(10000):
@@ -490,8 +610,8 @@ class TestEndToEnd:
         bet = 3_000_000_000  # 3 ERG
 
         c = CoinflipV2Final(HOUSE_PK, PLAYER_PK, commitment, choice,
-                            1000, secret, bet, 500)
-        c.current_height = 600
+                            1000, secret, bet, 980)
+        c.current_height = 990
 
         for i in range(10000):
             block_id = i.to_bytes(32, 'big')
