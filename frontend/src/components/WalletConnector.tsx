@@ -78,10 +78,12 @@ export default function WalletConnector() {
   const handleSelectWallet = useCallback((key: string) => {
     setShowSelector(false);
     selectWallet(key);
-    // Connect immediately after selecting
-    // useErgoWallet will auto-connect via the connect flow
-    setTimeout(() => connect(), 100);
-  }, [selectWallet, connect]);
+    // Do NOT call connect() here. The useErgoWallet hook's walletKey change
+    // effect will handle reconnection. Calling connect() with setTimeout
+    // captured a stale connect reference with the old walletKey, causing a
+    // race condition where connect() ran with null/old walletKey and silently
+    // returned with "No wallet selected" error.
+  }, [selectWallet]);
 
   const handleMobileConnect = useCallback((wallet: WalletInfo) => {
     const url = getMobileConnectUrl(wallet.key, window.location.origin);

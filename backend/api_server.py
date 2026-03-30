@@ -89,7 +89,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
             "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data:; "
-            "connect-src 'self'; "
+            "connect-src 'self' chrome-extension://; "
             "frame-ancestors 'none'; "
             "form-action 'self'; "
             "base-uri 'self'; "

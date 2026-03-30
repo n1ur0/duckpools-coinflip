@@ -34,22 +34,6 @@ const log = isDev ? console : { log: () => {}, warn: () => {}, error: () => {} }
 
 // ─── Helpers ────────────────────────────────────────────────────
 
-/**
- * Detect if the browser is blocking popups.
- * Wallets use a popup (or extension badge notification) to ask for connection approval.
- * If popups are blocked, `connect()` will hang indefinitely.
- */
-function isPopupBlocked(): boolean {
-  try {
-    const w = window.open('', '_blank', 'width=1,height=1,left=0,top=0');
-    if (!w || w.closed) return true;
-    w.close();
-    return false;
-  } catch {
-    return true;
-  }
-}
-
 function parseNanoErg(raw: string): number {
   const n = Number(raw);
   return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
@@ -114,7 +98,6 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
   const connectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastError = useRef<string | undefined>(undefined);
   const CONNECT_TIMEOUT = 30_000;
-  const PREFLIGHT_TIMEOUT = 5_000;
 
   const walletInfo = walletKey ? getWalletInfo(walletKey) : undefined;
   const walletDisplayName = walletInfo?.name ?? walletKey ?? 'wallet';
@@ -290,7 +273,8 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
 
     if (connectTimer.current) { clearTimeout(connectTimer.current); connectTimer.current = null; }
 
-    const available = await waitForConnector(3000);
+    // Wait for the extension to inject window.ergoConnector
+    const available = await waitForConnector(5000);
     const conn = getWalletConnection(walletKey);
 
     if (!available || !conn) {
@@ -307,119 +291,32 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
       return;
     }
 
-    log.log(`[Wallet] ${walletDisplayName} found, type connect:`, typeof conn.connect);
+    log.log(`[Wallet] ${walletDisplayName} found, calling connect()...`);
 
-    // If there was a previous failed connection, try resetting first.
-    if (lastError.current) {
-      log.log('[Wallet] Previous error detected, attempting disconnect reset...');
-      try {
-        await conn.disconnect();
-      } catch {
-        // Ignore — might not be connected
-      }
-    }
-
-    // Clear previous errors, show connecting state
+    // Set guard and connecting state
+    connectGuard.current = true;
     lastError.current = undefined;
     setState(prev => {
       const { error: _e, ...rest } = prev;
       return { ...rest, isConnecting: true };
     });
 
-    // Pre-flight check: is the extension responsive?
     try {
-      const result = await Promise.race([
-        conn.isConnected() as Promise<boolean>,
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('preflight_timeout')), PREFLIGHT_TIMEOUT),
-        ),
-      ]);
-      log.log('[Wallet] Preflight ok, already connected:', result);
-    } catch (err: any) {
-      if (err?.message === 'preflight_timeout') {
-        lastError.current = 'preflight_timeout';
-        setState(prev => ({
-          ...prev,
-          isConnecting: false,
-          error: createWalletError('wallet_not_responsive',
-            `${walletDisplayName} wallet is not responding — it may be locked or needs restart`,
-            [
-              `Click the ${walletDisplayName} extension icon and unlock it`,
-              'Try disabling/re-enabling in chrome://extensions',
-              `If issues persist, reinstall ${walletDisplayName}`,
-            ]),
-        }));
-        return;
-      }
-      // code -3 = not connected yet, that's fine
-      if (err?.code !== -3) {
-        setState(prev => ({
-          ...prev,
-          isConnecting: false,
-          error: createWalletError('wallet_not_responsive',
-            `${walletDisplayName} error: ${err?.message || String(err)}`,
-            [`Unlock ${walletDisplayName} and try again`]),
-        }));
-        return;
-      }
-    }
-
-    // Fast path: already connected
-    const alreadyConnected = await conn.isConnected().catch(() => false);
-    if (alreadyConnected) {
-      log.log('[Wallet] Already connected, getting context...');
-      try {
-        const ctx = await conn.getContext();
-        if (ctx) {
-          setErgo(ctx);
-        const address = await ctx.get_change_address();
-        const bal = parseNanoErg(await ctx.get_balance());
-        const utxos = await ctx.get_utxos();
-        const tokens = extractTokens(utxos);
-
-          const walletNetwork = getNetworkFromAddress(address);
-          const expected = getExpectedNetworkType();
-          if (walletNetwork && walletNetwork !== expected) {
-            setState(prev => ({
-              ...prev,
-              isConnecting: false,
-              error: createWalletError('network_mismatch',
-                `Wallet is on ${walletNetwork}, dApp expects ${expected}`,
-                [`Switch ${walletDisplayName} to ${expected}`]),
-            }));
-            await conn.disconnect();
-            setErgo(null);
-            return;
-          }
-
-          setState(prev => ({
-            ...prev,
-            isConnected: true,
-            isConnecting: false,
-            isLocked: false,
-            walletAddress: address,
-            balance: isNaN(bal) ? undefined : bal,
-            tokens,
-            network: walletNetwork,
-          }));
-          log.log('[Wallet] Reconnected (fast path)');
-          return;
-        }
-      } catch (err) {
-        log.warn('[Wallet] Fast path failed, falling back:', err);
-      }
-    }
-
-    // Popup-blocking pre-check
-    if (isPopupBlocked()) {
-      log.warn('[Wallet] Popups appear to be blocked');
-    }
-
-    // Full connect flow
-    connectGuard.current = true;
-
-    try {
-      log.log(`[Wallet] Calling ${walletDisplayName}.connect() — check extension icon or popup!`);
+      // ── The one and only connect() call ──
+      // EIP-12: conn.connect() triggers the wallet popup.
+      // - If dApp is NOT authorized: shows popup, resolves true/false based on user choice.
+      // - If dApp IS already authorized: resolves true immediately (no popup).
+      //
+      // We intentionally do NOT call isConnected() or any pre-flight checks before this.
+      // Pre-flight isConnected() calls can:
+      //   1. Timeout on slow/stalled extensions, aborting the connect flow entirely
+      //   2. Race with the user's intent to connect (Nautilus throws code -3 when not connected)
+      //   3. Add unnecessary latency before the popup appears
+      //
+      // Directly calling connect() is the standard EIP-12 flow and avoids all these issues.
+      // If the extension is unresponsive, the 30s CONNECT_TIMEOUT handles it.
+      //
+      // @see https://github.com/ergoplatform/eips/blob/master/eip-0012.md
 
       const connectPromise = conn.connect();
       const timeoutPromise = new Promise<never>((_, reject) => {
@@ -442,7 +339,6 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
             `Connection timed out — ${walletDisplayName} did not respond within 30 seconds`,
             [
               `Click the ${walletDisplayName} extension icon in your browser toolbar`,
-              'Allow popups for localhost:3000 in your browser settings',
               `Make sure ${walletDisplayName} is unlocked`,
               'Try refreshing the page and connecting again',
             ]),
@@ -465,7 +361,19 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
 
       log.log('[Wallet] Connection approved! Getting context...');
 
+      // Get the EIP-12 context API
       const ctx = await conn.getContext();
+      if (!ctx) {
+        setState(prev => ({
+          ...prev,
+          isConnecting: false,
+          error: createWalletError('wallet_error',
+            'Failed to get wallet context after connection',
+            ['Try disconnecting and reconnecting']),
+        }));
+        return;
+      }
+
       setErgo(ctx);
 
       const address = await ctx.get_change_address();
@@ -522,7 +430,7 @@ export function useErgoWallet(options: UseErgoWalletOptions): UseErgoWalletRetur
     } finally {
       connectGuard.current = false;
     }
-  }, [walletKey, walletDisplayName]);
+  }, [walletKey, walletDisplayName, saveSession]);
 
   // ─── disconnect ───────────────────────────────────────────────
 
