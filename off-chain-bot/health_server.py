@@ -52,7 +52,7 @@ class HealthServer:
 
         cors_config = {
             origin: aiohttp_cors.ResourceOptions(
-                allow_credentials=True,
+                allow_credentials=True
                 expose_headers="*",
                 allow_headers="*",
             )
