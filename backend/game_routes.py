@@ -430,7 +430,29 @@ async def get_player_comp(address: str):
 
 @router.get("/pool/state")
 async def pool_state():
-    """Return current pool state including liquidity and safe max bet."""
+    """Return current pool state including liquidity and safe max bet.
+
+    Tries to fetch real wallet balance from the Ergo node. Falls back to
+    in-memory tracking if node is unavailable.
+    """
+    # Try to get real wallet balance from node
+    try:
+        import httpx
+        node_url = os.environ.get("NODE_URL", "http://localhost:9052")
+        api_key = os.environ.get("NODE_API_KEY", "")
+        headers = {}
+        if api_key:
+            headers["api_key"] = api_key
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.get(f"{node_url}/wallet/balances", headers=headers)
+            resp.raise_for_status()
+            wallet_data = resp.json()
+            real_balance = int(wallet_data.get("balance", 0))
+            if real_balance > 0:
+                _pool_stats["liquidity"] = str(real_balance)
+    except Exception:
+        pass  # Fall back to in-memory value
+
     return {
         "liquidity": _pool_stats["liquidity"],
         "totalBets": _pool_stats["totalBets"],
@@ -439,6 +461,7 @@ async def pool_state():
         "totalFees": _pool_stats["totalFees"],
         "safeMaxBet": get_safe_max_bet(),
     }
+
 
 @router.get("/contract-info")
 async def contract_info():
