@@ -1,5 +1,5 @@
 /**
- * DuckPools Coinflip Contract v2-final
+ * DuckPools Coinflip Contract v2-final (R4-R9 compatible)
  *
  * Canonical commit-reveal coinflip for Ergo blockchain.
  * This is the Phase 2 production contract.
@@ -8,12 +8,13 @@
  *   1. PLAYER COMMITS: Frontend generates random 8-byte secret, computes
  *      commitment = blake2b256(secret || choice_byte), sends commitment
  *      + choice + secret to backend. Backend creates PendingBetBox on-chain
- *      with this contract, R4-R10 populated.
+ *      with this contract, R4-R9 populated.
  *
  *   2. HOUSE REVEALS: Backend observes new PendingBetBox, waits until
- *      rngBlockHeight, fetches current block header, computes
- *      RNG = blake2b256(blockId || secret)[0] % 2, builds reveal
- *      transaction spending the bet box. Must reveal before timeoutHeight.
+ *      rngBlockHeight (= timeoutHeight - REVEAL_WINDOW), fetches current
+ *      block header, computes RNG = blake2b256(blockId || secret)[0] % 2,
+ *      builds reveal transaction spending the bet box. Must reveal before
+ *      timeoutHeight.
  *
  *   3. PAYOUT: If playerWins, OUTPUTS(0) goes to player with >= 1.94x bet.
  *      If houseWins, OUTPUTS(0) goes to house with full bet amount.
@@ -23,11 +24,17 @@
  *
  * SECURITY MODEL (PoC+):
  *   - Player secret (R9) is visible on-chain. Honest house assumption.
- *   - House must pre-commit to reveal height (R10) at bet creation.
- *     This limits the block-grinding window to
- *     (timeoutHeight - rngBlockHeight) blocks (default: 30).
+ *   - House reveal window is derived: rngBlockHeight = timeoutHeight - 30.
+ *     This limits the block-grinding window to 30 blocks (~60 min on Ergo).
  *   - Only house can reveal. Player must wait for timeout if house offline.
  *   - Production hardening: ZK proofs, oracle RNG, player-initiated reveal.
+ *
+ * NOTE ON R10 LIMITATION:
+ *   ErgoScript on Lithos 6.0.3 only supports registers R4-R9 (6 registers).
+ *   R10 (rngBlockHeight) is not available. Instead, we derive it from
+ *   timeoutHeight: rngBlockHeight = timeoutHeight - REVEAL_WINDOW_BLOCKS.
+ *   The backend MUST set timeoutHeight such that the reveal window starts
+ *   30 blocks before the timeout.
  *
  * COMPILED (2026-03-30, ergo-6.0.3 Lithos testnet, treeVersion=1):
  *   R4:  Coll[Byte]  -- house compressed public key (33 bytes)
@@ -36,16 +43,20 @@
  *   R7:  Int         -- player's choice: 0=heads, 1=tails
  *   R8:  Int         -- timeout block height for refund
  *   R9:  Coll[Byte]  -- player secret (8 random bytes)
- *   R10: Int         -- pre-committed reveal height (earliest block house can reveal)
  *
  * ECONOMICS:
  *   House edge: 3% (player gets 1.94x on win instead of 2x)
  *   Refund fee: 2% (player gets 0.98x on timeout refund)
  *   Timeout:    100 blocks (~200 minutes on Ergo)
- *   Reveal window: 30 blocks (~60 minutes, rngBlockHeight to timeoutHeight)
+ *   Reveal window: 30 blocks (~60 minutes, derived as timeoutHeight - 30)
  */
 
 {
+  // -- Constants -----------------------------------------------------
+  // Reveal window in blocks. House can reveal between
+  // (timeoutHeight - REVEAL_WINDOW) and timeoutHeight.
+  val REVEAL_WINDOW: Int = 30
+
   // -- Read registers ------------------------------------------------
   val housePkBytes:    Coll[Byte] = SELF.R4[Coll[Byte]].get
   val playerPkBytes:   Coll[Byte] = SELF.R5[Coll[Byte]].get
@@ -53,7 +64,10 @@
   val playerChoice:    Int         = SELF.R7[Int].get
   val timeoutHeight:   Int         = SELF.R8[Int].get
   val playerSecret:    Coll[Byte] = SELF.R9[Coll[Byte]].get
-  val rngBlockHeight:  Int         = SELF.R10[Int].get
+
+  // -- Derived values ------------------------------------------------
+  // Reveal window start: 30 blocks before timeout
+  val rngBlockHeight: Int = timeoutHeight - REVEAL_WINDOW
 
   // -- Derive SigmaProps from raw PK bytes ---------------------------
   val housePk:  GroupElement = decodePoint(housePkBytes)

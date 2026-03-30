@@ -39,6 +39,10 @@
  * For production deployment, cryptographic guarantees must be enforced on-chain.
  *
  * See ARCHITECTURE.md for full security analysis.
+ *
+ * NOTE: This is the LEGACY contract (NFT-based auth, R4-R10).
+ * The CANONICAL contract is coinflip_v2_final.es (PK-based auth, R4-R9).
+ * v1 is kept for reference only. Do NOT deploy.
  */
 
 {
@@ -97,7 +101,7 @@
     OUTPUTS(0).propositionBytes == fromSelf.R5[Coll[Byte]].get && // Player gets payout
     
     // Verify commitment: blake2b256(secret || choice) matches stored commitment
-    // CRITICAL (SEC-CRITICAL-1): MUST use blake2b256 — the native Ergo hash opcode.
+    // CRITICAL (SEC-CRITICAL-1): MUST use blake2b256 -- the native Ergo hash opcode.
     // SHA-256 would cause every reveal to fail on-chain.
     val secretBytes = playerSecret.toBytes
     val choiceBytes = playerChoice.toBytes
