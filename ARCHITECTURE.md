@@ -27,9 +27,9 @@ DuckPools CoinFlip is a proof-of-concept decentralized gambling application buil
    - House spends commit box, pays player if they win
 
 3. **Refund Phase**: Player timeout protection
-   - If currentHeight > R10[TimeoutHeight], player can spend commit box
+   - If HEIGHT >= R8[TimeoutHeight], player can spend commit box
    - Player receives bet amount minus 2% fee
-   - House reclaims game NFT
+   - Note: v2_final uses PK-based auth, no NFTs
 
 ## Security Considerations (Production vs. PoC)
 
@@ -75,27 +75,43 @@ For a production system, the following would be needed:
 - House commitment to block height before reveal
 - Economic stakes for house (security deposit slashed on misbehavior)
 
-## Smart Contract: coinflip_v2.es (deployed)
+## Smart Contract: coinflip_v2_final.es (canonical, deployed)
 
-### Register Layout
+### Register Layout (R4-R9 only; R10 not supported in ErgoScript Lithos 6.0.3)
 | Register | Type | Content |
 |----------|------|---------|
 | R4 | Coll[Byte] | House compressed public key (33 bytes) |
 | R5 | Coll[Byte] | Player compressed public key (33 bytes) |
-| R6 | Coll[Byte] | Commitment hash: blake2b256(secret \|\| choice) (32 bytes) |
+| R6 | Coll[Byte] | Commitment hash: blake2b256(secret \|\| choice_byte) (32 bytes) |
 | R7 | Int | Player choice: 0=heads, 1=tails |
-| R8 | Int | Timeout height for refund |
-| R9 | Coll[Byte] | Player secret (32 random bytes) |
+| R8 | Int | Timeout height for refund (~100 blocks from bet) |
+| R9 | Coll[Byte] | Player secret (8 random bytes) |
+
+### Derived Values
+- `rngBlockHeight = timeoutHeight - 30` (REVEAL_WINDOW constant in contract)
+- Reveal window: house can reveal between rngBlockHeight and timeoutHeight
 
 ### Guard Clauses
-- **Reveal path (house)**: houseProp && commitmentOk && correct payout output
+- **Reveal path (house)**: houseProp && commitmentOk && (HEIGHT in reveal window) && correct payout output
 - **Refund path (player)**: HEIGHT >= timeoutHeight && playerProp && refund >= 98% of bet
-- **Commitment verification**: blake2b256(R9[Secret] ++ R7[Choice]) == R6[CommitmentHash]
+- **Commitment verification**: blake2b256(R9[Secret] ++ Coll(choiceByte)) == R6[CommitmentHash]
 - **RNG**: blake2b256(prevBlockHash ++ R9[Secret])[0] % 2
 
 ### Spend Paths
-1. **House Reveal**: Verifies commitment, determines outcome via block-hash RNG, pays winner
-2. **Player Refund**: After timeout height, player reclaims 98% of bet
+1. **House Reveal**: Verifies commitment, checks reveal window, determines outcome via block-hash RNG, pays winner
+2. **Player Refund**: After timeout height, player reclaims 98% of bet (2% spam-prevention fee)
+
+### Economics
+- House edge: 3% (player gets 1.94x on win instead of 2x)
+- Refund fee: 2% (player gets 0.98x on timeout refund)
+- Timeout: 100 blocks (~200 minutes on Ergo)
+- Reveal window: 30 blocks (~60 minutes, derived as timeoutHeight - 30)
+
+### Legacy Contracts
+- `coinflip_v1.es`: NFT-based auth, LEGACY, do NOT deploy. Has compilation issues.
+- `coinflip_v2.es`: Early PK-based version, no reveal window. Superseded by v2_final.
+- `coinflip_v3.es`: Added R10 (rngBlockHeight) but R10 not supported on Lithos 6.0.3.
+- `coinflip_commit_reveal.es`: Duplicate of v2 with different comments.
 
 ## Backend Architecture
 
@@ -204,9 +220,15 @@ Simulation code has redacted `secret_bytes`, making statistical tests invalid.
 
 ## Testing
 
-### Unit Tests
-- backend/tests/test_game_routes.py (incomplete)
-- backend/tests/test_rng_module.py (statistical tests)
+### Smart Contract Tests (95 tests, ALL PASSING)
+- `smart-contracts/tests/test_coinflip_v2_final.py` — 41 tests: commitment verification, RNG, payout math, reveal/refund paths, end-to-end flows, edge cases
+- `smart-contracts/tests/test_contract_logic.py` — 54 tests: v2 and v3 contract logic, reveal window, NFT preservation notes, edge cases
+- Run: `pytest smart-contracts/tests/ -v`
+
+### RNG Fairness Verification
+- `smart-contracts/rng_fairness_verify.py` — Standalone module: commitment verification, flip computation, statistical fairness (chi-squared, runs test, serial correlation)
+- Run: `python3 smart-contracts/rng_fairness_verify.py`
+- All statistical tests PASS (uniformity, independence, no autocorrelation)
 
 ### E2E Tests
 - tests/e2e/coinflip.spec.ts (Frontend coinflip flow)
@@ -214,7 +236,7 @@ Simulation code has redacted `secret_bytes`, making statistical tests invalid.
 
 ### Coverage Gaps
 - No backend API tests for coinflip endpoints (MAT-331)
-- No integration tests for full game flow
+- No on-chain integration tests (require running Ergo node + sigma-rust)
 - No performance tests under load
 
 ## Deployment
