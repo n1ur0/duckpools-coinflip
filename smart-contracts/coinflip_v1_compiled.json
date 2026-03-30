@@ -1,0 +1,10 @@
+{
+  "contract": "coinflip_v1",
+  "address": "3YZJXm91yq75pAgtpfHKCaJzHvV25uZP1iGSPkJ2Qu1F5iBWmWWWoTDyfpoUyvRETs6zSXwJgDR7n74tvFMDnsDQ96jBxFKNZbC1KWcfhx97WYtv6YozZ6s12oKAKBoJbfU97iK999xXyeUUa4iyiSuB1Bnke3gcuj6o8QeVtvYhGezTMsmxzS7dJTCXke8PtwxRa6iCXqzpTG4NRFkY8rU66b6qCXAJBafGK9AYfojkELpJynyrm6NtXkmUsW6hsfC7fzo5pmLCjvw9NpTNAjsqtiDokCCeuPEkcz9JjqTTDXfiASuda6EiBTBCqPH642xHcFbSj4Ujm1ooam4dk5rQq8qDWViheVpx3FN5b1FRpwfHLvV6Kg7FFUz4AjqFzzjWus7MHJb2aUbdqaH",
+  "ergoTree": "",
+  "ergoTreeHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "compiledAt": "2026-03-30T17:53:09Z",
+  "network": "testnet",
+  "treeVersion": 1,
+  "status": "compiled_successfully"
+}

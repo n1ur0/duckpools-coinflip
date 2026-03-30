@@ -4,10 +4,9 @@
  * Commit-reveal coinflip with on-chain block-hash RNG and NFT preservation.
  *
  * DIFFERENCES FROM v1:
- *   - Same register layout (R4-R10)
+ *   - Same register layout (R4-R9)
  *   - Same commit-reveal RNG scheme
  *   - Added NFT preservation guard in both reveal and refund paths
- *     (v1 originally had NFT logic but with compilation errors)
  *
  * TRUST ASSUMPTIONS (see ARCHITECTURE.md for details):
  * - TA-1: Player secret stored in R9 is visible on-chain. Any observer
@@ -17,9 +16,13 @@
  * - TA-2: House selects the reveal block (block-hash grinding risk).
  *   The house controls when to submit the reveal tx, so it could
  *   theoretically wait for a favorable block hash. Mitigated by the
- *   timeout mechanism (R8) and reveal window (R10).
+ *   timeout mechanism (R8).
  * - TA-3: Only the house can trigger reveal. No player-initiated reveal.
  *   If the house is offline, the player must wait for timeout.
+ *
+ * NOTE: R10 (rngBlockHeight) is NOT supported by Lithos 6.0.3.
+ *       Reveal window is enforced off-chain by the house backend.
+ *       See coinflip_v3.es documentation for the R10 design.
  *
  * REGISTER LAYOUT:
  *   R4:  Coll[Byte]  — house's compressed public key (33 bytes)
@@ -28,13 +31,12 @@
  *   R7:  Int         — player's choice: 0=heads, 1=tails
  *   R8:  Int         — timeout block height for refund
  *   R9:  Coll[Byte]  — player's secret (8 random bytes)
- *   R10: Int         — pre-committed reveal height
  *
  * TOKEN LAYOUT:
  *   Token 0: Game NFT (amount=1) — preserved in OUTPUTS(1) for both paths
  *
  * SPENDING PATHS:
- *   1. REVEAL (house): Verifies commitment, checks reveal window, pays winner
+ *   1. REVEAL (house): Verifies commitment, pays winner
  *   2. REFUND (player): After timeout, player reclaims bet minus 2% fee
  */
 
@@ -46,7 +48,6 @@
   val playerChoice:    Int         = SELF.R7[Int].get
   val timeoutHeight:   Int         = SELF.R8[Int].get
   val playerSecret:    Coll[Byte] = SELF.R9[Coll[Byte]].get
-  val rngBlockHeight:  Int         = SELF.R10[Int].get
 
   // -- Derive SigmaProps from raw PK bytes ---------------------------
   val housePk:  GroupElement = decodePoint(housePkBytes)
@@ -79,11 +80,10 @@
   val winPayout    = betAmount * 97L / 50L
   val refundAmount = betAmount - betAmount / 50L
 
-  // -- REVEAL path: house spends within reveal window ----------------
+  // -- REVEAL path: house spends before timeout ----------------------
   val canReveal: Boolean = {
     houseProp && commitmentOk && nftPreserved && {
-      val revealWindow = (HEIGHT >= rngBlockHeight) && (HEIGHT <= timeoutHeight)
-      revealWindow && {
+      HEIGHT < timeoutHeight && {
         if (playerWins) {
           OUTPUTS(0).propositionBytes == playerProp.propBytes &&
           OUTPUTS(0).value >= winPayout
