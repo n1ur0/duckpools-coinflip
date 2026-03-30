@@ -220,10 +220,10 @@ Simulation code has redacted `secret_bytes`, making statistical tests invalid.
 
 ## Testing
 
-### Smart Contract Tests (95 tests, ALL PASSING)
-- `smart-contracts/tests/test_coinflip_v2_final.py` — 41 tests: commitment verification, RNG, payout math, reveal/refund paths, end-to-end flows, edge cases
+### Smart Contract Tests (102 tests, ALL PASSING)
+- `smart-contracts/tests/test_coinflip_v2_final.py` — 48 tests: commitment verification, RNG, payout math, reveal/refund paths, reveal window (7 tests), end-to-end flows, edge cases
 - `smart-contracts/tests/test_contract_logic.py` — 54 tests: v2 and v3 contract logic, reveal window, NFT preservation notes, edge cases
-- Run: `pytest smart-contracts/tests/ -v`
+- Run: `python3 -m pytest smart-contracts/tests/ -v`
 
 ### RNG Fairness Verification
 - `smart-contracts/rng_fairness_verify.py` — Standalone module: commitment verification, flip computation, statistical fairness (chi-squared, runs test, serial correlation)
