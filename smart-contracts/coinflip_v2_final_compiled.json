@@ -1,19 +1,20 @@
 {
   "contract": "coinflip_v2_final",
-  "version": "v2-final-r4r9-compatible",
-  "address": "3QHN2BNDtWXVmBbwuyZNijhcAd92Ww9kD7j8PbrqVfjJsyabJ134mEuwJykbET5jsbebLtWfGMtSJUubgMdK5gfF6ve6WqM6gBBxQzZo58BoQDRbFf3qqvpNhiStgVFibfu55u7d31u6igiaWuEqyMQEEDCYxFgoMYK8VHDuP3hjXCUDdbyAfiEwYmAeHH2QKFrYUQV5bNWafbvhRgSZnDFc3bXwohrmP4rnNaMxrNJ9TC7r9QWm3yNFrrQj6CphdciEcYKh27H6UoeF9yPZjHyqGRZWMJsZGWZSwibxgebZW8Hqp6CLRrabSYPEwrKjtmXBdXtmb63x",
+  "address": "88q9jJjaRZsmAmbJqKEjSqeFHtsP4RsAB3pSgsTQNwGYf9gnGCKjKqP4BcpR6xCjaGGo13C8qQWE1zU2trNpuetCG4uS5mU2wkid4HyDd4cWj7kkxeFtnPNEaSznceEB46RpTJ8SXQiXKuk6p4RVj4wqzcUWDZGn5taF3XYMT5f7GGp4HdJT3wizd9XZQz466c8JiRS21JW92w9wdj2AFUR4vS3Q4Z2cLPTbt1FBdT73dVe2CjR81Hbc9iXFk2FF3hxjF86bx1ZsyfqQ7M3ff24JvCgDo3QwdteKFnkzcf3PiM9rL5b3aCyxpmUEfG2SGrmafX43i",
   "ergoTree": "",
-  "sourceFile": "smart-contracts/coinflip_v2_final.es",
-  "sourceLength": 6089,
-  "compiledAt": "2026-03-30T18:07:12.837828Z",
+  "ergoTreeHash": "",
+  "compiledAt": "2026-03-30T18:23:45Z",
   "nodeVersion": "6.0.3",
   "network": "testnet",
+  "treeVersion": 1,
+  "status": "compiled_successfully",
+  "description": "Canonical contract with reveal window (R4-R9)",
   "registerLayout": {
     "R4": "housePubKey (Coll[Byte]) - house compressed PK (33 bytes)",
     "R5": "playerPubKey (Coll[Byte]) - player compressed PK (33 bytes)",
     "R6": "commitmentHash (Coll[Byte]) - blake2b256(secret||choice) (32 bytes)",
     "R7": "playerChoice (Int) - 0=heads, 1=tails",
-    "R8": "timeoutHeight (Int) - timeout block height",
+    "R8": "timeoutHeight (Int) - timeout block height for refund",
     "R9": "playerSecret (Coll[Byte]) - player secret (8 random bytes)"
   },
   "economics": {

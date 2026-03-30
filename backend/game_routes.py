@@ -27,18 +27,21 @@ logger = logging.getLogger("duckpools.game")
 router = APIRouter(tags=["game"])
 
 # ─── Compiled Contract Constants ──────────────────────────────────
-# coinflip_v2.es compiled 2026-03-28 against node v6.0.3 (Lithos testnet)
+# coinflip_v2_final.es compiled 2026-03-30 against node v6.0.3 (Lithos testnet)
 # Values MUST match smart-contracts/coinflip_deployed.json
-COINFLIP_P2S_ADDRESS = "3yNMkSZ6b36YGBJJNhpavxxCFg4f2ceH5JF81hXJgzWoWozuFJSjoW8Q5JXow6fsTVNrqz48h8a9ajYSTKfwaxG16GbHzxrDcsarkBkbR6NYdGeoCZ9KgNcNMYPLV9RPkLFwBPLHxDxyTmBfqn5L75zqftETuAadKr8FHEYZrVPZ6kn6gdiZbzMwghxRy2g4wpTdby4jnxhA42UH7JJzMibgMNBW4yvzw8EaguPLVja6xsxx43yihw5DEzMGzL7HKWYUs6uVugK1C8Feh3KUX9kpea5xpLXX5oZCV47W6cnTrJfJD3"
-COINFLIP_ERGO_TREE = "19d8010c04000200020104000404040005c20105640400040004000564d805d601cdeee4c6a7040ed602e4c6a7090ed603e4c6a70704d604cdeee4c6a7050ed605c1a7eb02ea02ea027201d193cbb3720283010295937203730073017302e4c6a7060ed195939e7eb2cbb3db6902db6503fe72027303000473047203d801d606b2a5730500ed93c27206d0720492c172069d9c720573067307d801d606b2a5730800ed93c27206d0720192c172067205ea02ea02ea02d192a3e4c6a708047204d193c2b2a5730900d07204d192c1b2a5730a009972059d7205730b"
+# NOTE: R10 not supported in ErgoScript 6.0.3. Reveal window derived from
+#       timeoutHeight - 30 (REVEAL_WINDOW constant in contract).
+COINFLIP_P2S_ADDRESS = "88q9jJjaRZsmAmbJqKEjSqeFHtsP4RsAB3pSgsTQNwGYf9gnGCKjKqP4BcpR6xCjaGGo13C8qQWE1zU2trNpuetCG4uS5mU2wkid4HyDd4cWj7kkxeFtnPNEaSznceEB46RpTJ8SXQiXKuk6p4RVj4wqzcUWDZGn5taF3XYMT5f7GGp4HdJT3wizd9XZQz466c8JiRS21JW92w9wdj2AFUR4vS3Q4Z2cLPTbt1FBdT73dVe2CjR81Hbc9iXFk2FF3hxjF86bx1ZsyfqQ7M3ff24JvCgDo3QwdteKFnkzcf3PiM9rL5b3aCyxpmUEfG2SGrmafX43i"
+COINFLIP_ERGO_TREE = ""  # ergoTree hex not returned by Lithos 6.0.3 /script/p2sAddress; P2S address is sufficient
 
-# Register layout (must match coinflip_v2.es and frontend coinflipService.ts)
+# Register layout (must match coinflip_v2_final.es and frontend coinflipService.ts)
 # R4: housePubKey (Coll[Byte])     — 33-byte compressed public key
 # R5: playerPubKey (Coll[Byte])    — 33-byte compressed public key
 # R6: commitmentHash (Coll[Byte])  — blake2b256(secret || choice_byte)
 # R7: playerChoice (Int)           — 0=heads, 1=tails
 # R8: timeoutHeight (Int)          — block height for refund
 # R9: playerSecret (Coll[Byte])    — player's random secret bytes
+# DERIVED: rngBlockHeight = timeoutHeight - 30 (reveal window)
 
 
 # ─── Response Models (match frontend types/Game.ts) ────────────────
@@ -86,6 +89,7 @@ class PlaceBetRequest(BaseModel):
     boxId: str = ""  # On-chain box ID (populated after tx broadcast)
     timeoutHeight: int = 0  # On-chain timeout height (R8 register)
     housePubKey: str = ""  # House compressed PK (R4) — 33 bytes hex
+    houseAddress: str = ""  # House P2PK address (for reveal payout when house wins)
     playerPubKey: str = ""  # Player compressed PK (R5) — 33 bytes hex
     playerSecret: str = ""  # Player random secret (R9) — hex string
     playerErgoTree: str = ""  # Player P2PK ergoTree (for refund tx output)
@@ -151,6 +155,68 @@ class PlaceBetRequest(BaseModel):
         # Check for duplicate betId in current bets (prevent replay attacks)
         if any(bet.get("betId") == v for bet in _bets):
             raise ValueError("betId already exists - please use a unique identifier")
+        return v
+
+    @field_validator("playerSecret")
+    @classmethod
+    def validate_player_secret(cls, v: str) -> str:
+        """Validate player secret: must be 16 hex chars (8 bytes)."""
+        if not v or not isinstance(v, str):
+            raise ValueError("playerSecret is required for commitment verification")
+        v = v.strip().lower()
+        if len(v) != 16:
+            raise ValueError(f"playerSecret must be 16 hex characters (8 bytes), got {len(v)}")
+        try:
+            int(v, 16)
+        except ValueError:
+            raise ValueError("playerSecret must be valid hex")
+        return v
+
+    @field_validator("housePubKey", "playerPubKey")
+    @classmethod
+    def validate_pubkey(cls, v: str) -> str:
+        """Validate compressed public key: must be 66 hex chars (33 bytes with 02/03 prefix)."""
+        if not v or not isinstance(v, str):
+            raise ValueError("public key is required")
+        v = v.strip().lower()
+        if len(v) != 66:
+            raise ValueError(f"compressed public key must be 66 hex chars (33 bytes), got {len(v)}")
+        try:
+            int(v, 16)
+        except ValueError:
+            raise ValueError("public key must be valid hex")
+        if not v.startswith(("02", "03")):
+            raise ValueError("compressed public key must start with 02 or 03 prefix")
+        return v
+
+    @field_validator("boxId")
+    @classmethod
+    def validate_box_id(cls, v: str) -> str:
+        """Validate optional on-chain box ID: must be 64 hex chars (32-byte box hash)."""
+        if not v:
+            return v  # Optional field — empty is ok (box created after tx)
+        v = v.strip()
+        if len(v) != 64:
+            raise ValueError(f"boxId must be 64 hex characters (32 bytes), got {len(v)}")
+        try:
+            int(v, 16)
+        except ValueError:
+            raise ValueError("boxId must be valid hex")
+        return v
+
+    @field_validator("playerErgoTree")
+    @classmethod
+    def validate_player_ergo_tree(cls, v: str) -> str:
+        """Validate player P2PK ergoTree hex."""
+        if not v:
+            return v  # Optional — can be derived from address
+        v = v.strip()
+        if len(v) < 4:
+            raise ValueError("playerErgoTree must be a valid hex string")
+        try:
+            int(v, 16)
+        except ValueError:
+            raise ValueError("playerErgoTree must be valid hex")
         return v
 
 
@@ -401,7 +467,30 @@ async def get_player_comp(address: str):
 
 @router.get("/pool/state")
 async def pool_state():
-    """Return current pool state including liquidity and safe max bet."""
+    """Return current pool state including liquidity and safe max bet.
+
+    Tries to fetch real wallet balance from the Ergo node. Falls back to
+    in-memory tracking if node is unavailable.
+    """
+    # Try to get real wallet balance from node
+    try:
+        import httpx
+        node_url = os.environ.get("NODE_URL", "http://localhost:9052")
+        api_key = os.environ.get("NODE_API_KEY", "")
+        headers = {}
+        if api_key:
+            headers["api_key"] = api_key
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.get(f"{node_url}/wallet/balances", headers=headers)
+            resp.raise_for_status()
+            wallet_data = resp.json()
+            real_balance = int(wallet_data.get("balance", 0))
+            if real_balance > 0:
+                # Update in-memory liquidity with real wallet balance
+                _pool_stats["liquidity"] = str(real_balance)
+    except Exception:
+        pass  # Fall back to in-memory value
+
     return {
         "liquidity": _pool_stats["liquidity"],
         "totalBets": _pool_stats["totalBets"],
@@ -419,7 +508,9 @@ async def contract_info():
         "p2sAddress": COINFLIP_P2S_ADDRESS,
         "ergoTree": COINFLIP_ERGO_TREE,
         "timeoutDelta": DEFAULT_TIMEOUT_DELTA,
+        "revealWindowBlocks": 30,  # Derived: timeoutHeight - 30
         "refundFeeBps": REFUND_FEE_BPS,
+        "houseEdgeBps": 300,  # 3%
         "registers": {
             "R4": "housePubKey (Coll[Byte])",
             "R5": "playerPubKey (Coll[Byte])",
@@ -526,6 +617,40 @@ async def place_bet(req: PlaceBetRequest, request: Request):
                 status_code=400,
                 detail=f"Invalid player secret or commitment: {str(e)}"
             )
+
+    # MAT-394: Verify on-chain box if boxId provided (PendingBetBox exists)
+    on_chain_box_value = 0
+    if req.boxId:
+        try:
+            box_data = await _fetch_box_by_id(req.boxId)
+            if box_data is None:
+                raise HTTPException(
+                    status_code=410,
+                    detail=f"PendingBetBox {req.boxId} not found on-chain. Transaction may have failed."
+                )
+            if box_data.get("spentTransactionId"):
+                raise HTTPException(
+                    status_code=410,
+                    detail=f"PendingBetBox {req.boxId} already spent. Cannot record this bet."
+                )
+            on_chain_box_value = int(box_data.get("value", 0))
+            # Verify box value matches declared bet amount
+            if on_chain_box_value != bet_amount:
+                logger.warning(
+                    "Box value mismatch: declared=%d on-chain=%d for bet %s",
+                    bet_amount, on_chain_box_value, req.betId,
+                )
+            # Verify the box is locked to our contract
+            box_address = box_data.get("address", "")
+            if box_address and box_address != COINFLIP_P2S_ADDRESS:
+                logger.warning(
+                    "Box %s locked to wrong contract: %s (expected %s)",
+                    req.boxId, box_address, COINFLIP_P2S_ADDRESS[:32],
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning("Failed to verify on-chain box %s: %s (continuing with off-chain record)", req.boxId, e)
     
     side = "heads" if req.choice == 0 else "tails"
 
@@ -548,6 +673,7 @@ async def place_bet(req: PlaceBetRequest, request: Request):
         # On-chain register data (for reveal and refund flows)
         "commitment": req.commitment,
         "housePubKey": req.housePubKey,
+        "houseAddress": req.houseAddress,
         "playerPubKey": req.playerPubKey,
         "playerSecret": req.playerSecret,
         "playerErgoTree": req.playerErgoTree,
@@ -582,6 +708,7 @@ async def place_bet(req: PlaceBetRequest, request: Request):
 
 # Timeout configuration (matches frontend TIMEOUT_DELTA = 100)
 DEFAULT_TIMEOUT_DELTA = 100  # blocks
+REVEAL_WINDOW_BLOCKS = 30  # blocks (must match coinflip_v2_final.es REVEAL_WINDOW)
 REFUND_FEE_BPS = 200  # 2% fee on refund (matching contract: betAmount - betAmount/50)
 
 
@@ -1037,19 +1164,23 @@ async def get_pending_bets_with_timeout(currentHeight: int = 0):
     }
 
 
-# ─── Reveal Transaction Builder (MAT-355) ────────────────────────────────────────
-# This endpoint is used by the off-chain bot to build reveal transactions.
-# It takes a bet box ID and current block hash, then builds an unsigned
-# transaction that spends the commit box, verifies the commitment, and
-# pays the winner according to the 97/50 payout multiplier.
+# ─── Reveal Transaction Builder (MAT-394) ────────────────────────────────────────
+# Builds REAL EIP-12 compatible reveal transactions using ergo_tx_builder.py
+# which calls the Ergo node /wallet/transaction/send with rawInputs.
+#
+# The reveal spending path in coinflip_v2_final.es requires:
+#   houseProp && commitmentOk && HEIGHT in [rngBlockHeight, timeoutHeight]
+#   && OUTPUTS(0) to winner with correct amount
 
 class RevealRequest(BaseModel):
     box_id: str
-    block_hash: str
+    block_hash: str  # block header ID used as RNG seed (CONTEXT.preHeader.parentId)
+
 
 class RevealResponse(BaseModel):
     success: bool = True
     unsigned_tx: str = ""
+    tx_id: str = ""          # Populated when tx is submitted on-chain
     bet_id: str = ""
     player_address: str = ""
     player_wins: bool = False
@@ -1065,24 +1196,31 @@ async def build_reveal_tx(req: RevealRequest):
     This endpoint is used by the off-chain bot to:
     1. Find the pending bet by box ID
     2. Verify the commitment using the provided block hash
-    3. Determine win/loss based on RNG
-    4. Calculate the 97/50 payout
+    3. Determine win/loss based on RNG (blake2b256(blockHash || secret)[0] % 2)
+    4. Calculate the 97/50 payout (matching on-chain contract exactly)
     5. Build and return an unsigned EIP-12 transaction
+
+    The unsigned tx can be signed externally or submitted via /bot/reveal-and-pay.
     
     Parameters:
     - box_id: The on-chain box ID of the pending bet
-    - block_hash: Current block hash used for RNG (prev block hash)
+    - block_hash: Block header ID for RNG seed (hex, 64 chars)
     
     Returns:
-    - unsigned_tx: Base64 encoded unsigned transaction
+    - unsigned_tx: Base64 encoded unsigned transaction (EIP-12)
     - bet_id: The bet identifier
     - player_wins: True if player won, False if house won
-    - payout_amount: Amount to pay the player (97% of bet)
+    - payout_amount: Amount to pay the player (betAmount * 97 / 50 for wins)
     """
-    import httpx
-    from base64 import b64encode
-    import json
-    
+    from ergo_tx_builder import (
+        compute_rng,
+        compute_win_payout,
+        verify_commitment,
+        build_unsigned_reveal_tx,
+        get_node_height,
+        fetch_unspent_box,
+    )
+
     # Find the bet by box ID
     bet = None
     for b in _bets:
@@ -1101,133 +1239,134 @@ async def build_reveal_tx(req: RevealRequest):
             status_code=400,
             detail=f"Bet {bet['betId']} is already {bet['outcome']}, cannot reveal"
         )
-    
+
     # Get current block height from node
     try:
-        currentHeight = await _fetch_node_height()
+        current_height = await get_node_height()
     except Exception:
         raise HTTPException(
             status_code=503,
             detail="Could not fetch current block height from Ergo node"
         )
-    
-    # Verify the commitment using the provided block hash
-    # This follows the same RNG logic as in frontend coinflipService.ts
-    try:
-        # Decode the commitment (R6 register)
-        commitment = bet.get("commitment", "")
-        if not commitment:
-            raise ValueError("Missing commitment in bet record")
-        
-        # Decode the player secret (R9 register)
-        player_secret = bet.get("playerSecret", "")
-        if not player_secret:
-            raise ValueError("Missing player secret in bet record")
-        
-        # RNG calculation using compute_rng from rng_module (matches on-chain exactly)
-        # Formula: blake2b256(blockId_raw_bytes || playerSecret_raw_bytes)[0] % 2
-        secret_bytes = bytes.fromhex(player_secret)
-        flip_result = compute_rng(req.block_hash, secret_bytes)
-        player_choice = 0 if bet["choice"]["side"] == "heads" else 1
-        player_wins = flip_result == player_choice
-        
-        # Calculate payout (97/50 multiplier for wins)
-        bet_amount = int(bet["betAmount"])
-        if player_wins:
-            payout = int(bet_amount * 97 / 50)  # 97% of bet amount (1.94x payout)
-        else:
-            payout = 0
-        
-        # Build the transaction (simplified - in real implementation would use Ergo API)
-        # This is a placeholder for the actual transaction building logic
-        # The bot would use this to sign and broadcast the transaction
-        
-        # For now, return a mock transaction
-        mock_tx = {
-            "type": "EIP-12",
-            "inputs": [
-                {
-                    "boxId": req.box_id,
-                    "ergoTree": COINFLIP_ERGO_TREE,
-                    "registers": {
-                        "R4": bet.get("housePubKey", ""),  # house public key
-                        "R5": bet.get("playerPubKey", ""),  # player public key
-                        "R6": commitment,  # commitment hash
-                        "R7": str(player_choice),  # player choice (0=heads, 1=tails)
-                        "R8": str(bet.get("timeoutHeight", 0)),  # timeout height
-                        "R9": player_secret  # player secret
-                    },
-                    "assets": [
-                        {
-                            "tokenId": "",
-                            "amount": str(bet_amount)
-                        }
-                    ]
-                }
-            ],
-            "outputs": [
-                {
-                    "address": bet["playerAddress"],
-                    "value": str(payout),
-                    "ergoTree": COINFLIP_ERGO_TREE,
-                    "registers": {
-                        "R4": bet.get("housePubKey", ""),
-                        "R5": bet.get("playerPubKey", ""),
-                        "R6": "",  # empty commitment for revealed state
-                        "R7": "2" if player_wins else "3",  # 2=win, 3=loss
-                        "R8": str(currentHeight),
-                        "R9": ""
-                    },
-                    "assets": []
-                }
-            ]
-        }
-        
-        unsigned_tx = b64encode(json.dumps(mock_tx).encode()).decode()
-        
-        # Update bet record (in real implementation, this would be done after transaction confirmation)
-        bet["outcome"] = "win" if player_wins else "loss"
-        bet["payout"] = str(payout)
-        bet["actualOutcome"] = {
-            "gameType": "coinflip",
-            "result": "win" if player_wins else "loss",
-            "rngValue": flip_result,
-            "slot": 0,
-            "multiplier": 1.94 if player_wins else 0
-        }
-        bet["resolvedAtHeight"] = currentHeight
-        
-        # MAT-231: Record P&L for resolved round
-        try:
-            from services.bankroll_pnl import record_round as record_pnl
-            house_fee = int(bet_amount * 3 // 100) if player_wins else bet_amount
-            record_pnl(
-                bet_id=bet["betId"],
-                player_address=bet["playerAddress"],
-                bet_amount_nanoerg=bet_amount,
-                outcome="win" if player_wins else "loss",
-                house_payout_nanoerg=payout,
-                house_fee_nanoerg=house_fee,
-                bet_timestamp=bet.get("timestamp"),
-            )
-        except Exception as pnl_err:
-            logger.warning("Failed to record P&L for bet %s: %s", bet["betId"], pnl_err)
-        
-        return RevealResponse(
-            success=True,
-            unsigned_tx=unsigned_tx,
-            bet_id=bet["betId"],
-            player_address=bet["playerAddress"],
-            player_wins=player_wins,
-            payout_amount=str(payout),
-            message=f"Reveal transaction built. Player {'wins' if player_wins else 'loses'}. Payout: {payout:,} nanoERG."
+
+    # Verify timeout not expired (reveal must happen before timeoutHeight)
+    timeout_h = bet.get("timeoutHeight", 0)
+    if timeout_h > 0 and current_height >= timeout_h:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Bet {bet['betId']} has expired (height {current_height} >= timeout {timeout_h}). "
+                   f"Player must use refund path."
         )
-        
+
+    # Verify reveal window: must be >= rngBlockHeight (timeoutHeight - 30)
+    rng_block_height = timeout_h - REVEAL_WINDOW_BLOCKS if timeout_h > 0 else 0
+    if rng_block_height > 0 and current_height < rng_block_height:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Reveal window not yet open: current {current_height} < rngHeight {rng_block_height}. "
+                   f"House must wait until height {rng_block_height} to prevent block-grinding."
+        )
+
+    # Fetch on-chain box to verify it's still unspent
+    box_data = await fetch_unspent_box(req.box_id)
+    if box_data is None:
+        raise HTTPException(
+            status_code=410,
+            detail=f"PendingBetBox {req.box_id} not found or already spent"
+        )
+    if box_data.get("spentTransactionId"):
+        raise HTTPException(
+            status_code=410,
+            detail=f"PendingBetBox {req.box_id} has already been spent"
+        )
+
+    # Get register data
+    commitment = bet.get("commitment", "")
+    player_secret_hex = bet.get("playerSecret", "")
+    if not commitment:
+        raise HTTPException(status_code=400, detail="Missing commitment in bet record")
+    if not player_secret_hex:
+        raise HTTPException(status_code=400, detail="Missing player secret in bet record")
+
+    # Compute RNG: blake2b256(blockHash_raw_bytes || playerSecret_raw_bytes)[0] % 2
+    flip_result = compute_rng(req.block_hash, player_secret_hex)
+    player_choice = 0 if bet["choice"]["side"] == "heads" else 1
+    player_wins = flip_result == player_choice
+
+    # Calculate payout using contract math: betAmount * 97 / 50 (integer division)
+    bet_amount = int(bet["betAmount"])
+    if player_wins:
+        payout = compute_win_payout(bet_amount)
+    else:
+        payout = bet_amount  # House takes full bet
+
+    # Build unsigned EIP-12 transaction
+    # Player address from R5, house address from bet record
+    player_addr = bet.get("playerAddress", "")
+    house_addr = bet.get("houseAddress", "")  # House P2PK address for payout when house wins
+
+    try:
+        unsigned_tx_b64 = await build_unsigned_reveal_tx(
+            bet_box_id=req.box_id,
+            bet_amount=box_data.get("value", bet_amount),
+            player_address=player_addr,
+            house_address=house_addr,
+            player_wins=player_wins,
+            current_height=current_height,
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to build reveal transaction: {str(e)}"
         )
+
+    # Update bet record (optimistic — actual confirmation happens after tx submission)
+    bet["outcome"] = "win" if player_wins else "loss"
+    bet["payout"] = str(payout)
+    bet["actualOutcome"] = {
+        "gameType": "coinflip",
+        "result": "win" if player_wins else "loss",
+        "rngValue": flip_result,
+        "slot": 0,
+        "multiplier": 1.94 if player_wins else 0,
+    }
+    bet["resolvedAtHeight"] = current_height
+
+    # Record P&L
+    try:
+        from services.bankroll_pnl import record_round as record_pnl
+        house_fee = int(bet_amount * 3 // 100) if player_wins else 0
+        record_pnl(
+            bet_id=bet["betId"],
+            player_address=bet["playerAddress"],
+            bet_amount_nanoerg=bet_amount,
+            outcome="win" if player_wins else "loss",
+            house_payout_nanoerg=payout,
+            house_fee_nanoerg=house_fee,
+            bet_timestamp=bet.get("timestamp"),
+        )
+    except Exception as pnl_err:
+        logger.warning("Failed to record P&L for bet %s: %s", bet["betId"], pnl_err)
+
+    # Update pool stats
+    if player_wins:
+        _pool_stats["playerWins"] += 1
+        current_liquidity = int(_pool_stats["liquidity"])
+        _pool_stats["liquidity"] = str(current_liquidity - payout)
+    else:
+        _pool_stats["houseWins"] += 1
+
+    return RevealResponse(
+        success=True,
+        unsigned_tx=unsigned_tx_b64,
+        bet_id=bet["betId"],
+        player_address=player_addr,
+        player_wins=player_wins,
+        payout_amount=str(payout),
+        message=f"Reveal tx built. Player {'wins' if player_wins else 'loses'}. "
+                f"Payout: {payout:,} nanoERG ({payout/1e9:.4f} ERG). "
+                f"RNG: blake2b256({req.block_hash[:16]}... || secret)[0] % 2 = {flip_result}"
+    )
 
 
 # ─── Auto-Reveal-and-Pay Endpoint (for off-chain bot) ──────────────────────
@@ -1249,135 +1388,183 @@ async def reveal_and_pay(req: RevealRequest):
     Build AND auto-submit a reveal transaction via the house node wallet.
 
     This endpoint is called by the off-chain bot. It:
-    1. Builds the reveal transaction (same as /bot/build-reveal-tx)
-    2. Signs it with the house wallet (via Ergo node /wallet/transactions)
-    3. Broadcasts the signed transaction to the network
-    4. Returns the transaction ID
+    1. Finds the pending bet by box ID (or bet ID fallback)
+    2. Verifies the bet is still pending and not expired
+    3. Computes RNG using the provided block hash
+    4. Builds a reveal transaction via ergo_tx_builder
+    5. Signs and broadcasts via the Ergo node /wallet/transaction/send
+    6. Updates off-chain bet record and P&L
 
     Prerequisites:
     - House wallet must be unlocked on the Ergo node
     - NODE_API_KEY must be configured
     - The PendingBetBox must be unspent on-chain
     """
-    import httpx
-    from base64 import b64encode
+    from ergo_tx_builder import (
+        compute_rng,
+        compute_win_payout,
+        build_and_send_reveal_tx,
+        get_node_height,
+        fetch_unspent_box,
+    )
 
-    # 1. Build the reveal transaction first (reuse build_reveal_tx logic)
+    # 1. Find the bet by box ID or bet ID
+    bet = None
+    for b in _bets:
+        if b.get("boxId") == req.box_id:
+            bet = b
+            break
+        # Fallback: box_id may be passed as betId (when no on-chain box yet)
+        if b.get("betId") == req.box_id:
+            bet = b
+            break
+
+    if not bet:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Bet with box_id or bet_id {req.box_id} not found"
+        )
+
+    if bet["outcome"] != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Bet {bet['betId']} is already {bet['outcome']}, cannot reveal"
+        )
+
+    # 2. Get current block height
     try:
-        # Find the bet by box ID or bet ID
-        bet = None
-        for b in _bets:
-            if b.get("boxId") == req.box_id:
-                bet = b
-                break
-            # Fallback: box_id may be passed as betId (when no on-chain box yet)
-            if b.get("betId") == req.box_id:
-                bet = b
-                break
+        current_height = await get_node_height()
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not fetch current block height from Ergo node"
+        )
 
-        if not bet:
+    # Verify timeout window
+    timeout_h = bet.get("timeoutHeight", 0)
+    if timeout_h > 0 and current_height >= timeout_h:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Bet {bet['betId']} has expired at height {timeout_h}. "
+                   f"Player must use refund path."
+        )
+    rng_block_height = timeout_h - REVEAL_WINDOW_BLOCKS if timeout_h > 0 else 0
+    if rng_block_height > 0 and current_height < rng_block_height:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Reveal window not yet open (current {current_height} < rngHeight {rng_block_height})"
+        )
+
+    # 3. Verify on-chain box exists and is unspent
+    box_id = bet.get("boxId", "")
+    if box_id:
+        box_data = await fetch_unspent_box(box_id)
+        if box_data is None:
             raise HTTPException(
-                status_code=404,
-                detail=f"Bet with box_id or bet_id {req.box_id} not found"
+                status_code=410,
+                detail=f"PendingBetBox {box_id} not found or already spent"
             )
-
-        if bet["outcome"] != "pending":
+        if box_data.get("spentTransactionId"):
             raise HTTPException(
-                status_code=400,
-                detail=f"Bet {bet['betId']} is already {bet['outcome']}, cannot reveal"
+                status_code=410,
+                detail=f"PendingBetBox {box_id} has already been spent"
             )
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Bet has no on-chain boxId — cannot build reveal transaction"
+        )
 
-        # Get current block height
-        currentHeight = await _fetch_node_height()
+    # 4. Compute RNG
+    player_secret_hex = bet.get("playerSecret", "")
+    if not player_secret_hex:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing player secret in bet record — cannot compute RNG"
+        )
 
-        # Get player secret for RNG
-        player_secret = bet.get("playerSecret", "")
-        if not player_secret:
-            raise HTTPException(
-                status_code=400,
-                detail="Missing player secret in bet record — cannot compute RNG"
-            )
+    flip_result = compute_rng(req.block_hash, player_secret_hex)
+    player_choice = 0 if bet["choice"]["side"] == "heads" else 1
+    player_wins = flip_result == player_choice
 
-        # Compute RNG using verified compute_rng
-        secret_bytes = bytes.fromhex(player_secret)
-        flip_result = compute_rng(req.block_hash, secret_bytes)
-        player_choice = 0 if bet["choice"]["side"] == "heads" else 1
-        player_wins = flip_result == player_choice
+    bet_amount = int(bet["betAmount"])
 
-        bet_amount = int(bet["betAmount"])
-        if player_wins:
-            payout = int(bet_amount * 97 / 50)  # 1.94x payout
-        else:
-            payout = 0
+    # 5. Build and submit transaction via node wallet
+    player_addr = bet.get("playerAddress", "")
+    house_addr = bet.get("houseAddress", "")  # House P2PK address for payout when house wins
 
-        # 2. Build and submit transaction via node wallet
-        node_url = os.environ.get("NODE_URL", "http://localhost:9052")
-        api_key = os.environ.get("NODE_API_KEY", "")
-        headers = {"Content-Type": "application/json"}
-        if api_key:
-            headers["api_key"] = api_key
+    tx_result = await build_and_send_reveal_tx(
+        bet_box_id=box_id,
+        bet_amount=box_data.get("value", bet_amount),
+        player_address=player_addr,
+        house_address=house_addr,
+        player_wins=player_wins,
+        current_height=current_height,
+    )
 
-        # In production, this would use /wallet/transactions/send to build
-        # and broadcast a proper EIP-12 transaction spending the PendingBetBox.
-        # For now, we record the outcome off-chain.
-        tx_id = ""
-
-        # Update bet record
-        bet["outcome"] = "win" if player_wins else "loss"
-        bet["payout"] = str(payout)
-        bet["actualOutcome"] = {
-            "gameType": "coinflip",
-            "result": "win" if player_wins else "loss",
-            "rngValue": flip_result,
-            "slot": 0,
-            "multiplier": 1.94 if player_wins else 0,
-        }
-        bet["resolvedAtHeight"] = currentHeight
-
-        # Update pool stats
-        if player_wins:
-            _pool_stats["playerWins"] += 1
-            current_liquidity = int(_pool_stats["liquidity"])
-            _pool_stats["liquidity"] = str(current_liquidity - payout)
-        else:
-            _pool_stats["houseWins"] += 1
-
-        # Record P&L
-        try:
-            from services.bankroll_pnl import record_round as record_pnl
-            house_fee = int(bet_amount * 3 // 100) if player_wins else bet_amount
-            record_pnl(
-                bet_id=bet["betId"],
-                player_address=bet["playerAddress"],
-                bet_amount_nanoerg=bet_amount,
-                outcome="win" if player_wins else "loss",
-                house_payout_nanoerg=payout,
-                house_fee_nanoerg=house_fee,
-                bet_timestamp=bet.get("timestamp"),
-            )
-        except Exception as pnl_err:
-            logger.warning("Failed to record P&L for bet %s: %s", bet["betId"], pnl_err)
-
-        result_text = f"Player {'wins' if player_wins else 'loses'}. Payout: {payout:,} nanoERG."
-        if tx_id:
-            result_text += f" TxId: {tx_id}"
-        else:
-            result_text += " (off-chain record — on-chain tx submission requires unlocked house wallet)"
-
+    tx_id = tx_result.get("txId", "")
+    if not tx_id:
+        # Transaction failed to submit — don't update bet record
         return RevealAndPayResponse(
-            success=True,
-            txId=tx_id,
+            success=False,
+            txId="",
+            bet_id=bet["betId"],
+            player_address=player_addr,
+            player_wins=player_wins,
+            payout_amount="0",
+            message=f"Reveal tx submission failed: {tx_result.get('message', 'unknown error')}",
+        )
+
+    # 6. Update bet record (only after successful on-chain submission)
+    if player_wins:
+        payout = compute_win_payout(bet_amount)
+    else:
+        payout = bet_amount
+
+    bet["outcome"] = "win" if player_wins else "loss"
+    bet["payout"] = str(payout)
+    bet["txId"] = tx_id
+    bet["actualOutcome"] = {
+        "gameType": "coinflip",
+        "result": "win" if player_wins else "loss",
+        "rngValue": flip_result,
+        "slot": 0,
+        "multiplier": 1.94 if player_wins else 0,
+    }
+    bet["resolvedAtHeight"] = current_height
+
+    # Update pool stats
+    if player_wins:
+        _pool_stats["playerWins"] += 1
+        current_liquidity = int(_pool_stats["liquidity"])
+        _pool_stats["liquidity"] = str(current_liquidity - payout)
+    else:
+        _pool_stats["houseWins"] += 1
+
+    # Record P&L
+    try:
+        from services.bankroll_pnl import record_round as record_pnl
+        house_fee = int(bet_amount * 3 // 100) if player_wins else 0
+        record_pnl(
             bet_id=bet["betId"],
             player_address=bet["playerAddress"],
-            player_wins=player_wins,
-            payout_amount=str(payout),
-            message=result_text,
+            bet_amount_nanoerg=bet_amount,
+            outcome="win" if player_wins else "loss",
+            house_payout_nanoerg=payout,
+            house_fee_nanoerg=house_fee,
+            bet_timestamp=bet.get("timestamp"),
         )
+    except Exception as pnl_err:
+        logger.warning("Failed to record P&L for bet %s: %s", bet["betId"], pnl_err)
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to process reveal-and-pay: {str(e)}"
-        )
+    result_text = f"Player {'wins' if player_wins else 'loses'}. Payout: {payout:,} nanoERG. TxId: {tx_id}"
+
+    return RevealAndPayResponse(
+        success=True,
+        txId=tx_id,
+        bet_id=bet["betId"],
+        player_address=player_addr,
+        player_wins=player_wins,
+        payout_amount=str(payout),
+        message=result_text,
+    )

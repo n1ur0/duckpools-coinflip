@@ -1,3 +1,24 @@
 {
-  "address": "9q9ELg28BXxWTwfyPKZDLP6eG1GsjWNFtxuB4EqXXUPFKMVURg1Fun93WdSdQSSa8eKYDi7hB9SGmMRqweTHPhEpQxcvm8iAQwXEpZZbiyKSrtQct5dpsi1cCDJjjjEoAn2wjku3LEwtrf6jmjChsTDitx2arTY11sUYybXYe4ymRzVaGGcpNfzaXLu3Yt3PWnGC96JfXaK9Uk2FGQeXJqQh9NmuVU6UECd4MdmNaR7C4bLw63pK4MWuDL1NLkNCrcx2ynSh5f8huQqPUTDxb9c2tQzCsSL3DbnLDJTG88NMGfU"
+  "contract": "coinflip_commit_reveal",
+  "address": "9q9ELg28BXxWTwfyPKZDLP6eG1GsjWNFtxuB4EqXXUPFKMVURg1Fun93WdSdQSSa8eKYDi7hB9SGmMRqweTHPhEpQxcvm8iAQwXEpZZbiyKSrtQct5dpsi1cCDJjjjEoAn2wjku3LEwtrf6jmjChsTDitx2arTY11sUYybXYe4ymRzVaGGcpNfzaXLu3Yt3PWnGC96JfXaK9Uk2FGQeXJqQh9NmuVU6UECd4MdmNaR7C4bLw63pK4MWuDL1NLkNCrcx2ynSh5f8huQqPUTDxb9c2tQzCsSL3DbnLDJTG88NMGfU",
+  "ergoTree": "",
+  "ergoTreeHash": "",
+  "compiledAt": "2026-03-30T18:23:45Z",
+  "nodeVersion": "6.0.3",
+  "network": "testnet",
+  "treeVersion": 1,
+  "status": "compiled_successfully",
+  "description": "Simplified commit-reveal (no reveal window)",
+  "registerLayout": {
+    "R4": "housePubKey (Coll[Byte]) - house compressed PK (33 bytes)",
+    "R5": "playerPubKey (Coll[Byte]) - player compressed PK (33 bytes)",
+    "R6": "commitmentHash (Coll[Byte]) - blake2b256(secret||choice) (32 bytes)",
+    "R7": "playerChoice (Int) - 0=heads, 1=tails",
+    "R8": "timeoutHeight (Int) - timeout block height for refund",
+    "R9": "playerSecret (Coll[Byte]) - player secret (32 bytes)"
+  },
+  "economics": {
+    "houseEdge": 0.03,
+    "refundFee": 0.02
+  }
 }
