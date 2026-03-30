@@ -31,6 +31,20 @@ from ws_manager import ConnectionManager
 from ws_routes import router as ws_router
 from game_routes import router as game_router
 
+# Import and initialize rate limited client for external API calls
+# Define logger early for rate_limited_client init
+logger = logging.getLogger(__name__)
+
+from rate_limited_client import rate_limited_client, make_rate_limited_request
+
+# Initialize rate limited client with configured providers
+try:
+    # The client is already initialized in rate_limited_client.py
+    logger.info("Rate limited client initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize rate limited client: {str(e)}")
+    logger.warning("Rate limited client not available. External API calls may be rate limited.")
+
 # ─── Logging Setup ──────────────────────────────────────────────────
 
 logging.basicConfig(
@@ -65,8 +79,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     - X-XSS-Protection: 1; mode=block
     - Referrer-Policy: strict-origin-when-cross-origin
     - Permissions-Policy: restrictive settings
-    - Content-Security-Policy: default restrictive policy
+    - Content-Security-Policy: comprehensive policy
     - Strict-Transport-Security: HSTS (production only)
+    - Feature-Policy: restrict powerful features
+    - X-Download-Options: noopen
+    - X-Permitted-Cross-Domain-Policies: none
+    - Cache-Control: no-store (sensitive data)
     """
 
     async def dispatch(self, request: Request, call_next):
@@ -78,25 +96,47 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = (
-            "camera=(), microphone=(), geolocation=(), payment=()"
+            "camera=(), microphone=(), geolocation=(), payment=(), midi=(), sync-xhr=()"
         )
-
+        response.headers["X-Download-Options"] = "noopen"
+        response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, proxy-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
         # Content Security Policy - prevent XSS and data injection
-        # NOTE: unsafe-inline/unsafe-eval needed for Vite dev server (HMR).
-        #       For production, use nonces instead.
+        # NOTE: unsafe-inline needed for Vite dev server (HMR).
+        #       For production:
+        #       1. Remove `unsafe-eval` 
+        #       2. Use nonces instead of `unsafe-inline` for scripts
+        #       3. Update `connect-src` to include WebSocket and API origins
+        #       4. Remove debug headers
+
+        # Production CSP Hardening Requirements:
+        # - Remove `unsafe-eval` entirely
+        # - Replace `unsafe-inline` with nonce-based CSP for scripts
+        # - Update `connect-src` to include production WebSocket and API origins
+        # - Consider adding `script-src-elem` and `script-src-attr` with appropriate policies
+        # - Add `frame-ancestors` to allow trusted domains if needed
+        # - Set appropriate `max-age` for HSTS (e.g., 31536000 for 1 year)
+        # 
+        # See: docs/SECURITY.md for complete production hardening guidelines
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+            "script-src 'self' 'unsafe-inline'; "
             "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data:; "
-            "connect-src 'self'; "
+            "connect-src 'self' ws://localhost:8000 http://localhost:3000 http://localhost:3001; "
             "frame-ancestors 'none'; "
             "form-action 'self'; "
             "base-uri 'self'; "
-            "object-src 'none'"
+            "object-src 'none'; "
+            "font-src 'self'; "
+            "media-src 'self'; "
+            "manifest-src 'self'"
         )
 
-        # Strict Transport Security - max-age=0 for development
+        # Strict Transport Security - max-age=0 for development, longer for production
+        # In production, this should be set to a longer duration (e.g., 31536000 for 1 year)
         response.headers["Strict-Transport-Security"] = "max-age=0; includeSubDomains"
 
         return response
@@ -156,6 +196,9 @@ app = FastAPI(
 )
 
 # CORS — Explicit allowlist for methods and headers.
+CORS_ORIGINS_STR = os.getenv("CORS_ORIGINS_STR", "http://localhost:3000")
+cors_origins = [origin.strip() for origin in CORS_ORIGINS_STR.split(",") if origin.strip()]
+
 CORS_ALLOW_METHODS = os.getenv(
     "CORS_ALLOW_METHODS",
     "GET,POST,OPTIONS",
@@ -164,7 +207,8 @@ CORS_ALLOW_HEADERS = os.getenv(
     "CORS_ALLOW_HEADERS",
     "Content-Type,Authorization,X-Api-Key,Accept,Origin",
 )
-cors_origins = [o.strip() for o in CORS_ORIGINS_STR.split(",") if o.strip()]
+
+# CORS middleware (MAT-228)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -172,7 +216,6 @@ app.add_middleware(
     allow_methods=[m.strip() for m in CORS_ALLOW_METHODS.split(",") if m.strip()],
     allow_headers=[h.strip() for h in CORS_ALLOW_HEADERS.split(",") if h.strip()],
 )
-
 # Security headers — registered after CORS so headers are always applied
 app.add_middleware(SecurityHeadersMiddleware)
 
@@ -226,6 +269,10 @@ async def root():
         "version": "0.2.0",
         "endpoints": {
             "place_bet": "POST /place-bet",
+            "expired_bets": "GET /bets/expired",
+            "bet_timeout": "GET /bets/{bet_id}/timeout",
+            "record_refund": "POST /bets/{bet_id}/refund-record",
+            "pending_with_timeout": "GET /bets/pending-with-timeout",
             "leaderboard": "/leaderboard",
             "history": "/history/{address}",
             "player_stats": "/player/stats/{address}",
