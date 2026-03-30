@@ -1,22 +1,20 @@
 {
-  "contractName": "coinflip_v2_final",
+  "contractName": "coinflip_commit_reveal",
   "network": "testnet",
-  "p2sAddress": "PENDING_RECOMPILATION_REQUIRED",
-  "ergoTreeHex": "PENDING_RECOMPILATION_REQUIRED",
+  "p2sAddress": "9q9ELg28BXxWTwfyPKZDLP6eG1GsjWNFtxuB4EqXXUPFKMVURg1Fun93WdSdQSSa8eKYDi7hB9SGmMRqweTHPhEpQxcvm8iAQwXEpZZbiyKSrtQct5dpsi1cCDJjjjEoAn2wjku3LEwtrf6jmjChsTDitx2arTY11sUYybXYe4ymRzVaGGcpNfzaXLu3Yt3PWnGC96JfXaK9Uk2FGQeXJqQh9NmuVU6UECd4MdmNaR7C4bLw63pK4MWuDL1NLkNCrcx2ynSh5f8huQqPUTDxb9c2tQzCsSL3DbnLDJTG88NMGfU",
+  "ergoTreeHex": null,
   "registerLayout": {
     "R4": "housePubKey (Coll[Byte]) - house compressed PK (33 bytes)",
     "R5": "playerPubKey (Coll[Byte]) - player compressed PK (33 bytes)",
     "R6": "commitmentHash (Coll[Byte]) - blake2b256(secret||choice) (32 bytes)",
     "R7": "playerChoice (Int) - player choice (0=heads, 1=tails)",
     "R8": "timeoutHeight (Int) - timeout height for refund (~100 blocks from bet)",
-    "R9": "playerSecret (Coll[Byte]) - player secret (8 random bytes)",
-    "R10": "rngBlockHeight (Int) - pre-committed reveal height (earliest block house can reveal, ~70 blocks from bet)"
+    "R9": "playerSecret (Coll[Byte]) - player secret (32 random bytes)"
   },
   "houseEdge": 0.03,
   "refundFee": 0.02,
   "timeoutBlocks": 100,
-  "revealWindowBlocks": 30,
-  "compiledAt": "2026-03-30T17:45:00Z",
-  "status": "needs_recompilation",
-  "note": "v2-final updated with v3 reveal window (R10 register). Requires sigma-rust compilation and Ergo node for testnet deployment."
+  "compiledAt": "2026-03-30T17:25:00Z",
+  "status": "compiled_p2s_address_ready",
+  "note": "Uses R4-R9 only (Ergo node R10 not supported). Reveal window (R10) deferred to post-PoC hardening. Core features: commit-reveal RNG, 3% house edge, timeout refund."
 }
