@@ -3,27 +3,23 @@
   "version": "v2-final-r4r9-compatible",
   "address": "3QHN2BNDtWXVmBbwuyZNijhcAd92Ww9kD7j8PbrqVfjJsyabJ134mEuwJykbET5jsbebLtWfGMtSJUubgMdK5gfF6ve6WqM6gBBxQzZo58BoQDRbFf3qqvpNhiStgVFibfu55u7d31u6igiaWuEqyMQEEDCYxFgoMYK8VHDuP3hjXCUDdbyAfiEwYmAeHH2QKFrYUQV5bNWafbvhRgSZnDFc3bXwohrmP4rnNaMxrNJ9TC7r9QWm3yNFrrQj6CphdciEcYKh27H6UoeF9yPZjHyqGRZWMJsZGWZSwibxgebZW8Hqp6CLRrabSYPEwrKjtmXBdXtmb63x",
   "ergoTree": "",
-  "ergoTreeHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-  "compiledAt": "2026-03-30T17:42:06Z",
-  "network": "testnet",
-  "treeVersion": 1,
-  "status": "compiled_successfully",
+  "sourceFile": "smart-contracts/coinflip_v2_final.es",
+  "sourceLength": 6089,
+  "compiledAt": "2026-03-30T18:07:12.837828Z",
   "nodeVersion": "6.0.3",
+  "network": "testnet",
   "registerLayout": {
     "R4": "housePubKey (Coll[Byte]) - house compressed PK (33 bytes)",
     "R5": "playerPubKey (Coll[Byte]) - player compressed PK (33 bytes)",
     "R6": "commitmentHash (Coll[Byte]) - blake2b256(secret||choice) (32 bytes)",
     "R7": "playerChoice (Int) - 0=heads, 1=tails",
-    "R8": "timeoutHeight (Int) - timeout height for refund (~100 blocks from bet)",
+    "R8": "timeoutHeight (Int) - timeout block height",
     "R9": "playerSecret (Coll[Byte]) - player secret (8 random bytes)"
   },
-  "derivedValues": {
-    "rngBlockHeight": "timeoutHeight - 30 (REVEAL_WINDOW constant in contract)",
+  "economics": {
+    "houseEdge": 0.03,
+    "refundFee": 0.02,
+    "timeoutBlocks": 100,
     "revealWindowBlocks": 30
-  },
-  "houseEdge": 0.03,
-  "refundFee": 0.02,
-  "timeoutBlocks": 100,
-  "revealWindowBlocks": 30,
-  "r10Fix": "R10 not supported in ErgoScript Lithos 6.0.3. Reveal window derived from timeoutHeight - 30 constant."
+  }
 }
