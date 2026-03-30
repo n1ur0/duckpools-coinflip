@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from ws_manager import ConnectionManager
 from ws_routes import router as ws_router
 from game_routes import router as game_router
+from bankroll_routes import router as bankroll_router
 
 # Import and initialize rate limited client for external API calls
 # Define logger early for rate_limited_client init
@@ -142,6 +143,29 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+# ─── Request Body Size Limiter (MAT-396/5.1) ──────────────────────
+
+MAX_REQUEST_BODY_SIZE = 1_000_000  # 1 MB max request body
+
+class RequestBodySizeMiddleware(BaseHTTPMiddleware):
+    """Reject requests with oversized bodies to prevent DoS via large payloads."""
+
+    async def dispatch(self, request: Request, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                size = int(content_length)
+                if size > MAX_REQUEST_BODY_SIZE:
+                    from starlette.responses import JSONResponse as _JR
+                    return _JR(
+                        status_code=413,
+                        content={"error": {"code": 413, "message": "Request body too large", "path": str(request.url.path)}},
+                    )
+            except (ValueError, TypeError):
+                pass
+        return await call_next(request)
+
+
 # ─── Request/Response Logging Middleware (MAT-228) ──────────────
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
@@ -219,12 +243,16 @@ app.add_middleware(
 # Security headers — registered after CORS so headers are always applied
 app.add_middleware(SecurityHeadersMiddleware)
 
+# Request body size limiter — reject oversized payloads early
+app.add_middleware(RequestBodySizeMiddleware)
+
 # Request/response logging (MAT-228)
 app.add_middleware(RequestLoggingMiddleware)
 
 # Register routers — coinflip only
 app.include_router(ws_router)
 app.include_router(game_router)
+app.include_router(bankroll_router)  # MAT-231: Bankroll P&L tracking
 
 
 # ─── Global Error Handlers (MAT-227) ─────────────────────────────
@@ -266,18 +294,31 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 async def root():
     return {
         "name": "DuckPools CoinFlip API",
-        "version": "0.2.0",
+        "version": "0.3.0",
         "endpoints": {
             "place_bet": "POST /place-bet",
             "expired_bets": "GET /bets/expired",
             "bet_timeout": "GET /bets/{bet_id}/timeout",
+            "build_refund_tx": "POST /bets/{bet_id}/build-refund-tx",
             "record_refund": "POST /bets/{bet_id}/refund-record",
             "pending_with_timeout": "GET /bets/pending-with-timeout",
-            "leaderboard": "/leaderboard",
-            "history": "/history/{address}",
-            "player_stats": "/player/stats/{address}",
-            "player_comp": "/player/comp/{address}",
-            "health": "/health",
+            "build_reveal_tx": "POST /bot/build-reveal-tx",
+            "reveal_and_pay": "POST /bot/reveal-and-pay",
+            "ws_notify": "POST /ws/notify",
+            "contract_info": "GET /contract-info",
+            "pool_state": "GET /pool/state",
+            "bankroll_status": "GET /bankroll/status",
+            "bankroll_history": "GET /bankroll/history",
+            "bankroll_metrics": "GET /bankroll/metrics",
+            "bankroll_pnl_summary": "GET /bankroll/pnl/summary",
+            "bankroll_pnl_rounds": "GET /bankroll/pnl/rounds",
+            "bankroll_pnl_period": "GET /bankroll/pnl/period",
+            "bankroll_pnl_player": "GET /bankroll/pnl/player/{address}",
+            "leaderboard": "GET /leaderboard",
+            "history": "GET /history/{address}",
+            "player_stats": "GET /player/stats/{address}",
+            "player_comp": "GET /player/comp/{address}",
+            "health": "GET /health",
         },
     }
 
