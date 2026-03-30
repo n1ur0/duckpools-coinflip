@@ -8,8 +8,9 @@ MAT-309: Rebuild backend API to match frontend contract.
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional, Set
+from typing import Dict, List, Optional, Set
 import asyncio
+import json
 import os
 import re
 
@@ -182,9 +183,13 @@ class PlaceBetResponse(BaseModel):
     success: bool = True
     txId: str = ""
     betId: str = ""
+    boxId: str = ""  # Expected box ID (estimated from unsigned tx)
     message: str = ""
     contractAddress: str = COINFLIP_P2S_ADDRESS
     timeoutDelta: int = 100  # blocks
+    timeoutHeight: int = 0  # Computed timeout height
+    unsignedTx: str = ""  # Base64-encoded unsigned EIP-12 transaction for wallet signing
+    registers: Optional[dict] = None  # Register values for verification
 
 
 class PlayerStats(BaseModel):
@@ -486,19 +491,28 @@ def _check_rate_limit(address: str, max_requests: int = 5, time_window: timedelt
 
 @router.post("/place-bet", response_model=PlaceBetResponse)
 async def place_bet(req: PlaceBetRequest, request: Request):
-    """Place a coinflip bet from BetForm.tsx / CoinFlipGame.tsx.
-
-    The frontend builds the PendingBetBox transaction locally (EIP-12)
-    and submits it to the Ergo node. This endpoint records the off-chain
-    bet metadata for tracking, timeout monitoring, and reveal flow.
+    """Place a coinflip bet — creates PendingBetBox on-chain.
 
     Flow:
     1. Validate all inputs (address, amount, choice, commitment)
     2. Verify commitment = blake2b256(secret || choice) if secret provided
-    3. Check pool liquidity
-    4. Record bet in off-chain store (atomic under lock to prevent replay)
-    5. Return contract info for frontend reference
+    3. Fetch current height from node, compute timeoutHeight
+    4. Build unsigned EIP-12 tx with PendingBetBox output (R4-R9 registers)
+    5. Record bet in off-chain store (atomic under lock to prevent replay)
+    6. Return unsigned tx for frontend to sign via Nautilus wallet
+
+    The PendingBetBox output uses coinflip_v2_final.es contract:
+      ergoTree: COINFLIP_P2S_ADDRESS
+      R4: housePubKey (Coll[Byte])
+      R5: playerPubKey (Coll[Byte])
+      R6: commitmentHash (Coll[Byte])
+      R7: playerChoice (Int)
+      R8: timeoutHeight (Int)
+      R9: playerSecret (Coll[Byte])
     """
+    from base64 import b64encode
+    from vlq_serializer import VLQSerializer
+
     now = datetime.now(timezone.utc).isoformat()
     
     # Rate limiting to prevent abuse
@@ -551,12 +565,68 @@ async def place_bet(req: PlaceBetRequest, request: Request):
                 detail=f"Invalid player secret or commitment: {str(e)}"
             )
     
+    # Fetch current height from node to compute timeoutHeight
+    try:
+        current_height = await _fetch_node_height()
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not fetch current block height from Ergo node"
+        )
+
+    # Compute timeoutHeight: current + delta (default 100 blocks)
+    timeout_height = req.timeoutHeight if req.timeoutHeight > 0 else current_height + DEFAULT_TIMEOUT_DELTA
     side = "heads" if req.choice == 0 else "tails"
+
+    # Build register values for the PendingBetBox using VLQ serializer
+    serializer = VLQSerializer()
+
+    # R4: housePubKey (Coll[Byte]) — 33-byte compressed public key
+    r4_serialized = serializer.serialize(req.housePubKey, ErgoType.COLL_BYTE).value if req.housePubKey else ""
+    # R5: playerPubKey (Coll[Byte]) — 33-byte compressed public key
+    r5_serialized = serializer.serialize(req.playerPubKey, ErgoType.COLL_BYTE).value if req.playerPubKey else ""
+    # R6: commitmentHash (Coll[Byte]) — 32 bytes blake2b256
+    r6_serialized = serializer.serialize(req.commitment, ErgoType.COLL_BYTE).value
+    # R7: playerChoice (Int) — 0 or 1
+    r7_serialized = serializer.serialize(req.choice, ErgoType.INT).value
+    # R8: timeoutHeight (Int)
+    r8_serialized = serializer.serialize(timeout_height, ErgoType.INT).value
+    # R9: playerSecret (Coll[Byte]) — 8 or 32 random bytes
+    r9_serialized = serializer.serialize(req.playerSecret, ErgoType.COLL_BYTE).value if req.playerSecret else ""
+
+    registers = {
+        "R4": r4_serialized,
+        "R5": r5_serialized,
+        "R6": r6_serialized,
+        "R7": r7_serialized,
+        "R8": r8_serialized,
+        "R9": r9_serialized,
+    }
+
+    # Build unsigned EIP-12 transaction
+    # The player funds the PendingBetBox from their wallet.
+    # OUTPUTS(0) = PendingBetBox with contract ergoTree + bet amount + registers
+    # The frontend/wallet will add the change output and input boxes.
+    unsigned_tx = {
+        "inputs": [],  # Player's wallet will fill these in
+        "dataInputs": [],
+        "outputs": [{
+            "ergoTree": COINFLIP_P2S_ADDRESS,  # Contract address (P2S)
+            "value": str(bet_amount),
+            "assets": [],
+            "additionalRegisters": registers,
+            "creationHeight": current_height,
+        }],
+    }
+
+    unsigned_tx_b64 = b64encode(
+        json.dumps(unsigned_tx, separators=(",", ":")).encode()
+    ).decode()
 
     bet = {
         "betId": req.betId,
-        "txId": "",  # Will be filled when tx is actually broadcast
-        "boxId": req.boxId,
+        "txId": "",  # Will be filled when frontend broadcasts the signed tx
+        "boxId": "",  # Will be filled when tx is confirmed on-chain
         "playerAddress": req.address,
         "gameType": "coinflip",
         "choice": {"gameType": "coinflip", "side": side},
@@ -566,12 +636,13 @@ async def place_bet(req: PlaceBetRequest, request: Request):
         "payout": "0",
         "payoutMultiplier": 0.97,
         "timestamp": now,
-        "blockHeight": 0,
-        "timeoutHeight": req.timeoutHeight,
+        "blockHeight": current_height,
+        "timeoutHeight": timeout_height,
         "resolvedAtHeight": None,
         # On-chain register data (for reveal and refund flows)
         "commitment": req.commitment,
         "housePubKey": req.housePubKey,
+        "houseAddress": req.houseAddress,
         "playerPubKey": req.playerPubKey,
         "playerSecret": req.playerSecret,
         "playerErgoTree": req.playerErgoTree,
@@ -590,16 +661,65 @@ async def place_bet(req: PlaceBetRequest, request: Request):
     # Update pool stats
     _pool_stats["totalBets"] += 1
 
-    # Calculate fee
-    fee = int(req.amount) * 3 // 100  # 3% house edge
-    _pool_stats["totalFees"] = str(int(_pool_stats["totalFees"]) + fee)
-
     return PlaceBetResponse(
         success=True,
-        txId="",  # In PoC, no actual tx broadcast — frontend handles this
         betId=req.betId,
-        message="Bet placed. Waiting for on-chain confirmation.",
+        message="Bet placed. Sign the unsigned transaction via Nautilus wallet and broadcast to create PendingBetBox on-chain.",
+        timeoutHeight=timeout_height,
+        unsignedTx=unsigned_tx_b64,
+        registers={
+            "R4": f"housePubKey ({len(req.housePubKey) // 2} bytes)" if req.housePubKey else "housePubKey (MISSING)",
+            "R5": f"playerPubKey ({len(req.playerPubKey) // 2} bytes)" if req.playerPubKey else "playerPubKey (MISSING)",
+            "R6": f"commitmentHash ({len(req.commitment) // 2} bytes)",
+            "R7": f"playerChoice ({req.choice})",
+            "R8": f"timeoutHeight ({timeout_height})",
+            "R9": f"playerSecret ({len(req.playerSecret) // 2 if req.playerSecret else 0} bytes)",
+        },
     )
+
+
+# ─── Bet Confirmation Endpoint ────────────────────────────────────
+
+class ConfirmBetRequest(BaseModel):
+    txId: str
+    boxId: str = ""  # On-chain box ID (may not be known immediately)
+
+
+@router.post("/bets/{bet_id}/confirm")
+async def confirm_bet(bet_id: str, req: ConfirmBetRequest):
+    """
+    Confirm a bet was placed on-chain after frontend signs and broadcasts.
+
+    Called by the frontend after Nautilus wallet signs and broadcasts the
+    unsigned transaction returned by /place-bet. Updates the off-chain
+    record with the txId and boxId for reveal/refund tracking.
+    """
+    bet = None
+    for b in _bets:
+        if b["betId"] == bet_id:
+            bet = b
+            break
+
+    if not bet:
+        raise HTTPException(status_code=404, detail=f"Bet {bet_id} not found")
+
+    if bet["outcome"] != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Bet {bet_id} is already {bet['outcome']}, cannot confirm"
+        )
+
+    bet["txId"] = req.txId
+    if req.boxId:
+        bet["boxId"] = req.boxId
+
+    return {
+        "success": True,
+        "betId": bet_id,
+        "txId": req.txId,
+        "boxId": req.boxId,
+        "message": f"Bet {bet_id} confirmed on-chain. PendingBetBox tracked for reveal.",
+    }
 
 
 # ─── Timeout & Refund Endpoints ─────────────────────────────────
@@ -1115,7 +1235,7 @@ def _compute_rng_deterministic(block_hash_hex: str, player_secret_hex: str) -> i
     Returns: 0 (heads) or 1 (tails)
     """
     block_bytes = bytes.fromhex(block_hash_hex)
-    secret_bytes = bytes.fromhex(player_secret_hex)
+    secret_bytes = bytes.fromhex(player_secret)
     combined = block_bytes + secret_bytes
     result = hashlib.blake2b(combined, digest_size=32).digest()
     return result[0] % 2
