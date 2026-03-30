@@ -1,114 +1,126 @@
 /**
  * DuckPools Coinflip Game Contract v1
  *
- * Classic coinflip game with commit-reveal scheme.
- * Fixed: NFT preservation in refund path to prevent protocol breakage.
+ * Commit-reveal coinflip with on-chain RNG and NFT preservation.
  *
- * ========== SECURITY DESIGN TRADE-OFFS (PoC vs Production) ==========
+ * REGENERATED from scratch (MAT-393) — the original v1.es had multiple
+ * compilation errors: `fromSelf` instead of `SELF`, `sig.verify(pk)`
+ * instead of SigmaProp equality, corrupted `player...ytes`, and no
+ * actual on-chain RNG (no block-hash derivation).
  *
- * 1. PLAYER SECRET VISIBLE ON-CHAIN (R8 register)
- *    - SEC-HIGH finding (MAT-348)
- *    - Player secret is stored in R8[Int] which is readable by anyone
- *    - House can peek at player's choice before reveal
- *    - TRUST ASSUMPTION: House is honest and does not read R8
- *    - PRODUCTION: Use ZK-proof or commitment scheme without storing secret
+ * REGISTER LAYOUT:
+ *   R4:  Coll[Byte]  — house's compressed public key (33 bytes)
+ *   R5:  Coll[Byte]  — player's compressed public key (33 bytes)
+ *   R6:  Coll[Byte]  — blake2b256(secret || choice_byte) — 32 bytes
+ *   R7:  Int         — player's choice: 0=heads, 1=tails
+ *   R8:  Int         — timeout block height for refund
+ *   R9:  Coll[Byte]  — player's secret (8 random bytes)
+ *   R10: Int         — pre-committed reveal height (earliest block house can reveal)
  *
- * 2. NO PAYOUT AMOUNT ENFORCEMENT
- *    - SEC-MEDIUM finding (MAT-336)
- *    - Contract verifies player gets OUTPUTS(0), but not how much ERG
- *    - Malicious house could pay 0 ERG and pocket everything
- *    - TRUST ASSUMPTION: House follows payout rules (bet * 0.97 if win)
- *    - PRODUCTION: Add guard: OUTPUTS(0).value >= bet_amount * 0.97
+ * TOKEN LAYOUT:
+ *   Token 0: Game NFT (amount=1) — MUST be preserved in both reveal and refund
  *
- * 3. BLOCK HASH SELECTION BY HOUSE
- *    - SEC-MEDIUM finding (MAT-336)
- *    - House chooses which block height/hash to use for RNG
- *    - House could grind blocks for favorable outcome
- *    - TRUST ASSUMPTION: House uses current block hash without manipulation
- *    - PRODUCTION: Pre-commit to block height or use oracle
+ * SPENDING PATHS:
+ *   1. REVEAL (house): Verifies commitment, checks reveal window, pays winner.
+ *      NFT goes to OUTPUTS(1) (house or next game box).
+ *   2. REFUND (player): After timeout, player reclaims bet minus 2% fee.
+ *      NFT goes to OUTPUTS(1) (returned to pool).
  *
- * 4. ONLY HOUSE CAN REVEAL
- *    - SEC-MEDIUM finding (MAT-336)
- *    - No player-initiated reveal path
- *    - If house goes offline, player must wait for timeout
- *    - TRUST ASSUMPTION: House is always available to reveal
- *    - PRODUCTION: Add player self-reveal with on-chain RNG
+ * RNG:
+ *   Entropy = blake2b256(prevBlockHash || playerSecret)
+ *   Result  = hash[0] % 2  (0 = heads, 1 = tails)
  *
- * ========== SUMMARY ==========
- * This is a PROOF-OF-CONTRACT. It trusts the house operator to be honest.
- * For production deployment, cryptographic guarantees must be enforced on-chain.
- *
- * See ARCHITECTURE.md for full security analysis.
+ * TRUST ASSUMPTIONS:
+ *   - TA-1: Player secret visible on-chain (honest house assumption)
+ *   - TA-2: House selects reveal block (block-grinding risk, mitigated by R10 window)
+ *   - TA-3: Only house can trigger reveal; player must wait for timeout if offline
  */
 
 {
-  // Game parameters
-  val housePubKey: GroupElement = fromSelf.R4[GroupElement].get
-  
-  // Player commitment
-  val playerPubKey: Coll[Byte] = fromSelf.R5[Coll[Byte]].get
-  val commitmentHash: Coll[Byte] = fromSelf.R6[Coll[Byte]].get
-  val playerChoice: Int = fromSelf.R7[Int].get // 0=heads, 1=tails
-  val playerSecret: Int = fromSelf.R8[Int].get
-  val betId: Coll[Byte] = fromSelf.R9[Coll[Byte]].get
-  
-  // Timeout parameters
-  val timeoutHeight: Int = fromSelf.R10[Int].get
-  
-  // Game NFT (first token)
-  val gameNFT: Coll[(Coll[Byte], Long)] = fromSelf.tokens
-  
-  // Helper functions
-  def isPlayer(sig: SigmaProp): Boolean = {
-    sig.verify(playerPubKey)
+  // -- Read registers ------------------------------------------------
+  val housePkBytes:    Coll[Byte] = SELF.R4[Coll[Byte]].get
+  val playerPkBytes:   Coll[Byte] = SELF.R5[Coll[Byte]].get
+  val commitmentHash:  Coll[Byte] = SELF.R6[Coll[Byte]].get
+  val playerChoice:    Int         = SELF.R7[Int].get
+  val timeoutHeight:   Int         = SELF.R8[Int].get
+  val playerSecret:    Coll[Byte] = SELF.R9[Coll[Byte]].get
+  val rngBlockHeight:  Int         = SELF.R10[Int].get
+
+  // -- Derive SigmaProps from raw PK bytes ---------------------------
+  val housePk:  GroupElement = decodePoint(housePkBytes)
+  val playerPk: GroupElement = decodePoint(playerPkBytes)
+  val houseProp:  SigmaProp = proveDlog(housePk)
+  val playerProp: SigmaProp = proveDlog(playerPk)
+
+  // -- Game NFT from SELF's tokens -----------------------------------
+  // The game box MUST carry exactly 1 NFT as token(0).
+  val gameNFTId: Coll[Byte] = SELF.tokens(0)._1
+
+  // -- NFT preservation check ----------------------------------------
+  // NFT must appear in OUTPUTS(1) in both reveal and refund paths.
+  // This ensures the NFT is never burned — critical for protocol continuity.
+  val nftPreserved: Boolean = {
+    OUTPUTS.size >= 2 &&
+    OUTPUTS(1).tokens.exists { (t: (Coll[Byte], Long)) =>
+      t._1 == gameNFTId && t._2 == 1L
+    }
   }
-  
-  def isHouse(sig: SigmaProp): Boolean = {
-    sig.verify(housePubKey)
+
+  // -- On-chain commitment verification ------------------------------
+  // commitmentHash MUST equal blake2b256(secret || choice_byte)
+  val choiceByte   = if (playerChoice == 0) (0.toByte) else (1.toByte)
+  val computedHash = blake2b256(playerSecret ++ Coll(choiceByte))
+  val commitmentOk = (computedHash == commitmentHash)
+
+  // -- On-chain RNG using parent block hash --------------------------
+  // Entropy = blake2b256(prevBlockHash || playerSecret)
+  // Result  = hash[0] % 2  (0 = heads, 1 = tails)
+  // NOTE: CONTEXT.preHeader.parentId is the ONLY block hash available
+  // in ErgoScript. Historical block lookups require an oracle.
+  val blockSeed   = CONTEXT.preHeader.parentId
+  val rngHash     = blake2b256(blockSeed ++ playerSecret)
+  val flipResult  = rngHash(0) % 2
+  val playerWins  = (flipResult == playerChoice)
+
+  // -- Value calculations --------------------------------------------
+  val betAmount    = SELF.value
+  // Player wins: 1.94x payout (3% house edge on the 2x)
+  val winPayout    = betAmount * 97L / 50L
+  // Refund: 98% of bet (2% fee to prevent spam)
+  val refundAmount = betAmount - betAmount / 50L
+
+  // -- REVEAL path: house spends within reveal window ----------------
+  // Conditions: house signature, commitment verified, reveal window,
+  // correct payout to winner, NFT preserved in OUTPUTS(1)
+  val canReveal: Boolean = {
+    houseProp && commitmentOk && nftPreserved && {
+      // House must reveal within the committed window
+      val revealWindow = (HEIGHT >= rngBlockHeight) && (HEIGHT <= timeoutHeight)
+      revealWindow && {
+        if (playerWins) {
+          // Player wins: OUTPUTS(0) pays player with >= 1.94x
+          OUTPUTS(0).propositionBytes == playerProp.propBytes &&
+          OUTPUTS(0).value >= winPayout
+        } else {
+          // House wins: OUTPUTS(0) pays house with full bet
+          OUTPUTS(0).propositionBytes == houseProp.propBytes &&
+          OUTPUTS(0).value >= betAmount
+        }
+      }
+    }
   }
-  
-  def isTimedOut: Boolean = {
-    HEIGHT >= timeoutHeight
-  }
-  
-  def isPlayerRefund: Boolean = {
-    OUTPUTS(0).propositionBytes == playerPubKey
-  }
-  
-  def refundValueOk: Boolean = {
-    val refundAmount = fromSelf.value - fromSelf.value / 50 // 2% fee
+
+  // -- REFUND path: player spends after timeout ----------------------
+  // Conditions: timeout reached, player signature, correct refund amount,
+  // NFT preserved in OUTPUTS(1)
+  val canRefund: Boolean = {
+    HEIGHT >= timeoutHeight &&
+    playerProp &&
+    nftPreserved &&
+    OUTPUTS(0).propositionBytes == playerProp.propBytes &&
     OUTPUTS(0).value >= refundAmount
   }
-  
-  def nftPreserved: Boolean = {
-    OUTPUTS(0).tokens.exists { (t: (Coll[Byte], Long)) =>
-      t._1 == gameNFT(0)._1 && t._2 == 1L
-    }
-  }
-  
-  def nftToHouse: Boolean = {
-    OUTPUTS.size >= 2 && OUTPUTS(1).tokens.exists { (t: (Coll[Byte], Long)) =>
-      t._1 == gameNFT(0)._1 && t._2 == 1L
-    }
-  }
-  
-  // Reveal path verification
-  def isValidReveal: Boolean = {
-    OUTPUTS(0).propositionBytes == fromSelf.R5[Coll[Byte]].get && // Player gets payout
-    
-    // Verify commitment: blake2b256(secret || choice) matches stored commitment
-    // CRITICAL (SEC-CRITICAL-1): MUST use blake2b256 — the native Ergo hash opcode.
-    // SHA-256 would cause every reveal to fail on-chain.
-    val secretBytes = playerSecret.toBytes
-    val choiceBytes = playerChoice.toBytes
-    val computedHash = blake2b256(secretBytes ++ choiceBytes)
-    computedHash == commitmentHash
-  }
-  
-  // Spending conditions
-  val canReveal: Boolean = isHouse && nftPreserved && isValidReveal
-  val canRefund: Boolean = isTimedOut && isPlayerRefund && refundValueOk && nftToHouse
-  
-  // Main condition: either reveal or refund
+
+  // -- Main guard ----------------------------------------------------
   canReveal || canRefund
 }

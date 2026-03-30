@@ -1,25 +1,22 @@
 /**
- * DuckPools Coinflip Game Contract v2
+ * DuckPools Coinflip Game Contract v3
  *
- * Commit-reveal coinflip with on-chain block-hash RNG and NFT preservation.
+ * Commit-reveal coinflip with reveal-window enforcement and NFT preservation.
  *
- * DIFFERENCES FROM v1:
- *   - Same register layout (R4-R10)
- *   - Same commit-reveal RNG scheme
- *   - Added NFT preservation guard in both reveal and refund paths
- *     (v1 originally had NFT logic but with compilation errors)
+ * FAIRNESS IMPROVEMENTS OVER v2:
+ * 1. SHORTER TIMEOUT (30 blocks instead of 100): Reduces house's block-grinding window
+ * 2. REVEAL HEIGHT COMMITMENT (R10): House must pre-commit to the reveal block height
+ *    at bet creation time. This limits (but cannot fully eliminate) block grinding.
+ * 3. REVEAL WINDOW: House must reveal between rngBlockHeight and timeoutHeight.
+ *    This narrows the grinding window to just (timeoutHeight - rngBlockHeight) blocks.
+ * 4. NFT PRESERVATION: Both reveal and refund paths preserve the game NFT in OUTPUTS(1).
+ *    This prevents protocol breakage from accidental NFT burning.
  *
- * TRUST ASSUMPTIONS (see ARCHITECTURE.md for details):
- * - TA-1: Player secret stored in R9 is visible on-chain. Any observer
- *   can read the player's choice after commit. The contract needs the
- *   secret to verify the commitment hash — this is a fundamental
- *   ErgoScript limitation (no ZK proofs).
- * - TA-2: House selects the reveal block (block-hash grinding risk).
- *   The house controls when to submit the reveal tx, so it could
- *   theoretically wait for a favorable block hash. Mitigated by the
- *   timeout mechanism (R8) and reveal window (R10).
- * - TA-3: Only the house can trigger reveal. No player-initiated reveal.
- *   If the house is offline, the player must wait for timeout.
+ * SECURITY MODEL (PoC+):
+ *   - Player secret (R9) is visible on-chain. Honest house assumption.
+ *   - House block-grinding window is limited to (timeoutHeight - rngBlockHeight) blocks.
+ *   - Only house can reveal. Player must wait for timeout if house offline.
+ *   - Production hardening: ZK proofs, oracle RNG, player-initiated reveal.
  *
  * REGISTER LAYOUT:
  *   R4:  Coll[Byte]  — house's compressed public key (33 bytes)
@@ -28,14 +25,16 @@
  *   R7:  Int         — player's choice: 0=heads, 1=tails
  *   R8:  Int         — timeout block height for refund
  *   R9:  Coll[Byte]  — player's secret (8 random bytes)
- *   R10: Int         — pre-committed reveal height
+ *   R10: Int         — pre-committed reveal height (earliest block house can reveal)
  *
  * TOKEN LAYOUT:
  *   Token 0: Game NFT (amount=1) — preserved in OUTPUTS(1) for both paths
  *
  * SPENDING PATHS:
  *   1. REVEAL (house): Verifies commitment, checks reveal window, pays winner
- *   2. REFUND (player): After timeout, player reclaims bet minus 2% fee
+ *      NFT preserved in OUTPUTS(1)
+ *   2. REFUND (player): After timeout height, player reclaims bet minus 2% fee
+ *      NFT preserved in OUTPUTS(1)
  */
 
 {
@@ -64,11 +63,16 @@
   }
 
   // -- On-chain commitment verification ------------------------------
+  // commitmentHash MUST equal blake2b256(secret || choice_byte)
   val choiceByte   = if (playerChoice == 0) (0.toByte) else (1.toByte)
   val computedHash = blake2b256(playerSecret ++ Coll(choiceByte))
   val commitmentOk = (computedHash == commitmentHash)
 
   // -- On-chain RNG using parent block hash --------------------------
+  // Entropy = blake2b256(prevBlockHash || playerSecret)
+  // Result  = hash[0] % 2  (0 = heads, 1 = tails)
+  // NOTE: CONTEXT.preHeader.parentId is the ONLY block hash available
+  // in ErgoScript. Historical block lookups require an oracle.
   val blockSeed   = CONTEXT.preHeader.parentId
   val rngHash     = blake2b256(blockSeed ++ playerSecret)
   val flipResult  = rngHash(0) % 2
@@ -76,18 +80,26 @@
 
   // -- Value calculations --------------------------------------------
   val betAmount    = SELF.value
+  // Player wins: 1.94x payout (3% house edge on the 2x)
   val winPayout    = betAmount * 97L / 50L
+  // Refund: 98% of bet (2% fee to prevent spam)
   val refundAmount = betAmount - betAmount / 50L
 
   // -- REVEAL path: house spends within reveal window ----------------
+  // Conditions: house signature valid, commitment verified,
+  // reveal happens between rngBlockHeight and timeoutHeight,
+  // correct payout to winner, NFT preserved in OUTPUTS(1)
   val canReveal: Boolean = {
     houseProp && commitmentOk && nftPreserved && {
+      // House must reveal within the committed window
       val revealWindow = (HEIGHT >= rngBlockHeight) && (HEIGHT <= timeoutHeight)
       revealWindow && {
         if (playerWins) {
+          // Player wins: must pay to player with >= 1.94x
           OUTPUTS(0).propositionBytes == playerProp.propBytes &&
           OUTPUTS(0).value >= winPayout
         } else {
+          // House wins: must pay to house with full bet
           OUTPUTS(0).propositionBytes == houseProp.propBytes &&
           OUTPUTS(0).value >= betAmount
         }
@@ -96,6 +108,8 @@
   }
 
   // -- REFUND path: player spends after timeout ----------------------
+  // Conditions: timeout reached, player signature valid,
+  // correct refund amount, NFT preserved in OUTPUTS(1)
   val canRefund: Boolean = {
     HEIGHT >= timeoutHeight &&
     playerProp &&
