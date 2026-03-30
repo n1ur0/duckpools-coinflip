@@ -226,10 +226,14 @@ async def root():
         "version": "0.2.0",
         "endpoints": {
             "place_bet": "POST /place-bet",
+            "reveal": "POST /reveal",
+            "bot_build_reveal_tx": "POST /bot/build-reveal-tx",
+            "bot_reveal_and_pay": "POST /bot/reveal-and-pay",
             "leaderboard": "/leaderboard",
             "history": "/history/{address}",
             "player_stats": "/player/stats/{address}",
             "player_comp": "/player/comp/{address}",
+            "contract_info": "/contract-info",
             "health": "/health",
         },
     }
