@@ -15,6 +15,9 @@ from pydantic import BaseModel, Field, field_validator
 
 from validators import validate_ergo_address, ValidationError as ErgoValidationError
 
+# ─── Missing import for timedelta (used in place_bet deduplication) ───────
+from datetime import timedelta
+
 router = APIRouter(tags=["game"])
 
 # ─── Compiled Contract Constants ──────────────────────────────────
@@ -395,4 +398,114 @@ async def place_bet(req: PlaceBetRequest):
         txId="",  # In PoC, no actual tx broadcast
         betId=req.betId,
         message="Bet placed. Waiting for on-chain confirmation.",
+    )
+
+
+# ─── Bot Settlement Endpoint ────────────────────────────────────────────
+
+
+class SettleRequest(BaseModel):
+    """Payload from off-chain bot after settling a bet on-chain."""
+    boxId: str
+    txId: str
+    outcome: str  # "win" or "lose"
+    rngResult: int
+    playerChoice: int
+    playerAddress: str
+    betAmount: int
+    payout: int
+
+
+class SettleResponse(BaseModel):
+    success: bool
+    betId: str = ""
+    message: str = ""
+
+
+@router.post("/settle", response_model=SettleResponse)
+async def settle_bet(req: SettleRequest):
+    """
+    Receive settlement result from off-chain bot and update bet history.
+
+    The bot calls this after successfully broadcasting a reveal transaction.
+    We match by boxId and update the in-memory bet record with the outcome.
+    """
+    # Find bet by boxId (if recorded) or by player address + pending status
+    matched_bet = None
+    for b in _bets:
+        if b.get("boxId") == req.boxId:
+            matched_bet = b
+            break
+
+    # Fallback: find any pending bet for this player
+    if matched_bet is None and req.playerAddress:
+        pending_for_player = [
+            b for b in _bets
+            if b["playerAddress"] == req.playerAddress and b["outcome"] == "pending"
+        ]
+        if pending_for_player:
+            matched_bet = pending_for_player[-1]  # Most recent
+
+    if matched_bet is None:
+        # No matching bet found — create a history record anyway
+        # so the player can see their resolved bet
+        now = datetime.now(timezone.utc).isoformat()
+        new_record = {
+            "betId": req.boxId,  # Use boxId as betId if none matched
+            "txId": req.txId,
+            "boxId": req.boxId,
+            "playerAddress": req.playerAddress,
+            "gameType": "coinflip",
+            "choice": {
+                "gameType": "coinflip",
+                "side": "heads" if req.playerChoice == 0 else "tails",
+            },
+            "betAmount": str(req.betAmount),
+            "outcome": req.outcome,
+            "actualOutcome": {
+                "gameType": "coinflip",
+                "result": "heads" if req.rngResult == 0 else "tails",
+                "rngValue": req.rngResult,
+            },
+            "payout": str(req.payout),
+            "payoutMultiplier": 0.97,
+            "timestamp": now,
+            "blockHeight": 0,
+            "resolvedAtHeight": None,
+        }
+        _bets.append(new_record)
+
+        # Update pool stats
+        if req.outcome == "win":
+            _pool_stats["playerWins"] += 1
+        else:
+            _pool_stats["houseWins"] += 1
+
+        return SettleResponse(
+            success=True,
+            betId=req.boxId,
+            message="Settlement recorded (new entry).",
+        )
+
+    # Update existing bet record
+    matched_bet["outcome"] = req.outcome
+    matched_bet["txId"] = req.txId
+    matched_bet["boxId"] = req.boxId
+    matched_bet["payout"] = str(req.payout)
+    matched_bet["actualOutcome"] = {
+        "gameType": "coinflip",
+        "result": "heads" if req.rngResult == 0 else "tails",
+        "rngValue": req.rngResult,
+    }
+
+    # Update pool stats
+    if req.outcome == "win":
+        _pool_stats["playerWins"] += 1
+    else:
+        _pool_stats["houseWins"] += 1
+
+    return SettleResponse(
+        success=True,
+        betId=matched_bet.get("betId", req.boxId),
+        message="Settlement recorded.",
     )

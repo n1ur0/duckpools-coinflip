@@ -13,5 +13,9 @@ tenacity>=8.2.0
 # Structured logging
 structlog>=23.0.0
 
-# Async runtime
-asyncio
+# Base58 encoding (for Ergo address derivation)
+base58>=2.1.0
+
+# Health server
+aiohttp>=3.9.0
+aiohttp-cors>=0.7.0
