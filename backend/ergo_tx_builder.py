@@ -32,7 +32,7 @@ import httpx
 logger = logging.getLogger("duckpools.ergo_tx")
 
 NODE_URL = os.getenv("NODE_URL", "http://localhost:9052")
-NODE_API_KEY = os.getenv("ERGO_API_KEY", os.getenv("NODE_API_KEY", "hello"))
+NODE_API_KEY = os.getenv("NODE_API_KEY", "hello")
 
 
 def _node_headers(content_type: str = "application/json") -> dict:
@@ -273,8 +273,7 @@ def compute_rng(block_hash_hex: str, secret_hex: str) -> int:
         secret_hex: Player secret as hex string
     """
     from rng_module import compute_rng as _compute_rng
-    secret_bytes = bytes.fromhex(secret_hex)
-    return _compute_rng(block_hash_hex, secret_bytes)
+    return _compute_rng(block_hash_hex, secret_hex)
 
 
 def verify_commitment(secret_hex: str, choice: int, commitment_hex: str) -> bool:
@@ -284,8 +283,7 @@ def verify_commitment(secret_hex: str, choice: int, commitment_hex: str) -> bool
     Matches on-chain: blake2b256(playerSecret ++ Coll(choiceByte)) == commitmentHash
     """
     from rng_module import verify_commit as _verify_commit
-    secret_bytes = bytes.fromhex(secret_hex)
-    return _verify_commit(commitment_hex, secret_bytes, choice)
+    return _verify_commit(commitment_hex, secret_hex, choice)
 
 
 def build_reveal_outputs(

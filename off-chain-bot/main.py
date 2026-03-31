@@ -40,6 +40,7 @@ logger = get_logger(__name__)
 # ─── Configuration ─────────────────────────────────────────────────────────
 
 # Load from environment variables
+NODE_URL = os.getenv("NODE_URL", "http://127.0.0.1:9052")
 NODE_API_KEY = os.getenv("NODE_API_KEY", "")
 HEARTBEAT_FILE = os.getenv("HEARTBEAT_FILE", "/tmp/off-chain-bot-heartbeat.txt")
 HEARTBEAT_INTERVAL_SECONDS = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "30"))
@@ -225,6 +226,7 @@ class ErgoNodeClient:
     """HTTP client for Ergo node API with retry logic."""
 
     def __init__(self, node_url: str, api_key: str = ""):
+        self.node_url = node_url
         self.api_key = api_key
         self.api_key = api_key
         self._client: Optional[httpx.AsyncClient] = None
@@ -324,6 +326,7 @@ class OffChainBot:
         heartbeat_interval_seconds: int = 30,
         health_server_port: int = 8001,
     ):
+        self.node_url = node_url
         self.api_key = api_key
         self.api_key = api_key
         self.shutdown_manager = ShutdownManager()
@@ -959,6 +962,7 @@ class OffChainBot:
 async def main():
     """Main entry point."""
     bot = OffChainBot(
+        node_url=NODE_URL,
         api_key=NODE_API_KEY,
         heartbeat_file=HEARTBEAT_FILE,
         heartbeat_interval_seconds=HEARTBEAT_INTERVAL_SECONDS,

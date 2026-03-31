@@ -197,10 +197,50 @@ _pool_stats = {
 
 @router.get("/leaderboard", response_model=LeaderboardResponse)
 async def get_leaderboard():
-    """Leaderboard for Leaderboard.tsx."""
+    """Leaderboard for Leaderboard.tsx.
+
+    Aggregates per-player stats from the in-memory bet store and returns
+    players sorted by netPnL descending.
+    """
+    # Aggregate per player
+    player_stats: dict = {}
+    for b in _bets:
+        addr = b.get("playerAddress", "")
+        if not addr:
+            continue
+        if addr not in player_stats:
+            player_stats[addr] = {"totalBets": 0, "netPnL": 0, "wins": 0}
+        player_stats[addr]["totalBets"] += 1
+        payout = int(b.get("payout", "0"))
+        amount = int(b.get("betAmount", "0"))
+        if b.get("outcome") == "win":
+            player_stats[addr]["netPnL"] += payout - amount
+            player_stats[addr]["wins"] += 1
+        elif b.get("outcome") == "loss":
+            player_stats[addr]["netPnL"] -= amount
+
+    # Sort by netPnL descending
+    sorted_players = sorted(
+        player_stats.items(), key=lambda x: x[1]["netPnL"], reverse=True
+    )
+
+    entries = []
+    for rank, (addr, stats) in enumerate(sorted_players[:20], start=1):
+        total = stats["totalBets"]
+        win_rate = (stats["wins"] / total * 100) if total > 0 else 0.0
+        entries.append(
+            LeaderboardEntry(
+                rank=rank,
+                address=addr,
+                totalBets=total,
+                netPnL=str(stats["netPnL"]),
+                winRate=win_rate,
+            )
+        )
+
     return LeaderboardResponse(
-        players=[],
-        totalPlayers=0,
+        players=entries,
+        totalPlayers=len(player_stats),
         sortBy="netPnL",
     )
 
@@ -487,6 +527,103 @@ async def place_bet(req: PlaceBetRequest):
     )
 
 
+# ─── Confirm-bet endpoint (MAT-420) ─────────────────────────────────
+
+class ConfirmBetRequest(BaseModel):
+    """Payload from the frontend after a successful on-chain bet submission.
+
+    The on-chain flow builds + signs + broadcasts the tx entirely client-side
+    (Fleet SDK + Nautilus wallet).  The backend never sees the tx until the
+    frontend tells us about it via this endpoint.  We record it in the
+    in-memory store so that history / stats / leaderboard can display it.
+    """
+    betId: str
+    txId: str
+    playerAddress: str
+    choice: int  # 0 = Heads, 1 = Tails
+    betAmount: str  # nanoERG
+    commitment: str = ""
+    boxId: str = ""
+
+
+class ConfirmBetResponse(BaseModel):
+    success: bool = True
+    message: str = ""
+
+
+@router.post("/confirm-bet", response_model=ConfirmBetResponse)
+async def confirm_bet(request: Request, body: ConfirmBetRequest):
+    """
+    Record a bet that was submitted on-chain by the frontend.
+
+    In the on-chain flow the frontend builds, signs, and broadcasts the
+    transaction directly via Fleet SDK + Nautilus wallet — the backend's
+    /place-bet endpoint is never called.  This endpoint bridges that gap
+    by letting the frontend tell us the bet happened so we can track it
+    in the in-memory store (history, stats, leaderboard).
+
+    MAT-420: Fix "no updated data in frontend after bet submission".
+    """
+    import logging
+    _log = logging.getLogger("duckpools.game.confirm")
+
+    now = datetime.now(timezone.utc).isoformat()
+    side = "heads" if body.choice == 0 else "tails"
+
+    bet = {
+        "betId": body.betId,
+        "txId": body.txId,
+        "boxId": body.boxId,
+        "playerAddress": body.playerAddress,
+        "gameType": "coinflip",
+        "choice": {"gameType": "coinflip", "side": side},
+        "betAmount": body.betAmount,
+        "outcome": "pending",
+        "actualOutcome": None,
+        "payout": "0",
+        "payoutMultiplier": 0.97,
+        "timestamp": now,
+        "blockHeight": 0,
+        "resolvedAtHeight": None,
+    }
+    _bets.append(bet)
+    _pool_stats["totalBets"] += 1
+    fee = int(body.betAmount) * 3 // 100
+    _pool_stats["totalFees"] = str(int(_pool_stats["totalFees"]) + fee)
+
+    # Track for off-chain bot
+    _track_tx_for_bot(body.txId)
+
+    _log.info(
+        "bet_confirmed: bet_id=%s tx_id=%s player=%s amount=%s",
+        body.betId[:16],
+        body.txId[:16],
+        body.playerAddress[:16],
+        body.betAmount,
+    )
+
+    # Fire WebSocket bet_placed event
+    ws_manager = getattr(request.app.state, "ws_manager", None)
+    if ws_manager:
+        try:
+            from game_events import make_bet_placed_event, broadcast_bet_event
+            placed_event = make_bet_placed_event(
+                bet_id=body.betId,
+                player_address=body.playerAddress,
+                amount_nanoerg=int(body.betAmount),
+                choice=side,
+                commitment_hash=body.commitment or None,
+            )
+            await broadcast_bet_event(ws_manager, placed_event, body.playerAddress)
+        except Exception as e:
+            _log.error("ws_broadcast_failed: %s", str(e))
+
+    return ConfirmBetResponse(
+        success=True,
+        message="Bet recorded. Awaiting on-chain reveal.",
+    )
+
+
 # ─── Bot-facing endpoints (MAT-416) ────────────────────────────────
 
 _pending_tx_tracker: List[str] = []  # Track bet tx IDs for the bot
@@ -611,7 +748,7 @@ async def resolve_bet(request: Request, body: ResolveBetRequest):
             if bet.get("txId", "") == bet_tx_id and bet.get("outcome") == "pending":
                 matched_bet = bet
                 matched_idx = i
-                _log.info("resolve_bet: matched by txId", tx_id=bet_tx_id[:16])
+                _log.info("resolve_bet: matched by txId=%s", bet_tx_id[:16])
                 break
 
     # Strategy 2: Match by boxId
@@ -620,7 +757,7 @@ async def resolve_bet(request: Request, body: ResolveBetRequest):
             if bet.get("boxId", "") == box_id and bet.get("outcome") == "pending":
                 matched_bet = bet
                 matched_idx = i
-                _log.info("resolve_bet: matched by boxId", box_id=box_id[:16])
+                _log.info("resolve_bet: matched by boxId=%s", box_id[:16])
                 break
 
     # Strategy 3: Match by playerAddress + pending status
@@ -629,7 +766,7 @@ async def resolve_bet(request: Request, body: ResolveBetRequest):
             if bet.get("playerAddress", "").lower() == player_address and bet.get("outcome") == "pending":
                 matched_bet = bet
                 matched_idx = i
-                _log.info("resolve_bet: matched by playerAddress", player=player_address[:16])
+                _log.info("resolve_bet: matched by playerAddress=%s", player_address[:16])
                 break
 
     # Strategy 4: Last resort — any pending bet
@@ -639,8 +776,8 @@ async def resolve_bet(request: Request, body: ResolveBetRequest):
                 matched_bet = bet
                 matched_idx = i
                 _log.warning(
-                    "resolve_bet: fallback to first pending bet",
-                    bet_id=bet.get("betId", "")[:16],
+                    "resolve_bet: fallback to first pending bet, bet_id=%s",
+                    bet.get("betId", "")[:16],
                 )
                 break
 
@@ -668,16 +805,16 @@ async def resolve_bet(request: Request, body: ResolveBetRequest):
 
         bet_updated = True
         _log.info(
-            "bet_resolved",
-            bet_id=matched_bet.get("betId", "")[:16],
-            outcome=outcome,
-            player=player_address[:16],
+            "bet_resolved: bet_id=%s outcome=%s player=%s",
+            matched_bet.get("betId", "")[:16],
+            outcome,
+            player_address[:16],
         )
     else:
         _log.warning(
-            "resolve_bet: no matching pending bet found",
-            player=player_address[:16] if player_address else "unknown",
-            box_id=body.boxId[:16] if body.boxId else "unknown",
+            "resolve_bet: no matching pending bet found, player=%s box_id=%s",
+            player_address[:16] if player_address else "unknown",
+            body.boxId[:16] if body.boxId else "unknown",
         )
 
     # ── 3. Fire WebSocket events ───────────────────────────────────
@@ -713,13 +850,13 @@ async def resolve_bet(request: Request, body: ResolveBetRequest):
             sent2 = await broadcast_bet_event(ws_manager, settled_event, player_address)
 
             _log.info(
-                "ws_events_sent",
-                revealed_to=sent1,
-                settled_to=sent2,
-                player=player_address[:16],
+                "ws_events_sent: revealed_to=%s settled_to=%s player=%s",
+                sent1,
+                sent2,
+                player_address[:16],
             )
         except Exception as e:
-            _log.error("ws_broadcast_failed", error=str(e))
+            _log.error("ws_broadcast_failed: %s", str(e))
 
     # ── 4. Untrack resolved tx IDs ────────────────────────────────
     # The revealTxId is the new reveal transaction — untrack it

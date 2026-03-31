@@ -36,6 +36,14 @@ export default function Leaderboard() {
 
   useEffect(() => {
     fetchLeaderboard();
+
+    // Listen for bet placement events to refresh immediately
+    const handleBetPlaced = () => fetchLeaderboard();
+    window.addEventListener('duckpools:bet-placed', handleBetPlaced);
+
+    return () => {
+      window.removeEventListener('duckpools:bet-placed', handleBetPlaced);
+    };
   }, [fetchLeaderboard]);
 
   return (

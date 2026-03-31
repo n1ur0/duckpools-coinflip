@@ -231,6 +231,27 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
         }
 
         console.log(`[CoinFlip] On-chain bet placed: txId=${txId}, timeout=${timeoutHeight}`);
+
+        // 4. Notify backend so history/stats/leaderboard can track this bet.
+        //    In on-chain mode the backend never sees the tx — bridge that gap.
+        try {
+          await fetch(buildApiUrl('/confirm-bet'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              betId,
+              txId,
+              playerAddress: walletAddress,
+              choice,
+              betAmount: amountNanoErg,
+              commitment,
+            }),
+          });
+          console.log('[CoinFlip] Backend notified of on-chain bet');
+        } catch (notifyErr) {
+          // Non-fatal: bet is still on-chain, just backend tracking lag
+          console.warn('[CoinFlip] Failed to notify backend (non-fatal):', notifyErr);
+        }
       } else {
         // ── OFF-CHAIN FALLBACK ─────────────────────────────────
         // Contract not compiled yet (MAT-344 blocker).
@@ -272,6 +293,10 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
         commitment,
         txId: txId || undefined,
       });
+
+      // 5. Dispatch a custom event so GameHistory, StatsDashboard, and
+      //    Leaderboard can immediately refresh their data from the backend.
+      window.dispatchEvent(new CustomEvent('duckpools:bet-placed', { detail: { betId, txId } }));
 
       // Reset form
       setAmount('');

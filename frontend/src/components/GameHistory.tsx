@@ -68,8 +68,13 @@ export default function GameHistory() {
     fetchHistory();
     intervalRef.current = setInterval(() => fetchHistory(false), REFRESH_INTERVAL);
 
+    // Listen for bet placement events to refresh immediately
+    const handleBetPlaced = () => fetchHistory(false);
+    window.addEventListener('duckpools:bet-placed', handleBetPlaced);
+
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
+      window.removeEventListener('duckpools:bet-placed', handleBetPlaced);
     };
   }, [isConnected, walletAddress, fetchHistory]);
 

@@ -37,6 +37,14 @@ export default function StatsDashboard() {
       return;
     }
     fetchStats();
+
+    // Listen for bet placement events to refresh immediately
+    const handleBetPlaced = () => fetchStats();
+    window.addEventListener('duckpools:bet-placed', handleBetPlaced);
+
+    return () => {
+      window.removeEventListener('duckpools:bet-placed', handleBetPlaced);
+    };
   }, [isConnected, walletAddress, fetchStats]);
 
   // ── Not connected ───────────────────────────────────────────────
