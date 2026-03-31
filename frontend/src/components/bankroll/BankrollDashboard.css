@@ -1,0 +1,102 @@
+/* BankrollDashboard - bk-dashboard- prefix */
+
+.bk-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── Header ────────────────────────────────────── */
+
+.bk-dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.bk-dashboard-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bk-dashboard-title {
+  font-family: var(--font-heading, 'Space Grotesk', sans-serif);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary, #f0f0f0);
+  margin: 0;
+}
+
+.bk-dashboard-live {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent-green, #00ff88);
+}
+
+.bk-dashboard-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-green, #00ff88);
+  animation: bk-dashboard-pulse 2s ease-in-out infinite;
+}
+
+.bk-dashboard-live--idle {
+  color: var(--text-secondary, #8892b0);
+}
+
+.bk-dashboard-live--idle .bk-dashboard-live-dot {
+  background: var(--text-secondary, #8892b0);
+  animation: none;
+}
+
+@keyframes bk-dashboard-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.4); }
+  50% { opacity: 0.7; box-shadow: 0 0 0 4px rgba(0, 255, 136, 0); }
+}
+
+.bk-dashboard-poll {
+  font-size: 0.72rem;
+  color: var(--text-secondary, #8892b0);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+
+/* ── Stats Grid ────────────────────────────────── */
+
+.bk-dashboard-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.bk-dashboard-stats-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Responsive ────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .bk-dashboard-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .bk-dashboard-title {
+    font-size: 1.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .bk-dashboard {
+    gap: 14px;
+  }
+}

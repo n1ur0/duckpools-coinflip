@@ -3,6 +3,7 @@ import { WalletProvider } from './contexts/WalletContext';
 import GameHistory from './components/GameHistory';
 import StatsDashboard from './components/StatsDashboard';
 import Leaderboard from './components/Leaderboard';
+import BankrollDashboard from './components/bankroll/BankrollDashboard';
 import CoinFlipGame from './components/games/CoinFlipGame';
 import TestWallet from './components/TestWallet';
 import WalletConnector from './components/WalletConnector';
@@ -144,6 +145,7 @@ function App() {
               <GameHistory />
               <StatsDashboard />
               <Leaderboard />
+              <BankrollDashboard />
             </div>
 
             {showDevPanel && (

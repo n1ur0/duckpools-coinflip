@@ -12,3 +12,6 @@ export type { BetState, PendingBet } from './betStore';
 
 export { usePreferencesStore } from './preferencesStore';
 export type { PreferencesState, RiskLevel, CurrencyDisplay } from './preferencesStore';
+
+export { useBankrollStore } from './bankrollStore';
+export type { BankrollState } from './bankrollStore';

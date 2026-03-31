@@ -1,0 +1,108 @@
+/* ProfitTracker - bk-profit- prefix */
+
+.bk-profit {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.06));
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.bk-profit::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent-red, #ef4444), var(--accent-green, #00ff88));
+}
+
+.bk-profit-icon {
+  font-size: 1.5rem;
+  margin-bottom: 8px;
+}
+
+.bk-profit-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary, #8892b0);
+  margin-bottom: 14px;
+}
+
+.bk-profit-values {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.bk-profit-main,
+.bk-profit-daily {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.bk-profit-number {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.bk-profit-positive { color: var(--accent-green, #00ff88); }
+.bk-profit-negative { color: var(--accent-red, #ef4444); }
+
+.bk-profit-sublabel {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-secondary, #8892b0);
+}
+
+.bk-profit-divider {
+  width: 1px;
+  height: 36px;
+  background: var(--border-color, rgba(255, 255, 255, 0.08));
+}
+
+.bk-profit-na {
+  font-size: 0.9rem;
+  color: var(--text-secondary, #8892b0);
+}
+
+/* Skeleton */
+
+.bk-profit-skeleton-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.bk-profit-skeleton {
+  width: 130px;
+  height: 26px;
+  border-radius: 6px;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.03) 25%,
+    rgba(255,255,255,0.07) 50%,
+    rgba(255,255,255,0.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: bk-profit-shimmer 1.5s infinite;
+}
+
+.bk-profit-skeleton--small {
+  width: 90px;
+  height: 20px;
+}
+
+@keyframes bk-profit-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
