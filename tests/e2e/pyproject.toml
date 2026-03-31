@@ -1,0 +1,11 @@
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests/e2e"]
+markers = [
+    "e2e: End-to-end integration test",
+    "slow: Tests that take > 1s",
+    "concurrent: Tests involving concurrent requests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
