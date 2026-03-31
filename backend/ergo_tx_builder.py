@@ -32,7 +32,7 @@ import httpx
 logger = logging.getLogger("duckpools.ergo_tx")
 
 NODE_URL = os.getenv("NODE_URL", "http://localhost:9052")
-NODE_API_KEY = os.getenv("NODE_API_KEY", "")
+NODE_API_KEY = os.getenv("ERGO_API_KEY", os.getenv("NODE_API_KEY", "hello"))
 
 
 def _node_headers(content_type: str = "application/json") -> dict:
@@ -102,6 +102,67 @@ def encode_coll_byte(hex_str: str) -> str:
     # SByte type tag = 0x04
     encoded = bytes([0x04]) + raw_bytes
     return encoded.hex()
+
+
+def sigma_encode_coll_byte(hex_str: str) -> str:
+    """
+    Encode as sigma-serialized Constant(Coll[SByte]) for node register values.
+
+    Format: 09 01 <VLQ(len)> <raw_bytes>
+      09 = SColl type ID
+      01 = SByte element type ID
+      VLQ(len) = variable-length quantity encoding of byte array length
+      raw_bytes = the actual byte data
+
+    This is the correct format for the /wallet/payment/send registers field.
+    """
+    raw = bytes.fromhex(hex_str)
+    length = len(raw)
+    return f"0901{_encode_vlq_unsigned(length)}{raw.hex()}"
+
+
+def sigma_encode_int(value: int) -> str:
+    """
+    Encode as sigma-serialized Constant(SInt) for node register values.
+
+    Format: 03 <ZigZag+VLQ(value)>
+      03 = SInt type ID
+      ZigZag encoding: (n << 1) ^ (n >> 63)
+      VLQ encoding: variable-length quantity of unsigned zigzag value
+
+    Used for R7 (playerChoice) and R8 (timeoutHeight).
+    """
+    # ZigZag encode for signed integers
+    if value >= 0:
+        zz = value * 2
+    else:
+        zz = (-value) * 2 - 1
+    return f"03{_encode_vlq_unsigned(zz)}"
+
+
+def _encode_vlq_unsigned(value: int) -> str:
+    """
+    VLQ (Variable Length Quantity) encoding for unsigned values.
+    Each byte has 7 data bits + 1 continuation bit (MSB = 1 means more bytes).
+    """
+    if value == 0:
+        return "00"
+
+    bytes_list = []
+    remaining = value
+    while remaining > 0:
+        byte = remaining & 0x7F
+        remaining >>= 7
+        bytes_list.append(byte)
+
+    # Reverse to big-endian
+    bytes_list.reverse()
+
+    # Set continuation bits (all bytes except last get MSB=1)
+    for i in range(len(bytes_list) - 1):
+        bytes_list[i] |= 0x80
+
+    return bytes(bytes_list).hex()
 
 
 def encode_int_value(value: int) -> str:
@@ -479,3 +540,255 @@ async def fetch_unspent_box(box_id: str) -> Optional[dict]:
 async def fetch_wallet_balances() -> dict:
     """Fetch house wallet balances from the Ergo node."""
     return await _node_get("/wallet/balances")
+
+
+# ─── Place Bet (PendingBetBox Creation) ──────────────────────────
+# MAT-410: Test bet submissions from the ergo node without frontend.
+#
+# Creates a PendingBetBox on-chain via /wallet/payment/send.
+# The box contains the coinflip contract (ergoTree) with registers:
+#   R4: housePubKey (Coll[Byte])
+#   R5: playerPubKey (Coll[Byte])
+#   R6: commitmentHash (Coll[Byte]) = blake2b256(secret || choice_byte)
+#   R7: playerChoice (Int) = 0 or 1
+#   R8: timeoutHeight (Int) = currentHeight + TIMEOUT_BLOCKS
+#   R9: playerSecret (Coll[Byte])
+
+# P2S address of the compiled coinflip contract (from coinflip_deployed.json)
+COINFLIP_P2S = (
+    "3yNMkSZ6b36YGBJJNhpavxxCFg4f2ceH5JF81hXJgzWoWozuFJSjoW8Q5JXow6fs"
+    "TVNrqz48h8a9ajYSTKfwaxG16GbHzxrDcsarkBkbR6NYdGeoCZ9KgNcNMYPLV9RP"
+    "kLFwBPLHxDxyTmBfqn5L75zqftETuAadKr8FHEYZrVPZ6kn6gdiZbzMwghxRy2g4w"
+    "pTdby4jnxhA42UH7JJzMibgMNBW4yvzw8EaguPLVja6xsxx43yihw5DEzMGzL7HKWY"
+    "Us6uVugK1C8Feh3KUX9kpea5xpLXX5oZCV47W6cnTrJfJD3"
+)
+
+TIMEOUT_BLOCKS = 100  # Refund available after 100 blocks
+
+
+def build_place_bet_registers(
+    house_pubkey_hex: str,
+    player_pubkey_hex: str,
+    commitment_hex: str,
+    choice: int,
+    timeout_height: int,
+    secret_hex: str,
+) -> dict:
+    """
+    Build the register map for a PendingBetBox.
+
+    All values are sigma-serialized Constant hex strings for the
+    /wallet/payment/send registers field.
+
+    Args:
+        house_pubkey_hex: 33-byte compressed public key (66 hex chars)
+        player_pubkey_hex: 33-byte compressed public key (66 hex chars)
+        commitment_hex: 32-byte blake2b256 hash (64 hex chars)
+        choice: 0 (heads) or 1 (tails)
+        timeout_height: Block height for refund availability
+        secret_hex: Player's random secret bytes (variable length)
+
+    Returns:
+        dict mapping register names to sigma-serialized hex values
+    """
+    return {
+        "R4": sigma_encode_coll_byte(house_pubkey_hex),
+        "R5": sigma_encode_coll_byte(player_pubkey_hex),
+        "R6": sigma_encode_coll_byte(commitment_hex),
+        "R7": sigma_encode_int(choice),
+        "R8": sigma_encode_int(timeout_height),
+        "R9": sigma_encode_coll_byte(secret_hex),
+    }
+
+
+def build_place_bet_payment(
+    bet_amount: int,
+    house_pubkey_hex: str,
+    player_pubkey_hex: str,
+    commitment_hex: str,
+    choice: int,
+    timeout_height: int,
+    secret_hex: str,
+    fee: int = 1_000_000,
+) -> list:
+    """
+    Build the payment request array for /wallet/payment/send.
+
+    The Ergo node payment endpoint accepts an array of PaymentRequest
+    objects. Each request creates one output box.
+
+    Returns:
+        list of PaymentRequest dicts for the node API
+    """
+    registers = build_place_bet_registers(
+        house_pubkey_hex, player_pubkey_hex, commitment_hex,
+        choice, timeout_height, secret_hex,
+    )
+
+    return [{
+        "address": COINFLIP_P2S,
+        "value": bet_amount,
+        "registers": registers,
+    }]
+
+
+async def place_bet_onchain(
+    bet_amount: int,
+    house_pubkey_hex: str,
+    player_pubkey_hex: str,
+    commitment_hex: str,
+    choice: int,
+    secret_hex: str,
+    timeout_blocks: int = TIMEOUT_BLOCKS,
+    fee: int = 1_000_000,
+) -> dict:
+    """
+    Place a bet on-chain by creating a PendingBetBox via the Ergo node.
+
+    Uses /wallet/payment/send (NOT /wallet/transaction/send) because the
+    transaction endpoint silently drops outputs with custom ergoTree +
+    additionalRegisters (MAT-27 bug).
+
+    The payment endpoint correctly handles registers and creates the
+    PendingBetBox with the coinflip contract ergoTree.
+
+    Args:
+        bet_amount: Bet amount in nanoERG (min 1,000,000 = 0.001 ERG)
+        house_pubkey_hex: House's 33-byte compressed public key (66 hex chars)
+        player_pubkey_hex: Player's 33-byte compressed public key (66 hex chars)
+        commitment_hex: blake2b256(secret || choice_byte) (64 hex chars)
+        choice: Player's choice: 0=heads, 1=tails
+        secret_hex: Player's random secret bytes (hex string)
+        timeout_blocks: Blocks until refund is available (default 100)
+        fee: Transaction fee in nanoERG (default 0.001 ERG)
+
+    Returns:
+        dict with success, txId, message (or error details)
+    """
+    # Get current block height for timeout calculation
+    height = await get_node_height()
+    if height == 0:
+        return {
+            "success": False,
+            "txId": "",
+            "message": "Node not synced (fullHeight is null). Cannot determine block height for timeout.",
+        }
+
+    timeout_height = height + timeout_blocks
+
+    # Build payment request
+    payments = build_place_bet_payment(
+        bet_amount=bet_amount,
+        house_pubkey_hex=house_pubkey_hex,
+        player_pubkey_hex=player_pubkey_hex,
+        commitment_hex=commitment_hex,
+        choice=choice,
+        timeout_height=timeout_height,
+        secret_hex=secret_hex,
+        fee=fee,
+    )
+
+    logger.info(
+        "Submitting place-bet tx: amount=%d choice=%d timeout=%d house=%s... player=%s...",
+        bet_amount, choice, timeout_height,
+        house_pubkey_hex[:8], player_pubkey_hex[:8],
+    )
+
+    try:
+        result = await _node_post(
+            f"/wallet/payment/send?fee={fee}",
+            payments,
+            timeout=30,
+        )
+        tx_id = result.get("id", "")
+
+        return {
+            "success": True,
+            "txId": tx_id,
+            "timeoutHeight": timeout_height,
+            "message": f"Bet placed on-chain. Tx: {tx_id}. Timeout at height {timeout_height}.",
+        }
+    except httpx.HTTPStatusError as e:
+        error_body = e.response.text
+        logger.error("Place-bet tx failed: status=%d body=%s", e.response.status_code, error_body)
+        return {
+            "success": False,
+            "txId": "",
+            "message": f"Place-bet failed (HTTP {e.response.status_code}): {error_body}",
+        }
+    except Exception as e:
+        logger.error("Place-bet tx error: %s", e)
+        return {
+            "success": False,
+            "txId": "",
+            "message": f"Place-bet error: {str(e)}",
+        }
+
+
+def decode_ergo_address_to_pubkey(address: str) -> str:
+    """
+    Extract compressed public key from an Ergo P2PK address.
+
+    Ergo P2PK address encoding (Base58Check):
+      1 byte: type (0x01 for P2PK)
+      33 bytes: compressed public key
+      4 bytes: checksum
+
+    Args:
+        address: Base58Check-encoded Ergo P2PK address
+
+    Returns:
+        66-char hex string of the compressed public key
+
+    Raises:
+        ValueError: If address is not a valid P2PK address or decoding fails
+    """
+    import hashlib
+
+    # Base58 alphabet
+    ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+    # Decode Base58
+    num = 0
+    for char in address:
+        if char not in ALPHABET:
+            raise ValueError(f"Invalid Base58 character: {char}")
+        num = num * 58 + ALPHABET.index(char)
+
+    # Convert to bytes (5 bytes: type + 33 pubkey + 4 checksum)
+    raw = num.to_bytes(38, byteorder="big")
+
+    # Verify checksum (last 4 bytes) - blake2b256 (32-byte digest, take first 4)
+    payload = raw[:-4]
+    checksum = raw[-4:]
+    expected = hashlib.blake2b(payload, digest_size=32).digest()[:4]
+    if checksum != expected:
+        raise ValueError(f"Address checksum mismatch (expected {expected.hex()}, got {checksum.hex()})")
+
+    # Verify P2PK type
+    # First byte: networkPrefix (0x10=testnet, 0x00=mainnet) | addressType (0x01=P2PK)
+    addr_type = payload[0]
+    if (addr_type & 0x0F) != 0x01:
+        raise ValueError(f"Address type is {addr_type:#x}, expected P2PK (0x01 or 0x11)")
+
+    # Extract 33-byte compressed public key
+    pubkey = payload[1:34]
+    return pubkey.hex()
+
+
+async def get_house_wallet_pubkey() -> str:
+    """
+    Get the house wallet's first address public key.
+
+    Returns the compressed public key (hex) of the first wallet address.
+    Falls back to a test key if the wallet is unavailable.
+    """
+    try:
+        addresses = await _node_get("/wallet/addresses")
+        if addresses and len(addresses) > 0:
+            return decode_ergo_address_to_pubkey(addresses[0])
+    except Exception as e:
+        logger.warning("Could not get house wallet pubkey: %s", e)
+
+    # Fallback test pubkey (for development only)
+    return "02" + "00" * 32

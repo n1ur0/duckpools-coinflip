@@ -231,6 +231,7 @@ async def root():
             "player_stats": "/player/stats/{address}",
             "player_comp": "/player/comp/{address}",
             "health": "/health",
+            "resolve_bet": "POST /bot/resolve-bet (internal)",
         },
     }
 

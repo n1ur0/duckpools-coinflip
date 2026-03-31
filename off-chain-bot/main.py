@@ -14,6 +14,7 @@ MAT-223: Add retry logic and graceful shutdown
 """
 
 import asyncio
+import json
 import os
 import signal
 import sys
@@ -39,11 +40,19 @@ logger = get_logger(__name__)
 # ─── Configuration ─────────────────────────────────────────────────────────
 
 # Load from environment variables
-NODE_URL = os.getenv("NODE_URL", "http://localhost:9052")
+NODE_API_KEY=os.getenv("NODE_API_KEY", "")
 NODE_API_KEY = os.getenv("NODE_API_KEY", "")
 HEARTBEAT_FILE = os.getenv("HEARTBEAT_FILE", "/tmp/off-chain-bot-heartbeat.txt")
 HEARTBEAT_INTERVAL_SECONDS = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "30"))
 HEALTH_SERVER_PORT = int(os.getenv("HEALTH_SERVER_PORT", "8001"))
+
+# Data directory for shared files (pending_txs.json, pending_boxes.json).
+# Defaults to the bot's own directory so it matches where the backend writes.
+DATA_DIR = Path(os.getenv("DATA_DIR", str(Path(__file__).parent)))
+
+# Backend API URL for reporting bet resolutions (MAT-419)
+BOT_API_KEY=os.getenv("BOT_API_KEY", "")
+BOT_API_KEY = os.getenv("BOT_API_KEY", "")
 
 # ─── Retry Configuration ────────────────────────────────────────────────────
 
@@ -218,7 +227,7 @@ class ErgoNodeClient:
     """HTTP client for Ergo node API with retry logic."""
 
     def __init__(self, node_url: str, api_key: str = ""):
-        self.node_url = node_url.rstrip("/")
+        self.api_key = api_key
         self.api_key = api_key
         self._client: Optional[httpx.AsyncClient] = None
 
@@ -317,7 +326,7 @@ class OffChainBot:
         heartbeat_interval_seconds: int = 30,
         health_server_port: int = 8001,
     ):
-        self.node_url = node_url
+        self.api_key = api_key
         self.api_key = api_key
         self.shutdown_manager = ShutdownManager()
         self.heartbeat_manager = HeartbeatManager(heartbeat_file)
@@ -388,36 +397,566 @@ class OffChainBot:
 
     async def process_bets(self):
         """
-        Process pending bets.
+        Process pending bets — real implementation.
 
-        This is a placeholder - real implementation will:
-        1. Query for PendingBet boxes
-        2. Reveal secrets
-        3. Calculate RNG
-        4. Settle bets
+        Workflow:
+        1. Check node is synced (fullHeight must not be null)
+        2. Get current best block header (for RNG seed: CONTEXT.preHeader.parentId)
+        3. Scan for unspent boxes with coinflip contract ergoTree
+        4. For each PendingBet box:
+           a. Extract registers R4-R9 (pubkeys, commitment, choice, timeout, secret)
+           b. Compute RNG: blake2b256(blockId || playerSecret)[0] % 2
+           c. Determine winner (player_wins = rng_outcome == playerChoice)
+           d. Build reveal tx with correct output (pay player or house)
+           e. Submit via /wallet/transaction/send with rawInputs
+        5. Handle failures: retry on block change, skip timed-out boxes
+
+        MAT-416: Fix "bet transaction submitted but no after effect"
         """
-        # Placeholder: log that we're checking for bets
-        logger.debug("checking_for_pending_bets")
-
-        # Example node API call with retry
+        # ── Step 1: Check node sync ────────────────────────────────
         try:
-            # Get node info to test connectivity
             info = await self.client.get("/info")
-            logger.debug("node_info", full_height=info.get("fullHeight"))
-            
-            # In a real implementation, this would be where we:
-            # 1. Query for PendingBet boxes
-            # 2. Process each bet
-            # 3. Increment the counter for each successful bet
-            
-            # For demo purposes, simulate a bet being processed
-            # In the real implementation, this would be inside the bet processing loop
-            self.health_server.increment_bets_processed()
-            logger.debug("bet_processed_counter_incremented")
-            
         except httpx.HTTPError as e:
-            logger.error("node_api_error", error=str(e))
-            raise
+            logger.warning("node_unreachable", error=str(e))
+            return
+
+        full_height = info.get("fullHeight")
+        if full_height is None:
+            logger.info(
+                "node_not_synced",
+                headers_height=info.get("headersHeight"),
+                message="UTXO state not downloaded, skipping bet scan",
+            )
+            return
+
+        current_height = int(full_height)
+        logger.debug("node_synced", height=current_height)
+
+        # ── Step 2: Get best block header ID (RNG seed) ────────────
+        try:
+            # /blocks/lastHeaders/1 returns a list of header IDs
+            header_ids = await self.client.get("/blocks/lastHeaders/1")
+            if isinstance(header_ids, list) and len(header_ids) > 0:
+                best_header_id = header_ids[0]
+            elif isinstance(header_ids, dict) and "id" in header_ids:
+                best_header_id = header_ids["id"]
+            else:
+                logger.warning("no_block_headers", response=header_ids)
+                return
+        except httpx.HTTPError as e:
+            logger.warning("failed_get_headers", error=str(e))
+            return
+
+        # The RNG uses CONTEXT.preHeader.parentId.
+        # When the reveal tx is included in the next block,
+        # preHeader.parentId = current best header ID.
+        # If a new block arrives before inclusion, the tx may fail
+        # and we retry on the next loop iteration.
+        rng_block_hash = best_header_id
+        logger.debug("rng_seed_set", block_id=rng_block_hash[:16] + "...")
+
+        # ── Step 3: Find PendingBet boxes ──────────────────────────
+        # Strategy 1: byErgoTree scan (requires node extraIndex=true)
+        # Strategy 2: Track box IDs off-chain in pending_boxes.json
+        # Strategy 3: Look up tx outputs from known bet tx IDs
+        boxes = await self._scan_pending_boxes()
+
+        if not boxes:
+            logger.debug("no_pending_boxes")
+            return
+
+        logger.info("pending_boxes_found", count=len(boxes))
+
+        # ── Step 4: Process each PendingBet box ────────────────────
+        for box in boxes:
+            box_id = box.get("boxId", "")
+            value = int(box.get("value", 0))
+            registers = box.get("additionalRegisters", {})
+            bet_tx_id = box.get("_betTxId", "")  # Original bet tx ID for backend matching
+
+            if not box_id or value == 0:
+                logger.warning("invalid_box", box_id=box_id, value=value)
+                continue
+
+            try:
+                result = await self._reveal_bet(
+                    box_id=box_id,
+                    value=value,
+                    registers=registers,
+                    rng_block_hash=rng_block_hash,
+                    current_height=current_height,
+                )
+
+                if result.get("success"):
+                    result["boxId"] = box_id  # Attach box ID for backend notification
+                    result["betTxId"] = bet_tx_id  # Original bet tx ID for precise matching
+                    self.health_server.increment_bets_processed()
+                    # Clean up tracked box
+                    self._remove_pending_box(box_id)
+                    # Clean up tracked bet tx ID
+                    if bet_tx_id:
+                        self._remove_pending_tx(bet_tx_id)
+                    logger.info(
+                        "bet_revealed",
+                        box_id=box_id[:16] + "...",
+                        tx_id=result.get("txId", "")[:16] + "...",
+                        player_wins=result.get("player_wins"),
+                        payout=result.get("payout_amount"),
+                    )
+                    # Notify backend to update bet history + fire WebSocket events (MAT-419)
+                    await self._notify_backend(result, box, current_height)
+                else:
+                    logger.warning(
+                        "reveal_failed",
+                        box_id=box_id[:16] + "...",
+                        reason=result.get("message", "unknown"),
+                    )
+
+            except Exception as e:
+                logger.error(
+                    "reveal_error",
+                    box_id=box_id[:16] + "...",
+                    error=str(e),
+                    exc_info=True,
+                )
+
+    async def _scan_pending_boxes(self) -> list:
+        """
+        Find PendingBet boxes using multiple strategies.
+
+        Strategy 1: /blockchain/box/unspent/byErgoTree (requires node extraIndex=true)
+        Strategy 2: Load tracked box IDs from pending_boxes.json and verify each
+        Strategy 3: Look up tx outputs from tracked bet tx IDs
+
+        Returns list of box dicts from the node, or empty list.
+        """
+        ergo_tree_hex = (
+            "19d8010c04000200020104000404040005c20105640400040004000564d805d601"
+            "cdeee4c6a7040ed602e4c6a7090ed603e4c6a70704d604cdeee4c6a7050ed605c1"
+            "a7eb02ea02ea027201d193cbb3720283010295937203730073017302e4c6a7060ed"
+            "195939e7eb2cbb3db6902db6503fe72027303000473047203d801d606b2a5730500e"
+            "d93c27206d0720492c172069d9c720573067307d801d606b2a5730800ed93c27206"
+            "d0720192c172067205ea02ea02ea02d192a3e4c6a708047204d193c2b2a5730900d"
+            "07204d192c1b2a5730a009972059d7205730b"
+        )
+
+        # ── Strategy 1: byErgoTree scan ────────────────────────────
+        try:
+            boxes = await self.client.post(
+                "/blockchain/box/unspent/byErgoTree",
+                ergo_tree_hex,
+            )
+            if isinstance(boxes, list) and len(boxes) > 0:
+                logger.info("scan_strategy_ergotree", count=len(boxes))
+                return boxes
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code not in (404, 500):
+                logger.debug("ergotree_scan_failed", status=e.response.status_code)
+        except Exception:
+            pass
+
+        # ── Strategy 2: Tracked box IDs ────────────────────────────
+        tracked = self._load_pending_boxes()
+        if tracked:
+            valid_boxes = []
+            for box_id in tracked:
+                try:
+                    box = await self.client.get(f"/blockchain/box/{box_id}")
+                    if box and box.get("boxId"):
+                        valid_boxes.append(box)
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 404:
+                        # Box already spent (reveal or refund happened)
+                        logger.debug("box_already_spent", box_id=box_id[:16] + "...")
+                        continue
+            if valid_boxes:
+                logger.info("scan_strategy_tracked", count=len(valid_boxes))
+                return valid_boxes
+
+        # ── Strategy 3: Look up tx outputs from tracked bet tx IDs ──
+        tracked_txs = self._load_pending_tx_ids()
+        if tracked_txs:
+            valid_boxes = []
+            for tx_id in tracked_txs:
+                try:
+                    tx = await self.client.get(f"/transactions/{tx_id}")
+                    outputs = tx.get("outputs", [])
+                    for out in outputs:
+                        if out.get("ergoTree") == ergo_tree_hex:
+                            box_id = out.get("boxId", "")
+                            if box_id:
+                                # Verify it's still unspent
+                                try:
+                                    box = await self.client.get(f"/blockchain/box/{box_id}")
+                                    if box and box.get("boxId"):
+                                        box["_betTxId"] = tx_id  # Tag with original bet tx
+                                        valid_boxes.append(box)
+                                except httpx.HTTPStatusError as e:
+                                    if e.response.status_code == 404:
+                                        continue
+                except httpx.HTTPStatusError:
+                    continue
+            if valid_boxes:
+                logger.info("scan_strategy_tx_outputs", count=len(valid_boxes))
+                return valid_boxes
+
+        return []
+
+    def _load_pending_boxes(self) -> list:
+        """Load tracked PendingBet box IDs from pending_boxes.json."""
+        path = DATA_DIR / "pending_boxes.json"
+        if not path.exists():
+            return []
+        try:
+            data = json.loads(path.read_text())
+            return data.get("box_ids", [])
+        except Exception as e:
+            logger.warning("failed_load_pending_boxes", error=str(e))
+            return []
+
+    def _save_pending_box(self, box_id: str):
+        """Track a PendingBet box ID in pending_boxes.json."""
+        path = DATA_DIR / "pending_boxes.json"
+        tracked = self._load_pending_boxes()
+        if box_id not in tracked:
+            tracked.append(box_id)
+            path.write_text(json.dumps({"box_ids": tracked}))
+            logger.info("tracked_box", box_id=box_id[:16] + "...")
+
+    def _remove_pending_box(self, box_id: str):
+        """Remove a resolved box from tracking."""
+        path = DATA_DIR / "pending_boxes.json"
+        tracked = self._load_pending_boxes()
+        if box_id in tracked:
+            tracked.remove(box_id)
+            path.write_text(json.dumps({"box_ids": tracked}))
+
+    def _load_pending_tx_ids(self) -> list:
+        """Load tracked bet transaction IDs from pending_txs.json."""
+        path = DATA_DIR / "pending_txs.json"
+        if not path.exists():
+            return []
+        try:
+            data = json.loads(path.read_text())
+            return data.get("tx_ids", [])
+        except Exception:
+            return []
+
+    def _save_pending_tx(self, tx_id: str):
+        """Track a bet transaction ID for later box lookup."""
+        path = DATA_DIR / "pending_txs.json"
+        tracked = self._load_pending_tx_ids()
+        if tx_id not in tracked:
+            tracked.append(tx_id)
+            path.write_text(json.dumps({"tx_ids": tracked}))
+            logger.info("tracked_tx", tx_id=tx_id[:16] + "...")
+
+    def _remove_pending_tx(self, tx_id: str):
+        """Remove a resolved tx from tracking."""
+        path = DATA_DIR / "pending_txs.json"
+        tracked = self._load_pending_tx_ids()
+        if tx_id in tracked:
+            tracked.remove(tx_id)
+            path.write_text(json.dumps({"tx_ids": tracked}))
+
+    async def _reveal_bet(
+        self,
+        box_id: str,
+        value: int,
+        registers: dict,
+        rng_block_hash: str,
+        current_height: int,
+    ) -> dict:
+        """
+        Reveal a single PendingBet box.
+
+        1. Decode registers R4-R9
+        2. Verify commitment
+        3. Compute RNG
+        4. Build and submit reveal tx
+
+        Returns dict with success, txId, player_wins, payout_amount, message.
+        """
+        # ── Decode registers ───────────────────────────────────────
+        # Node returns registers as {"R4": {"serializedValue": "...", "sigmaType": "..."}, ...}
+        def get_reg_bytes(reg_name: str) -> str:
+            reg = registers.get(reg_name, {})
+            sv = reg.get("serializedValue", "")
+            if not sv:
+                raise ValueError(f"Missing register {reg_name}")
+            # Remove leading type byte (0x04 for SByte coll elements) per decode_coll_byte_from_node
+            raw = bytes.fromhex(sv)
+            if len(raw) < 2:
+                raise ValueError(f"Register {reg_name} too short: {sv}")
+            return raw[1:].hex()
+
+        def get_reg_int(reg_name: str) -> int:
+            reg = registers.get(reg_name, {})
+            sv = reg.get("serializedValue", "")
+            if not sv:
+                raise ValueError(f"Missing register {reg_name}")
+            # Decode VLQ integer from node serialization
+            raw = bytes.fromhex(sv)
+            if not raw:
+                return 0
+            # VLQ with sign: bit 6 of last byte is sign
+            value = 0
+            for b in raw:
+                value = (value << 7) | (b & 0x7F)
+            negative = bool(raw[-1] & 0x40)
+            return -value if negative else value
+
+        house_pubkey_hex = get_reg_bytes("R4")
+        player_pubkey_hex = get_reg_bytes("R5")
+        commitment_hex = get_reg_bytes("R6")
+        player_choice = get_reg_int("R7")
+        player_secret_hex = get_reg_bytes("R9")
+        player_secret_hex = get_reg_bytes("R9")
+
+        logger.debug(
+            "box_decoded",
+            box_id=box_id[:16] + "...",
+            value=value,
+            choice=player_choice,
+            timeout=timeout_height,
+        )
+
+        # ── Check timeout ──────────────────────────────────────────
+        if current_height >= timeout_height:
+            logger.info(
+                "box_timed_out",
+                box_id=box_id[:16] + "...",
+                timeout=timeout_height,
+                current=current_height,
+                message="Skipping — player must claim refund",
+            )
+            return {
+                "success": False,
+                "txId": "",
+                "player_wins": None,
+                "payout_amount": "0",
+                "message": f"Box timed out (timeout={timeout_height}, current={current_height}). Player must claim refund.",
+            }
+
+        # ── Verify commitment ──────────────────────────────────────
+        # commitment = blake2b256(secret || choice_byte)
+        import hashlib
+        player_secret_hex = get_reg_bytes("R9")
+        player_secret_hex = get_reg_bytes("R9")
+        computed_hash = hashlib.blake2b(
+        secret_bytes = bytes.fromhex(player_secret_hex)
+        ).digest().hex()
+
+        if computed_hash != commitment_hex:
+            logger.error(
+                "commitment_mismatch",
+                box_id=box_id[:16] + "...",
+                computed=computed_hash[:16] + "...",
+                expected=commitment_hex[:16] + "...",
+            )
+            return {
+                "success": False,
+                "txId": "",
+                "player_wins": None,
+                "payout_amount": "0",
+                "message": f"Commitment mismatch: computed {computed_hash[:16]} != stored {commitment_hex[:16]}",
+            }
+
+        # ── Compute RNG ────────────────────────────────────────────
+        # blake2b256(blockId_raw_bytes || playerSecret_raw_bytes)[0] % 2
+        block_hash_bytes = bytes.fromhex(rng_block_hash)
+        secret_bytes = bytes.fromhex(player_secret_hex)
+        rng_hash = hashlib.blake2b(rng_data, digest_size=32).digest()
+        rng_outcome = rng_hash[0] % 2  # 0 or 1
+
+        # playerWins = (flipResult == playerChoice)
+        player_wins = (rng_outcome == player_choice)
+
+        logger.info(
+            "rng_computed",
+            box_id=box_id[:16] + "...",
+            rng_outcome=rng_outcome,
+            player_choice=player_choice,
+            player_wins=player_wins,
+        )
+
+        # ── Derive addresses from pubkeys ──────────────────────────
+        # For P2PK addresses, we need to construct them from the pubkey.
+        # The simplest approach: use /wallet/transaction/send with rawInputs
+        # and specify the output address. The house wallet signs.
+        # We need the player's P2PK address — we can derive it or store it.
+        #
+        # Actually, the contract checks OUTPUTS(0).propositionBytes == playerProp.propBytes
+        # which means the output must be a P2PK to the player's pubkey.
+        # The node's /wallet/transaction/send handles this if we provide
+        # the correct P2PK address.
+        #
+        # Derive P2PK address from pubkey bytes:
+        player_address = self._pubkey_to_p2pk(player_pubkey_hex, testnet=True)
+        house_address = self._pubkey_to_p2pk(house_pubkey_hex, testnet=True)
+
+        # ── Build and submit reveal tx ─────────────────────────────
+        if player_wins:
+            # Player wins: 1.94x payout (betAmount * 97 / 50)
+            payout = value * 97 // 50
+            recipient = player_address
+        else:
+            # House wins: gets full bet amount back
+            payout = value
+            recipient = house_address
+
+        fee = 1_000_000  # 0.001 ERG
+
+        tx_request = {
+            "requests": [{
+                "address": recipient,
+                "value": str(payout),
+                "creationHeight": current_height,
+            }],
+            "rawInputs": [box_id],
+            "fee": str(fee),
+        }
+
+        logger.info(
+            "submitting_reveal_tx",
+            box_id=box_id[:16] + "...",
+            player_wins=player_wins,
+            payout=payout,
+            recipient=recipient[:20] + "...",
+        )
+
+        try:
+            result = await self.client.post("/wallet/transaction/send", tx_request)
+            tx_id = result.get("id", "")
+
+            return {
+                "success": True,
+                "txId": tx_id,
+                "player_wins": player_wins,
+                "payout_amount": str(payout),
+                "message": f"Reveal tx submitted: {tx_id}",
+            }
+        except httpx.HTTPStatusError as e:
+            error_body = ""
+            try:
+                error_body = e.response.text
+            except Exception:
+                pass
+            return {
+                "success": False,
+                "txId": "",
+                "player_wins": player_wins,
+                "payout_amount": "0",
+                "message": f"Reveal tx failed (HTTP {e.response.status_code}): {error_body}",
+            }
+
+    async def _notify_backend(self, result: dict, box: dict, current_height: int):
+        """
+        Report bet resolution to the DuckPools backend API (MAT-419).
+
+        POSTs to /bot/resolve-bet so the backend can:
+        1. Update the in-memory bet record (pending -> win/loss)
+        2. Fire WebSocket events (bet_revealed + bet_settled) to the frontend
+        3. Untrack the bet tx ID
+
+        This is non-blocking: failures are logged but don't affect the reveal.
+        """
+        if not BACKEND_URL:
+            return
+
+        # Derive player address from R5 register (same logic as _reveal_bet)
+        player_address = ""
+        try:
+            registers = box.get("additionalRegisters", {})
+            r5 = registers.get("R5", {})
+            sv = r5.get("serializedValue", "")
+            if sv and len(sv) > 4:
+                # Decode Coll[Byte]: strip leading type bytes (0x0e Coll, 0x01 SByte)
+                raw = bytes.fromhex(sv)
+                # Same decoding as get_reg_bytes in _reveal_bet
+                if len(raw) >= 2:
+                    player_pubkey_hex = raw[1:].hex()
+                    player_address = self._pubkey_to_p2pk(player_pubkey_hex, testnet=True)
+        except Exception:
+            pass
+
+        payload = {
+            "boxId": result.get("boxId", ""),
+            "txId": result.get("betTxId", ""),  # Original place-bet tx ID for backend matching
+            "playerWins": result.get("player_wins"),
+            "payoutAmount": result.get("payout_amount", "0"),
+            "playerAddress": player_address,
+            "betAmount": str(box.get("value", 0)),
+            "blockHeight": current_height,
+            "revealTxId": result.get("txId", ""),  # The reveal transaction ID
+        }
+
+        headers = {"Content-Type": "application/json"}
+        if BOT_API_KEY:
+            headers["X-Api-Key"] = BOT_API_KEY
+
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(
+                    f"{BACKEND_URL}/bot/resolve-bet",
+                    json=payload,
+                    headers=headers,
+                )
+                if resp.status_code == 200:
+                    logger.info(
+                        "backend_notified",
+                        box_id=result.get("boxId", "")[:16] + "...",
+                        status=resp.status_code,
+                    )
+                else:
+                    logger.warning(
+                        "backend_notify_failed",
+                        box_id=result.get("boxId", "")[:16] + "...",
+                        status=resp.status_code,
+                        body=resp.text[:200],
+                    )
+        except Exception as e:
+            logger.warning(
+                "backend_notify_error",
+                box_id=result.get("boxId", "")[:16] + "...",
+                error=str(e),
+            )
+
+    @staticmethod
+    def _pubkey_to_p2pk(pubkey_hex: str, testnet: bool = True) -> str:
+        """
+        Convert a 33-byte compressed public key to an Ergo P2PK address.
+
+        Ergo P2PK address = Base58Check(0x01 || pubkey || checksum)
+        where checksum = blake2b256(payload)[:4]
+        Network prefix: 0x10 for testnet, 0x00 for mainnet
+        """
+        import hashlib
+
+        # Build payload: network_prefix | address_type | pubkey
+        network_byte = 0x10 if testnet else 0x00
+        addr_type = 0x01  # P2PK
+        first_byte = network_byte | addr_type
+        pubkey_bytes = bytes.fromhex(pubkey_hex)
+
+        payload = bytes([first_byte]) + pubkey_bytes
+        checksum = hashlib.blake2b(payload, digest_size=32).digest()[:4]
+        full = payload + checksum
+
+        # Base58 encode
+        ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+        num = int.from_bytes(full, byteorder="big")
+        result = []
+        while num > 0:
+            num, rem = divmod(num, 58)
+            result.append(ALPHABET[rem])
+        # Handle leading zeros
+        for byte in full:
+            if byte == 0:
+                result.append(ALPHABET[0])
+            else:
+                break
+        return "".join(reversed(result))
 
 
 # ─── Main ────────────────────────────────────────────────────────────────
@@ -425,7 +964,7 @@ class OffChainBot:
 async def main():
     """Main entry point."""
     bot = OffChainBot(
-        node_url=NODE_URL,
+        api_key=api_key,
         api_key=NODE_API_KEY,
         heartbeat_file=HEARTBEAT_FILE,
         heartbeat_interval_seconds=HEARTBEAT_INTERVAL_SECONDS,
