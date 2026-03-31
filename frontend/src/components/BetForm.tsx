@@ -3,6 +3,8 @@ import { useWallet } from '../contexts/WalletContext';
 import { generateSecret, bytesToHex, blake2b256 } from '../utils/crypto';
 import { ergToNanoErg, formatErg } from '../utils/ergo';
 import { buildApiUrl } from '../utils/network';
+import { isOnChainEnabled } from '../config/contract';
+import { buildPlaceBetTx } from '../services/coinflipService';
 import './BetForm.css';
 
 // ─── Helpers (until utils are expanded) ─────────────────────────────
@@ -43,7 +45,7 @@ function getExplorerTxUrl(txId: string): string {
 // ─── Component ──────────────────────────────────────────────────────
 
 export default function BetForm() {
-  const { isConnected, walletAddress, connect } = useWallet();
+  const { isConnected, walletAddress, connect, signTransaction, submitTransaction, getUtxos, getCurrentHeight, getChangeAddress } = useWallet();
 
   const [amount, setAmount] = useState('');
   const [choice, setChoice] = useState<0 | 1 | null>(null);
@@ -131,37 +133,98 @@ export default function BetForm() {
 
     try {
       // 1. Generate secret & commitment
-      const secret = generateSecret()
+      const secret = generateSecret();
       const commitment = generateCommitment(secret, choice);
       const betId = generateBetId();
 
-      // 2. Build API request
-      // SECURITY (SEC-HIGH-2): Do NOT send secret to backend.
-      // The secret is revealed on-chain during the resolution transaction.
-      const payload = {
-        address: walletAddress,
-        amount: amountNanoErg,
-        choice,
-        commitment,
-        betId,
-      };
+      let txId = '';
 
-      // 3. Submit to backend
-      const res = await fetch(buildApiUrl('/place-bet'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      if (isOnChainEnabled()) {
+        // ── ON-CHAIN FLOW ──────────────────────────────────────
+        // Build unsigned EIP-12 transaction using Fleet SDK,
+        // then sign via Nautilus and broadcast.
 
-      const data = await res.json();
+        const [utxos, currentHeight, changeAddressRaw] = await Promise.all([
+          getUtxos(),
+          getCurrentHeight(),
+          getChangeAddress(),
+        ]);
 
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || `Server error ${res.status}`);
+        const changeAddress = changeAddressRaw ?? walletAddress;
+        if (!changeAddress) {
+          throw new Error('Could not get change address from wallet');
+        }
+
+        if (utxos.length === 0) {
+          throw new Error('No UTXOs available in wallet. Fund your wallet first.');
+        }
+
+        // Extract player's compressed public key from first P2PK UTXO
+        const playerPubKey = extractPubKeyFromUtxo(utxos[0]);
+        if (!playerPubKey) {
+          throw new Error(
+            'Could not determine player public key. Ensure your UTXO is a P2PK address.'
+          );
+        }
+
+        const { unsignedTx, timeoutHeight } = await buildPlaceBetTx({
+          changeAddress,
+          amountNanoErg: BigInt(amountNanoErg),
+          playerPubKey,
+          commitment,
+          choice,
+          secret,
+          betId,
+          currentHeight,
+          utxos: utxos as any,
+        });
+
+        // 2. Sign via Nautilus — triggers wallet popup
+        const signedTx = await signTransaction(unsignedTx as any);
+        if (!signedTx) {
+          throw new Error('Transaction signing was rejected or failed');
+        }
+
+        // 3. Broadcast to the Ergo network
+        txId = (await submitTransaction(signedTx as any)) ?? '';
+        if (!txId) {
+          throw new Error('Transaction broadcast failed');
+        }
+
+        console.log(`[BetForm] On-chain bet placed: txId=${txId}, timeout=${timeoutHeight}`);
+      } else {
+        // ── OFF-CHAIN FALLBACK ─────────────────────────────────
+        // Contract not configured yet.
+        // Send to backend for in-memory tracking only.
+        // No real ERG moves.
+
+        const payload = {
+          address: walletAddress,
+          amount: amountNanoErg,
+          choice,
+          commitment,
+          betId,
+        };
+
+        const res = await fetch(buildApiUrl('/place-bet'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || `Server error ${res.status}`);
+        }
+
+        txId = data.txId || '';
+        console.warn('[BetForm] OFF-CHAIN MODE — no real ERG was moved.');
       }
 
       // 4. Show pending state
       setPendingBet({
-        txId: data.txId,
+        txId,
         betId,
         amount,
         choiceLabel: choice === 0 ? 'Heads' : 'Tails',
@@ -177,7 +240,7 @@ export default function BetForm() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [canSubmit, choice, walletAddress, amountNanoErg, amount]);
+  }, [canSubmit, choice, walletAddress, amountNanoErg, amount, signTransaction, submitTransaction, getUtxos, getCurrentHeight, getChangeAddress]);
 
   // ── Not connected ───────────────────────────────────────────────
 
@@ -335,4 +398,23 @@ export default function BetForm() {
       </div>
     </div>
   );
+}
+
+// ── Utility: Extract player public key from P2PK UTXO ──────────────
+
+/**
+ * Extract the 33-byte compressed public key from a P2PK UTXO's ergoTree.
+ *
+ * P2PK ErgoTree format: 0008cd<33-byte-pk>
+ * The public key is bytes 4..37 of the ergoTree hex string.
+ *
+ * Returns null if the UTXO is not a standard P2PK box.
+ */
+function extractPubKeyFromUtxo(utxo: { ergoTree?: string }): string | null {
+  const tree = utxo.ergoTree;
+  if (!tree || tree.length < 74) return null; // 4 + 66 hex chars minimum
+  if (tree.startsWith('0008cd')) {
+    return tree.slice(4, 4 + 66); // 33 bytes = 66 hex chars
+  }
+  return null;
 }
