@@ -40,7 +40,6 @@ logger = get_logger(__name__)
 # ─── Configuration ─────────────────────────────────────────────────────────
 
 # Load from environment variables
-NODE_API_KEY=os.getenv("NODE_API_KEY", "")
 NODE_API_KEY = os.getenv("NODE_API_KEY", "")
 HEARTBEAT_FILE = os.getenv("HEARTBEAT_FILE", "/tmp/off-chain-bot-heartbeat.txt")
 HEARTBEAT_INTERVAL_SECONDS = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "30"))
@@ -51,9 +50,8 @@ HEALTH_SERVER_PORT = int(os.getenv("HEALTH_SERVER_PORT", "8001"))
 DATA_DIR = Path(os.getenv("DATA_DIR", str(Path(__file__).parent)))
 
 # Backend API URL for reporting bet resolutions (MAT-419)
-BOT_API_KEY=os.getenv("BOT_API_KEY", "")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 BOT_API_KEY = os.getenv("BOT_API_KEY", "")
-
 # ─── Retry Configuration ────────────────────────────────────────────────────
 
 RETRY_MAX_ATTEMPTS = 3
@@ -710,7 +708,7 @@ class OffChainBot:
         player_pubkey_hex = get_reg_bytes("R5")
         commitment_hex = get_reg_bytes("R6")
         player_choice = get_reg_int("R7")
-        player_secret_hex = get_reg_bytes("R9")
+        timeout_height = get_reg_int("R8")
         player_secret_hex = get_reg_bytes("R9")
 
         logger.debug(
@@ -741,11 +739,8 @@ class OffChainBot:
         # ── Verify commitment ──────────────────────────────────────
         # commitment = blake2b256(secret || choice_byte)
         import hashlib
-        player_secret_hex = get_reg_bytes("R9")
-        player_secret_hex = get_reg_bytes("R9")
-        computed_hash = hashlib.blake2b(
-        secret_bytes = bytes.fromhex(player_secret_hex)
-        ).digest().hex()
+        secret_data = bytes.fromhex(player_secret_hex) + bytes([player_choice])
+        computed_hash = hashlib.blake2b(secret_data, digest_size=32).digest().hex()
 
         if computed_hash != commitment_hex:
             logger.error(
@@ -766,7 +761,7 @@ class OffChainBot:
         # blake2b256(blockId_raw_bytes || playerSecret_raw_bytes)[0] % 2
         block_hash_bytes = bytes.fromhex(rng_block_hash)
         secret_bytes = bytes.fromhex(player_secret_hex)
-        rng_hash = hashlib.blake2b(rng_data, digest_size=32).digest()
+        rng_hash = hashlib.blake2b(block_hash_bytes + secret_bytes, digest_size=32).digest()
         rng_outcome = rng_hash[0] % 2  # 0 or 1
 
         # playerWins = (flipResult == playerChoice)
@@ -964,7 +959,6 @@ class OffChainBot:
 async def main():
     """Main entry point."""
     bot = OffChainBot(
-        api_key=api_key,
         api_key=NODE_API_KEY,
         heartbeat_file=HEARTBEAT_FILE,
         heartbeat_interval_seconds=HEARTBEAT_INTERVAL_SECONDS,
