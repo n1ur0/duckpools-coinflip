@@ -12,6 +12,7 @@ markers = [
     "depends: marks test dependencies (requires pytest-dependency plugin)",
     "security: marks security-focused tests",
     "slow: marks tests that take >5s to run",
+    "flaky: marks tests that should be retried on failure (use with reruns=N)",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

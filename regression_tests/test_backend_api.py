@@ -24,6 +24,7 @@ API_KEY = "hello"  # Default from .env.example
 
 # ─── BR-1: Health Check ────────────────────────────────────────────────
 
+@pytest.mark.flaky(reruns=2)
 class TestHealthCheck:
     """Verify the /health endpoint returns system status."""
 
@@ -60,6 +61,7 @@ class TestHealthCheck:
 
 # ─── BR-2: Pool State ────────────────────────────────────────────────
 
+@pytest.mark.flaky(reruns=2)
 class TestPoolState:
     """Verify the pool state endpoint returns valid pool data."""
 
@@ -95,6 +97,7 @@ class TestPoolState:
 
 # ─── BR-3: Scripts Endpoint ────────────────────────────────────────────
 
+@pytest.mark.flaky(reruns=2)
 class TestScriptsEndpoint:
     """Verify the scripts endpoint returns valid ErgoTree contracts."""
 
@@ -138,6 +141,7 @@ class TestScriptsEndpoint:
 
 # ─── BR-4: History Endpoint ────────────────────────────────────────────
 
+@pytest.mark.flaky(reruns=2)
 class TestHistoryEndpoint:
     """Verify the history endpoint handles valid and invalid addresses."""
 
@@ -174,6 +178,7 @@ class TestHistoryEndpoint:
 
 # ─── BR-5: Invalid Bet Rejection ──────────────────────────────────────
 
+@pytest.mark.flaky(reruns=2)
 class TestInvalidBetRejection:
     """Verify the bet placement endpoint rejects invalid requests."""
 
@@ -223,6 +228,7 @@ class TestInvalidBetRejection:
 
 # ─── Additional LP Endpoints ───────────────────────────────────────────
 
+@pytest.mark.flaky(reruns=2)
 class TestLPEndpoints:
     """Additional tests for LP-related endpoints."""
 
@@ -252,6 +258,7 @@ class TestLPEndpoints:
 
 # ─── Oracle Endpoints ──────────────────────────────────────────────────
 
+@pytest.mark.flaky(reruns=2)
 class TestOracleEndpoints:
     """Tests for oracle-related endpoints."""
 

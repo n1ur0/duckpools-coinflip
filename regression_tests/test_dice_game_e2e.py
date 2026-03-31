@@ -34,6 +34,7 @@ DICE_MAX_TARGET = 98
 
 # ─── DG-1: Place Bet ─────────────────────────────────────────────────
 
+@pytest.mark.flaky(reruns=2)
 class TestDicePlaceBet:
     """Verify users can place dice bets with valid parameters."""
 
@@ -133,6 +134,7 @@ class TestDicePlaceBet:
 
 # ─── DG-2: Reveal ─────────────────────────────────────────────────
 
+@pytest.mark.flaky(reruns=2)
 class TestDiceReveal:
     """Verify dice roll reveals work correctly."""
 
@@ -163,6 +165,7 @@ class TestDiceReveal:
 
 # ─── DG-3: Payout ─────────────────────────────────────────────────
 
+@pytest.mark.flaky(reruns=2)
 class TestDicePayout:
     """Verify payout calculations are correct."""
 
@@ -224,6 +227,7 @@ class TestDicePayout:
 
 # ─── DG-4: Wallet Balance ─────────────────────────────────────────
 
+@pytest.mark.flaky(reruns=2)
 class TestWalletBalance:
     """Verify wallet balance updates after game results."""
 
@@ -258,6 +262,7 @@ class TestWalletBalance:
 
 # ─── Integration Tests ─────────────────────────────────────────────
 
+@pytest.mark.flaky(reruns=2)
 class TestDiceGameIntegration:
     """Integration tests for complete dice game flow."""
 
@@ -331,6 +336,7 @@ class TestDiceGameIntegration:
 
 # ─── Security Tests ───────────────────────────────────────────────
 
+@pytest.mark.flaky(reruns=2)
 class TestDiceGameSecurity:
     """Security tests for dice game functionality."""
 

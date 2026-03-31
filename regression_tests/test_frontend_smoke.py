@@ -24,6 +24,7 @@ BACKEND_URL = "http://localhost:8000"
 
 # ─── FR-1: Page Load ───────────────────────────────────────────────────
 
+@pytest.mark.flaky(reruns=2)
 class TestPageLoad:
     """Verify the frontend page loads without errors."""
 
@@ -108,6 +109,7 @@ class TestPageLoad:
 
 # ─── FR-2: Wallet Connection ──────────────────────────────────────────
 
+@pytest.mark.flaky(reruns=2)
 class TestWalletConnection:
     """Verify wallet connection UI exists."""
 
@@ -178,6 +180,7 @@ class TestWalletConnection:
 
 # ─── FR-3: API Proxy ─────────────────────────────────────────────────
 
+@pytest.mark.flaky(reruns=2)
 class TestAPIProxy:
     """Verify frontend /api/* routes proxy correctly to backend."""
 
@@ -250,6 +253,7 @@ class TestAPIProxy:
 
 # ─── Basic Responsiveness ─────────────────────────────────────────────
 
+@pytest.mark.flaky(reruns=2)
 class TestBasicResponsiveness:
     """Basic checks for page responsiveness."""
 

@@ -6,6 +6,16 @@ import os
 import pytest
 
 
+def pytest_configure(config):
+    """Register custom markers."""
+    config.addinivalue_line(
+        "markers", "flaky: mark test to retry on failure (use with reruns=N)"
+    )
+    config.addinivalue_line(
+        "markers", "integration: marks tests requiring a running backend or external services"
+    )
+
+
 # Test environment configuration
 TEST_NODE_URL = os.getenv("TEST_NODE_URL", "http://localhost:9052")
 TEST_API_KEY = os.getenv("TEST_API_KEY", "hello")
