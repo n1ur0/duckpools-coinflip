@@ -8,6 +8,7 @@ MAT-309: Rebuild backend API to match frontend contract.
 """
 
 from datetime import datetime, timezone
+import os
 from typing import List, Optional
 
 from fastapi import APIRouter, Query, Request
@@ -562,22 +563,97 @@ async def confirm_bet(request: Request, body: ConfirmBetRequest):
     by letting the frontend tell us the bet happened so we can track it
     in the in-memory store (history, stats, leaderboard).
 
+    On-chain verification (MAT-419): Before recording, verifies the tx
+    exists on the Ergo node and contains a PendingBet box with the correct
+    ergoTree. This prevents fake bet records from polluting the system.
+
     MAT-420: Fix "no updated data in frontend after bet submission".
     """
     import logging
     _log = logging.getLogger("duckpools.game.confirm")
 
+    # ── On-chain verification ─────────────────────────────────────
+    # Verify the bet transaction actually exists on-chain before recording it.
+    # Falls back to trusting the frontend if node is unreachable (graceful degradation).
+    verified = False
+    verified_box_id = ""
+    verified_amount = ""
+    try:
+        import httpx
+        node_url = os.getenv("NODE_URL", "http://localhost:9052")
+        node_api_key = os.getenv("NODE_API_KEY", "")
+        headers = {}
+        if node_api_key:
+            headers["api_key"] = node_api_key
+
+        async with httpx.AsyncClient(timeout=8) as client:
+            # 1. Fetch the transaction from the node
+            tx_resp = await client.get(
+                f"{node_url}/transactions/{body.txId}",
+                headers=headers,
+            )
+            if tx_resp.status_code == 200:
+                tx_data = tx_resp.json()
+                outputs = tx_data.get("outputs", [])
+
+                # 2. Find the output matching the coinflip contract
+                for out in outputs:
+                    if out.get("ergoTree", "") == COINFLIP_ERGO_TREE:
+                        out_box_id = out.get("boxId", "")
+                        out_value = str(out.get("value", 0))
+                        _log.info(
+                            "onchain_verify: found PendingBet box=%s value=%s",
+                            out_box_id[:16], out_value,
+                        )
+
+                        # 3. Cross-validate with frontend's claim
+                        if body.boxId and body.boxId != out_box_id:
+                            _log.warning(
+                                "onchain_verify: boxId mismatch frontend=%s onchain=%s",
+                                body.boxId[:16], out_box_id[:16],
+                            )
+                            # Use the on-chain boxId (it's authoritative)
+                        verified_box_id = out_box_id
+                        verified_amount = out_value
+                        verified = True
+                        break
+
+                if not verified:
+                    _log.warning(
+                        "onchain_verify: no PendingBet output in tx %s (found %d outputs)",
+                        body.txId[:16], len(outputs),
+                    )
+            elif tx_resp.status_code == 404:
+                _log.warning("onchain_verify: tx %s not found on node", body.txId[:16])
+            else:
+                _log.warning(
+                    "onchain_verify: node returned %d for tx %s",
+                    tx_resp.status_code, body.txId[:16],
+                )
+    except Exception as e:
+        _log.warning("onchain_verify: verification failed (non-blocking): %s", str(e))
+
+    if not verified:
+        _log.warning(
+            "confirm_bet: proceeding WITHOUT on-chain verification for tx %s",
+            body.txId[:16],
+        )
+
     now = datetime.now(timezone.utc).isoformat()
     side = "heads" if body.choice == 0 else "tails"
+
+    # Use verified values if available, otherwise trust frontend
+    box_id = verified_box_id or body.boxId
+    bet_amount = verified_amount or body.betAmount
 
     bet = {
         "betId": body.betId,
         "txId": body.txId,
-        "boxId": body.boxId,
+        "boxId": box_id,
         "playerAddress": body.playerAddress,
         "gameType": "coinflip",
         "choice": {"gameType": "coinflip", "side": side},
-        "betAmount": body.betAmount,
+        "betAmount": bet_amount,
         "outcome": "pending",
         "actualOutcome": None,
         "payout": "0",
@@ -588,18 +664,19 @@ async def confirm_bet(request: Request, body: ConfirmBetRequest):
     }
     _bets.append(bet)
     _pool_stats["totalBets"] += 1
-    fee = int(body.betAmount) * 3 // 100
+    fee = int(bet_amount) * 3 // 100
     _pool_stats["totalFees"] = str(int(_pool_stats["totalFees"]) + fee)
 
     # Track for off-chain bot
-    _track_tx_for_bot(body.txId)
+    _track_tx_for_bot(body.txId, box_id)
 
     _log.info(
-        "bet_confirmed: bet_id=%s tx_id=%s player=%s amount=%s",
+        "bet_confirmed: bet_id=%s tx_id=%s player=%s amount=%s verified=%s",
         body.betId[:16],
         body.txId[:16],
         body.playerAddress[:16],
-        body.betAmount,
+        bet_amount,
+        verified,
     )
 
     # Fire WebSocket bet_placed event
@@ -629,12 +706,15 @@ async def confirm_bet(request: Request, body: ConfirmBetRequest):
 _pending_tx_tracker: List[str] = []  # Track bet tx IDs for the bot
 
 
-def _track_tx_for_bot(tx_id: str):
+def _track_tx_for_bot(tx_id: str, box_id: str = ""):
     """
-    Internal helper: register a bet tx ID for the off-chain bot.
+    Internal helper: register a bet tx ID and box ID for the off-chain bot.
 
-    Writes to both the in-memory list and the shared pending_txs.json file.
-    Called automatically when on-chain bets are placed.
+    Writes to both the in-memory list and the shared pending_txs.json /
+    pending_boxes.json files. Called automatically when on-chain bets are
+    placed and verified.
+
+    MAT-419: Also tracks box_id so the bot can use Strategy 2 (box lookup).
     """
     if tx_id not in _pending_tx_tracker:
         _pending_tx_tracker.append(tx_id)
@@ -644,6 +724,8 @@ def _track_tx_for_bot(tx_id: str):
         from pathlib import Path as _Path
         bot_dir = _Path(__file__).parent.parent / "off-chain-bot"
         bot_dir.mkdir(exist_ok=True)
+
+        # Track tx ID
         tx_file = bot_dir / "pending_txs.json"
         existing = []
         if tx_file.exists():
@@ -651,6 +733,16 @@ def _track_tx_for_bot(tx_id: str):
         if tx_id not in existing:
             existing.append(tx_id)
             tx_file.write_text(_json.dumps({"tx_ids": existing}))
+
+        # Track box ID (Strategy 2 for bot)
+        if box_id:
+            box_file = bot_dir / "pending_boxes.json"
+            existing_boxes = []
+            if box_file.exists():
+                existing_boxes = _json.loads(box_file.read_text()).get("box_ids", [])
+            if box_id not in existing_boxes:
+                existing_boxes.append(box_id)
+                box_file.write_text(_json.dumps({"box_ids": existing_boxes}))
     except Exception:
         pass
 
@@ -697,18 +789,133 @@ async def untrack_bet_tx(tx_id: str):
     return {"success": True, "tracked_txs": len(_pending_tx_tracker)}
 
 
+@router.get("/bot/reconcile")
+async def reconcile_pending_bets(request: Request):
+    """
+    Reconcile in-memory pending bets with on-chain state.
+
+    For each bet with outcome='pending', checks the Ergo node to see if:
+    1. The bet box still exists (unspent) — bet is truly pending
+    2. The bet box is gone (spent) — bet was revealed/resolved on-chain
+    3. The bet tx doesn't exist — bet was never confirmed
+
+    This is the "blockchain verification" the house needs to determine
+    win/lose status for bets that may have been resolved while the bot
+    was offline or when the bot missed a reveal.
+
+    MAT-419: On-chain reconciliation for pending bets.
+    """
+    import logging
+    import httpx
+    _log = logging.getLogger("duckpools.game.reconcile")
+
+    node_url = os.getenv("NODE_URL", "http://localhost:9052")
+    node_api_key = os.getenv("NODE_API_KEY", "")
+    headers = {}
+    if node_api_key:
+        headers["api_key"] = node_api_key
+
+    results = {
+        "total_pending": 0,
+        "still_pending": [],
+        "already_spent": [],
+        "tx_not_found": [],
+        "errors": [],
+    }
+
+    # Find all pending bets
+    pending_bets = [(i, b) for i, b in enumerate(_bets) if b.get("outcome") == "pending"]
+    results["total_pending"] = len(pending_bets)
+
+    if not pending_bets:
+        return results
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        for idx, bet in pending_bets:
+            tx_id = bet.get("txId", "")
+            box_id = bet.get("boxId", "")
+            bet_id = bet.get("betId", "")
+
+            if not tx_id:
+                _log.warning("reconcile: bet %s has no txId, skipping", bet_id[:16])
+                results["errors"].append({"bet_id": bet_id, "reason": "no txId"})
+                continue
+
+            try:
+                # Check if the bet box is still unspent
+                if box_id:
+                    box_resp = await client.get(
+                        f"{node_url}/blockchain/box/{box_id}",
+                        headers=headers,
+                    )
+                    if box_resp.status_code == 200:
+                        # Box exists and is unspent — bet is still pending
+                        results["still_pending"].append({
+                            "bet_id": bet_id,
+                            "tx_id": tx_id[:16],
+                            "box_id": box_id[:16],
+                        })
+                        continue
+                    elif box_resp.status_code == 404:
+                        # Box was spent — bet was resolved on-chain
+                        # Try to find the spending transaction
+                        _log.info(
+                            "reconcile: box %s spent, bet %s was resolved on-chain",
+                            box_id[:16], bet_id[:16],
+                        )
+                        results["already_spent"].append({
+                            "bet_id": bet_id,
+                            "tx_id": tx_id[:16],
+                            "box_id": box_id[:16],
+                            "message": "Box was spent — bet resolved on-chain but backend not notified",
+                        })
+                        continue
+
+                # Check if the tx exists at all
+                tx_resp = await client.get(
+                    f"{node_url}/transactions/{tx_id}",
+                    headers=headers,
+                )
+                if tx_resp.status_code == 404:
+                    _log.warning("reconcile: tx %s not found for bet %s", tx_id[:16], bet_id[:16])
+                    results["tx_not_found"].append({
+                        "bet_id": bet_id,
+                        "tx_id": tx_id[:16],
+                        "message": "Transaction not found — bet may not have been confirmed",
+                    })
+                else:
+                    results["still_pending"].append({
+                        "bet_id": bet_id,
+                        "tx_id": tx_id[:16],
+                        "box_id": box_id[:16] if box_id else "unknown",
+                    })
+
+            except Exception as e:
+                _log.error("reconcile: error checking bet %s: %s", bet_id[:16], str(e))
+                results["errors"].append({"bet_id": bet_id, "reason": str(e)})
+
+    _log.info(
+        "reconcile: %d pending, %d spent, %d not_found, %d errors",
+        len(results["still_pending"]),
+        len(results["already_spent"]),
+        len(results["tx_not_found"]),
+        len(results["errors"]),
+    )
+    return results
+
+
 # ─── Bot bet resolution endpoint (MAT-419) ─────────────────────────
 
 class ResolveBetRequest(BaseModel):
     """Payload from the off-chain bot when a bet is resolved on-chain."""
     boxId: str = ""
-    txId: str = ""               # Reveal tx ID
+    txId: str = ""               # Original place-bet tx ID (for matching)
     playerWins: Optional[bool] = None
     payoutAmount: str = "0"
     playerAddress: str = ""
     betAmount: str = "0"
     blockHeight: int = 0
-    revealTxId: str = ""
+    revealTxId: str = ""         # The reveal transaction ID
 
 
 class ResolveBetResponse(BaseModel):

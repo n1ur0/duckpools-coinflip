@@ -59,14 +59,19 @@ module.exports = {
       name: 'off-chain-bot',
       script: 'python',
       args: 'main.py',
-      cwd: '/Users/n1ur0/Documents/git/duckpools/off-chain-bot',
+      cwd: '/Users/n1ur0/Documents/git/duckpools-coinflip/off-chain-bot',
       interpreter: 'python',
       watch: false,
       autorestart: true,
       restart_delay: 5000,
       max_memory_restart: '500M',
       env: {
-        NODE_ENV: 'production'
+        NODE_ENV: 'production',
+        NODE_URL: 'http://127.0.0.1:9052',
+        BACKEND_URL: 'http://127.0.0.1:8000',
+        HEALTH_SERVER_PORT: '8001',
+        HEARTBEAT_FILE: '/tmp/off-chain-bot-heartbeat.txt',
+        HEARTBEAT_INTERVAL_SECONDS: '30'
       },
       error_file: '/Users/n1ur0/Documents/git/duckpools-coinflip/logs/off-chain-bot-error.log',
       out_file: '/Users/n1ur0/Documents/git/duckpools-coinflip/logs/off-chain-bot-out.log',

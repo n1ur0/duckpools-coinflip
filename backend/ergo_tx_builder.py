@@ -32,7 +32,7 @@ import httpx
 logger = logging.getLogger("duckpools.ergo_tx")
 
 NODE_URL = os.getenv("NODE_URL", "http://localhost:9052")
-NODE_API_KEY = os.getenv("NODE_API_KEY", "hello")
+NODE_API_KEY = os.getenv("NODE_API_KEY", "")
 
 
 def _node_headers(content_type: str = "application/json") -> dict:
@@ -208,38 +208,52 @@ def _encode_vlq(value: int) -> str:
 
 def decode_coll_byte_from_node(serialized_hex: str) -> str:
     """
-    Decode a Coll[Byte] value from node's serialized format.
+    Decode a Coll[SByte] value from node's sigma-serialized format.
     Returns the raw hex string of the byte array.
+
+    Node format: 09 (SColl) 01 (SByte element type) <VLQ(len)> <raw_bytes>
     """
     raw = bytes.fromhex(serialized_hex)
-    if len(raw) < 2:
+    if len(raw) < 3:
         return serialized_hex
-    # First byte is the type tag (0x04 = SByte for Coll[Byte] elements)
-    # Rest is the raw byte array
+    # Check for Coll[SByte] prefix
+    if raw[0] == 0x09 and raw[1] == 0x01:
+        # Decode VLQ length starting at byte 2
+        length = 0
+        i = 2
+        while i < len(raw):
+            byte = raw[i]
+            length = (length << 7) | (byte & 0x7F)
+            i += 1
+            if not (byte & 0x80):
+                break
+        return raw[i:i + length].hex()
+    # Fallback: skip first byte (legacy format)
     return raw[1:].hex()
 
 
 def decode_int_from_node(serialized_hex: str) -> int:
     """
-    Decode an integer from node's VLQ serialized format.
+    Decode an SInt value from node's sigma-serialized format.
+
+    Node format: 03 <zigzag_vlq(value)>
+    Zigzag encoding: (n << 1) ^ (n >> 63), then VLQ-encoded.
     """
     raw = bytes.fromhex(serialized_hex)
     if not raw:
         return 0
 
-    # Check sign bit in last byte
-    last = raw[-1]
-    negative = bool(last & 0x40)
+    # Strip SInt type byte (0x03)
+    if raw[0] == 0x03:
+        raw = raw[1:]
 
-    # Extract value bytes (mask out sign bit in last, continuation bits in others)
-    value = 0
+    # Decode VLQ
+    zigzag_val = 0
     for b in raw:
-        value = (value << 7) | (b & 0x7F)
+        zigzag_val = (zigzag_val << 7) | (b & 0x7F)
 
-    if negative:
-        value = -value
-
-    return value
+    # Zigzag decode: (n >> 1) ^ -(n & 1)
+    return (zigzag_val >> 1) ^ -(zigzag_val & 1)
 
 
 def compute_win_payout(bet_amount: int) -> int:

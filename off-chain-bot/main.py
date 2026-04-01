@@ -29,9 +29,13 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+from dotenv import load_dotenv
 
 from logger import configure_logging, get_logger
 from health_server import HealthServer
+
+# Load .env file BEFORE reading env vars
+load_dotenv(Path(__file__).parent / ".env")
 
 # Configure structured logging
 configure_logging()
@@ -228,7 +232,6 @@ class ErgoNodeClient:
     def __init__(self, node_url: str, api_key: str = ""):
         self.node_url = node_url
         self.api_key = api_key
-        self.api_key = api_key
         self._client: Optional[httpx.AsyncClient] = None
 
     async def __aenter__(self):
@@ -283,13 +286,13 @@ class ErgoNodeClient:
         return response.json()
 
     @get_retry_decorator()
-    async def post(self, endpoint: str, data: dict = None) -> dict:
+    async def post(self, endpoint: str, data=None) -> dict:
         """
         Make POST request to Ergo node API with retry.
 
         Args:
             endpoint: API endpoint path
-            data: Request body data
+            data: Request body data (dict for JSON, or str for raw JSON string)
 
         Returns:
             JSON response as dict
@@ -307,6 +310,9 @@ class ErgoNodeClient:
 
         logger.debug("ergo_api_request", method="POST", url=url)
 
+        # httpx.json= serializes Python objects to JSON.
+        # For string data (e.g., ergoTree hex), json= wraps it as a JSON string,
+        # which is what the Ergo node expects for /blockchain/box/unspent/byErgoTree.
         response = await self._client.post(url, json=data, headers=headers)
         response.raise_for_status()
 
@@ -372,8 +378,7 @@ class OffChainBot:
 
         while not self.shutdown_manager.is_shutdown_requested():
             try:
-                # TODO: Implement actual bet monitoring logic
-                # This is a placeholder that will be replaced with real bet processing
+                # Process pending bets: scan boxes, verify commitments, reveal outcomes
                 await self.process_bets()
 
                 # Check for shutdown before sleeping
@@ -432,6 +437,25 @@ class OffChainBot:
 
         current_height = int(full_height)
         logger.debug("node_synced", height=current_height)
+
+        # ── Step 1.5: Check wallet is unlocked ─────────────────────
+        try:
+            wallet_status = await self.client.get("/wallet/status")
+            if not wallet_status.get("isUnlocked", False):
+                logger.warning(
+                    "wallet_locked",
+                    is_initialized=wallet_status.get("isInitialized"),
+                    message="Wallet is locked, cannot sign reveal transactions. "
+                            "Unlock via: curl -X POST /wallet/unlock -d '{\"pass\":\"...\"}'",
+                )
+                return
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 403:
+                logger.error(
+                    "wallet_auth_required",
+                    message="Wallet API requires authentication. Set NODE_API_KEY in .env",
+                )
+                return
 
         # ── Step 2: Get best block header ID (RNG seed) ────────────
         try:
@@ -543,11 +567,18 @@ class OffChainBot:
 
         # ── Strategy 1: byErgoTree scan ────────────────────────────
         try:
-            boxes = await self.client.post(
+            result = await self.client.post(
                 "/blockchain/box/unspent/byErgoTree",
                 ergo_tree_hex,
             )
-            if isinstance(boxes, list) and len(boxes) > 0:
+            # Node returns {"items": [...], "total": N} (Swagger v5.0.15)
+            if isinstance(result, dict):
+                boxes = result.get("items", [])
+            elif isinstance(result, list):
+                boxes = result
+            else:
+                boxes = []
+            if len(boxes) > 0:
                 logger.info("scan_strategy_ergotree", count=len(boxes))
                 return boxes
         except httpx.HTTPStatusError as e:
@@ -679,33 +710,51 @@ class OffChainBot:
         Returns dict with success, txId, player_wins, payout_amount, message.
         """
         # ── Decode registers ───────────────────────────────────────
-        # Node returns registers as {"R4": {"serializedValue": "...", "sigmaType": "..."}, ...}
+        # Node returns registers as {\"R4\": {\"serializedValue\": \"...\", \"sigmaType\": \"...\"}, ...}
+        # serializedValue uses sigma constant serialization:
+        #   Coll[SByte]: 09 01 <VLQ(len)> <raw_bytes>
+        #   SInt:        03 <zigzag_vlq(value)>
+        def decode_vlq_unsigned(raw: bytes, start: int) -> tuple:
+            """Decode a VLQ-encoded unsigned integer. Returns (value, bytes_consumed)."""
+            value = 0
+            i = start
+            while i < len(raw):
+                byte = raw[i]
+                value = (value << 7) | (byte & 0x7F)
+                i += 1
+                if not (byte & 0x80):  # No continuation bit
+                    break
+            return value, i - start
+
         def get_reg_bytes(reg_name: str) -> str:
+            """Decode a Coll[SByte] register value from sigma serialization."""
             reg = registers.get(reg_name, {})
             sv = reg.get("serializedValue", "")
             if not sv:
                 raise ValueError(f"Missing register {reg_name}")
-            # Remove leading type byte (0x04 for SByte coll elements) per decode_coll_byte_from_node
             raw = bytes.fromhex(sv)
-            if len(raw) < 2:
+            if len(raw) < 3:
                 raise ValueError(f"Register {reg_name} too short: {sv}")
-            return raw[1:].hex()
+            # Format: 09 (SColl) 01 (SByte element type) <VLQ(len)> <raw_bytes>
+            if raw[0] != 0x09 or raw[1] != 0x01:
+                raise ValueError(f"Register {reg_name} not Coll[SByte]: prefix {raw[0]:02x}{raw[1]:02x}")
+            length, vlq_bytes = decode_vlq_unsigned(raw, 2)
+            data_start = 2 + vlq_bytes
+            return raw[data_start:data_start + length].hex()
 
         def get_reg_int(reg_name: str) -> int:
+            """Decode an SInt register value from sigma serialization."""
             reg = registers.get(reg_name, {})
             sv = reg.get("serializedValue", "")
             if not sv:
                 raise ValueError(f"Missing register {reg_name}")
-            # Decode VLQ integer from node serialization
             raw = bytes.fromhex(sv)
-            if not raw:
-                return 0
-            # VLQ with sign: bit 6 of last byte is sign
-            value = 0
-            for b in raw:
-                value = (value << 7) | (b & 0x7F)
-            negative = bool(raw[-1] & 0x40)
-            return -value if negative else value
+            if not raw or raw[0] != 0x03:
+                raise ValueError(f"Register {reg_name} not SInt: prefix {raw[0]:02x}")
+            # Decode zigzag+VLQ after the type byte
+            zigzag_val, _ = decode_vlq_unsigned(raw, 1)
+            # Zigzag decode: (n >> 1) ^ -(n & 1)
+            return (zigzag_val >> 1) ^ -(zigzag_val & 1)
 
         house_pubkey_hex = get_reg_bytes("R4")
         player_pubkey_hex = get_reg_bytes("R5")
@@ -862,18 +911,28 @@ class OffChainBot:
         if not BACKEND_URL:
             return
 
-        # Derive player address from R5 register (same logic as _reveal_bet)
+        # Derive player address from R5 register (same decoding as _reveal_bet)
         player_address = ""
         try:
             registers = box.get("additionalRegisters", {})
             r5 = registers.get("R5", {})
             sv = r5.get("serializedValue", "")
-            if sv and len(sv) > 4:
-                # Decode Coll[Byte]: strip leading type bytes (0x0e Coll, 0x01 SByte)
+            if sv and len(sv) > 6:
                 raw = bytes.fromhex(sv)
-                # Same decoding as get_reg_bytes in _reveal_bet
-                if len(raw) >= 2:
-                    player_pubkey_hex = raw[1:].hex()
+                # Coll[SByte] format: 09 01 <VLQ(len)> <raw_bytes>
+                if len(raw) >= 3 and raw[0] == 0x09 and raw[1] == 0x01:
+                    # Decode VLQ length
+                    length = 0
+                    vlq_bytes = 0
+                    i = 2
+                    while i < len(raw):
+                        byte = raw[i]
+                        length = (length << 7) | (byte & 0x7F)
+                        i += 1
+                        vlq_bytes += 1
+                        if not (byte & 0x80):
+                            break
+                    player_pubkey_hex = raw[2 + vlq_bytes:2 + vlq_bytes + length].hex()
                     player_address = self._pubkey_to_p2pk(player_pubkey_hex, testnet=True)
         except Exception:
             pass
