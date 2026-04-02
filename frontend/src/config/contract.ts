@@ -49,7 +49,21 @@ export const HOUSE_EDGE_BPS = 300;
  * Whether the on-chain flow is enabled.
  * Requires a compiled contract (P2S_ADDRESS) and house public key.
  * NFT is optional — coinflip_v2.es does not check for tokens.
+ *
+ * Uses dynamic import.meta access to prevent Vite/Rollup tree-shaking
+ * from eliminating the on-chain code path when env vars are empty at
+ * build time. Without this guard, the entire on-chain branch (including
+ * Fleet SDK TransactionBuilder) would be dead-code eliminated.
  */
 export function isOnChainEnabled(): boolean {
-  return !!(P2S_ADDRESS && HOUSE_PUB_KEY);
+  try {
+    // Dynamic property access prevents static analysis / tree-shaking
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const env: any = import.meta;
+    const p2s = String(env.env?.VITE_CONTRACT_P2S_ADDRESS ?? P2S_ADDRESS);
+    const pk = String(env.env?.VITE_HOUSE_PUB_KEY ?? HOUSE_PUB_KEY);
+    return p2s.length > 0 && pk.length > 0;
+  } catch {
+    return false;
+  }
 }
