@@ -57,11 +57,8 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
   const [winOutcome, setWinOutcome] = useState<'win' | 'loss' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [betPlaced, setBetPlaced] = useState<{
-    betId: string;
     amount: string;
     choiceLabel: string;
-    commitment: string;
-    txId?: string;
   } | null>(null);
 
   // Touch gesture state
@@ -145,10 +142,8 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
 
       // Sanity-check commitment (should always pass)
       if (!verifyCommitment(secret, choice, commitment)) {
-        throw new Error('Commitment verification failed — internal error');
+        throw new Error('Internal error — please try again');
       }
-
-      let txId = '';
 
       if (isOnChainEnabled()) {
         // ── ON-CHAIN FLOW ──────────────────────────────────────
@@ -167,7 +162,7 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
         }
 
         if (utxos.length === 0) {
-          throw new Error('No UTXOs available in wallet. Fund your wallet first.');
+          throw new Error('No funds available. Please deposit some ERG to your wallet first.');
         }
 
         // TODO: Get player's compressed public key from wallet.
@@ -179,7 +174,7 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
         const playerPubKey = extractPubKeyFromUtxo(utxos[0]);
         if (!playerPubKey) {
           throw new Error(
-            'Could not determine player public key. Ensure your UTXO is a P2PK address.'
+            'Could not verify your wallet. Please use a standard wallet address.'
           );
         }
 
@@ -198,13 +193,13 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
         // 2. Sign via Nautilus — THIS triggers the wallet popup
         const signedTx = await signTransaction(unsignedTx as any);
         if (!signedTx) {
-          throw new Error('Transaction signing was rejected or failed');
+          throw new Error('Payment was cancelled or failed. Please try again.');
         }
 
         // 3. Broadcast to the Ergo network
-        txId = (await submitTransaction(signedTx as any)) ?? '';
+        const txId = (await submitTransaction(signedTx as any)) ?? '';
         if (!txId) {
-          throw new Error('Transaction broadcast failed');
+          throw new Error('Payment failed. Please try again.');
         }
 
         console.log(`[CoinFlip] On-chain bet placed: txId=${txId}, timeout=${timeoutHeight}`);
@@ -240,14 +235,11 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
         );
       }
 
-      // 4. Show "Bet Placed — Pending On-Chain Reveal" state.
+      // 4. Show "Bet Placed" state.
       // NO Math.random() — outcomes come from on-chain reveal.
       setBetPlaced({
-        betId,
         amount,
         choiceLabel: choice === 0 ? 'Heads' : 'Tails',
-        commitment,
-        txId: txId || undefined,
       });
 
       // Reset form
@@ -287,12 +279,6 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
   return (
     <div className={`coinflip-game-container ${className}`}>
       <h2 className="coinflip-title">Coin Flip</h2>
-
-      {!isOnChainEnabled() && (
-        <div className="coinflip-offchain-banner">
-          ⚠️ Off-chain mode — contract not yet deployed (MAT-344)
-        </div>
-      )}
 
       <div className="coinflip-game-layout">
         {/* ── Main Game Area ───────────────────────────────────────── */}
@@ -431,9 +417,7 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
             loading={isSubmitting}
             fullWidth
           >
-            {isSubmitting
-              ? isOnChainEnabled() ? 'Signing...' : 'Flipping...'
-              : 'Flip!'}
+            {isSubmitting ? 'Flipping...' : 'Flip!'}
           </Button>
 
           {/* ── Info ─────────────────────────────────────────────── */}
@@ -454,7 +438,7 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
       {/* ── Error ────────────────────────────────────────────────── */}
       {error && <div className="coinflip-error">{error}</div>}
 
-      {/* ── Result Actions (for when on-chain reveal completes) ─── */}
+      {/* ── Result Actions (for when reveal completes) ─── */}
       {!isFlipping && result && winOutcome && (
         <div className="coinflip-result-actions">
           <button
@@ -471,48 +455,23 @@ const CoinFlipGame: React.FC<CoinFlipGameProps> = ({ className = '' }) => {
         </div>
       )}
 
-      {/* ── Bet Placed — Pending On-Chain Reveal ─────────────── */}
+      {/* ── Bet Placed — Waiting for Result ─────────────── */}
       {betPlaced && !result && (
         <div className="coinflip-pending">
           <div className="coinflip-pending-title">
             <span className="coinflip-pending-spinner" />
-            Bet Placed — Awaiting On-Chain Reveal
-          </div>
-          <div className="coinflip-pending-row">
-            <span className="coinflip-pending-row-label">Bet ID</span>
-            <span className="coinflip-pending-row-value">{betPlaced.betId.slice(0, 16)}...</span>
+            Bet Placed — Waiting for Result
           </div>
           <div className="coinflip-pending-row">
             <span className="coinflip-pending-row-label">Amount</span>
             <span className="coinflip-pending-row-value">{betPlaced.amount} ERG</span>
           </div>
           <div className="coinflip-pending-row">
-            <span className="coinflip-pending-row-label">Choice</span>
+            <span className="coinflip-pending-row-label">Your Pick</span>
             <span className="coinflip-pending-row-value">{betPlaced.choiceLabel}</span>
           </div>
-          <div className="coinflip-pending-row">
-            <span className="coinflip-pending-row-label">Commitment</span>
-            <span className="coinflip-pending-row-value">{betPlaced.commitment.slice(0, 16)}...</span>
-          </div>
-          {betPlaced.txId && (
-            <div className="coinflip-pending-row">
-              <span className="coinflip-pending-row-label">Transaction</span>
-              <span className="coinflip-pending-row-value">
-                <a
-                  href={`https://explorer.ergoplatform.com/en/transactions/${betPlaced.txId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="coinflip-tx-link"
-                >
-                  {betPlaced.txId.slice(0, 16)}...
-                </a>
-              </span>
-            </div>
-          )}
           <div className="coinflip-pending-note">
-            {isOnChainEnabled()
-              ? 'Outcome will be revealed on-chain when the house processes the bet.'
-              : '⚠️ Off-chain mode — no real transaction was broadcast (MAT-344).'}
+            Your bet is being processed. The result will appear here shortly.
           </div>
           <button
             className="coinflip-flip-again-btn"

@@ -52,8 +52,6 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
 }
 
 function App() {
-  const network = import.meta.env.VITE_NETWORK || 'testnet';
-  const explorerUrl = import.meta.env.VITE_EXPLORER_URL || 'https://testnet.ergoplatform.com';
   const [showDevPanel, setShowDevPanel] = useState(false);
 
   // Onboarding state
@@ -106,9 +104,6 @@ function App() {
             <div className="header-left">
               <span className="header-logo">&#129689;</span>
               <h1 className="header-title">DuckPools</h1>
-              <span className={`network-badge network-${network}`}>
-                {network.toUpperCase()}
-              </span>
             </div>
             <div className="header-right">
               <button
@@ -119,14 +114,6 @@ function App() {
               >
                 Help
               </button>
-              <a
-                href={explorerUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="explorer-link"
-              >
-                Explorer &#8599;
-              </a>
               <WalletConnector />
             </div>
           </header>
@@ -167,12 +154,9 @@ function App() {
           <footer className="app-footer">
             <div className="footer-content">
               <p className="footer-disclaimer">
-                &#9888;&#65039; Decentralized gambling on Ergo. Play responsibly. All transactions are final.
+                &#9888;&#65039; Play responsibly. All bets are final.
               </p>
               <div className="footer-links">
-                <a href="https://ergoplatform.com" target="_blank" rel="noopener noreferrer">
-                  About Ergo
-                </a>
                 <a href="https://github.com/duckpools/coinflip-game" target="_blank" rel="noopener noreferrer">
                   GitHub
                 </a>

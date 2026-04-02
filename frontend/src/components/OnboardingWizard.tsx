@@ -51,14 +51,14 @@ const STEPS: Step[] = [
     icon: '\u{1F986}', // duck
     heading: 'Welcome to DuckPools',
     description:
-      'The premier coinflip gambling platform on the Ergo blockchain. Fair, transparent, and provably random — powered by a cryptographic commit-reveal scheme.',
+      'The fairest coinflip platform around. No hidden algorithms, no server-side randomness — every flip is transparent and provably fair.',
     detail: (
       <>
         <strong>What makes us different?</strong>
         <br />
-        No hidden algorithms. No server-side randomness. Every flip is
-        cryptographically verifiable on-chain. The house bankroll is
-        transparent and publicly auditable.
+        Your bet outcome is determined by cryptography, not by us.
+        Every result can be independently verified. The house bankroll
+        is transparent and publicly auditable.
       </>
     ),
   },
@@ -66,7 +66,7 @@ const STEPS: Step[] = [
     icon: '\u{1F511}', // key
     heading: 'Connect Your Wallet',
     description:
-      'DuckPools works with Nautilus, the leading Ergo wallet. Connect to start playing with your ERG.',
+      'DuckPools works with Nautilus wallet. Connect to start playing with your ERG.',
     detail: (
       <>
         <strong>Getting started:</strong>
@@ -81,7 +81,7 @@ const STEPS: Step[] = [
         </a>{' '}
         browser extension
         <br />
-        2. Create or import your Ergo wallet
+        2. Create or import your wallet
         <br />
         3. Click "Connect Wallet" in the top right
         <br />
@@ -93,7 +93,7 @@ const STEPS: Step[] = [
     icon: '\u{1FA0}', // coin
     heading: 'How Coinflip Works',
     description:
-      'We use a commit-reveal scheme to ensure fairness. Neither you nor the house can influence the outcome.',
+      'We use a cryptographic commitment scheme to ensure fairness. Neither you nor the house can influence the outcome.',
     detail: (
       <ol
         className="ow-steps-list"
@@ -102,23 +102,21 @@ const STEPS: Step[] = [
         <li>
           <span className="ow-step-num">1</span>
           <span>
-            <strong>Commit:</strong> You pick Heads or Tails and a random
-            secret. We compute <code>blake2b256(secret || choice)</code> as your
-            commitment.
+            <strong>Pick:</strong> Choose Heads or Tails and set your bet amount.
           </span>
         </li>
         <li>
           <span className="ow-step-num">2</span>
           <span>
-            <strong>Bet:</strong> Your commitment is submitted on-chain along
-            with your ERG bet amount.
+            <strong>Commit:</strong> Your choice is locked in with a
+            cryptographic commitment. No take-backs!
           </span>
         </li>
         <li>
           <span className="ow-step-num">3</span>
           <span>
-            <strong>Reveal:</strong> After confirmation, you reveal your
-            secret and choice. The oracle result determines the winner.
+            <strong>Reveal:</strong> After a short wait, the result is
+            determined and the winner is paid out automatically.
           </span>
         </li>
         <li>
@@ -135,7 +133,7 @@ const STEPS: Step[] = [
     icon: '\u{1F680}', // rocket
     heading: 'Ready to Flip!',
     description:
-      'You are all set. Pick your side, set your bet, and let the blockchain decide your fate. Good luck!',
+      'You are all set. Pick your side, set your bet, and test your luck. Good fortune!',
     detail: (
       <>
         <strong>Tips:</strong>

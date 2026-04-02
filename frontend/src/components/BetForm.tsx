@@ -38,10 +38,6 @@ function calculatePayout(amountNanoErg: string): string {
   return (nano * BigInt(Math.round(PAYOUT_MULTIPLIER * 1e9)) / BigInt(1e9)).toString();
 }
 
-function getExplorerTxUrl(txId: string): string {
-  return `https://explorer.ergoplatform.com/en/transactions/${txId}`;
-}
-
 // ─── Component ──────────────────────────────────────────────────────
 
 export default function BetForm() {
@@ -52,8 +48,6 @@ export default function BetForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingBet, setPendingBet] = useState<{
-    txId: string;
-    betId: string;
     amount: string;
     choiceLabel: string;
   } | null>(null);
@@ -139,10 +133,8 @@ export default function BetForm() {
 
       // Sanity-check commitment (should always pass)
       if (!verifyCommitment(secret, choice, commitment)) {
-        throw new Error('Commitment verification failed — internal error');
+        throw new Error('Internal error — please try again');
       }
-
-      let txId = '';
 
       if (isOnChainEnabled()) {
         // ── ON-CHAIN FLOW ──────────────────────────────────────
@@ -161,14 +153,14 @@ export default function BetForm() {
         }
 
         if (utxos.length === 0) {
-          throw new Error('No UTXOs available in wallet. Fund your wallet first.');
+          throw new Error('No funds available. Please deposit some ERG to your wallet first.');
         }
 
         // Extract player public key from first P2PK UTXO
         const playerPubKey = extractPubKeyFromUtxo(utxos[0]);
         if (!playerPubKey) {
           throw new Error(
-            'Could not determine player public key. Ensure your UTXO is a P2PK address.'
+            'Could not verify your wallet. Please use a standard wallet address.'
           );
         }
 
@@ -187,13 +179,13 @@ export default function BetForm() {
         // Sign via Nautilus — triggers the wallet popup
         const signedTx = await signTransaction(unsignedTx as any);
         if (!signedTx) {
-          throw new Error('Transaction signing was rejected or failed');
+          throw new Error('Payment was cancelled or failed. Please try again.');
         }
 
         // Broadcast to the Ergo network
-        txId = (await submitTransaction(signedTx as any)) ?? '';
+        const txId = (await submitTransaction(signedTx as any)) ?? '';
         if (!txId) {
-          throw new Error('Transaction broadcast failed');
+          throw new Error('Payment failed. Please try again.');
         }
 
         console.log(`[BetForm] On-chain bet placed: txId=${txId}, timeout=${timeoutHeight}`);
@@ -219,14 +211,11 @@ export default function BetForm() {
           throw new Error(data.error || `Server error ${res.status}`);
         }
 
-        txId = data.txId;
         console.warn('[BetForm] OFF-CHAIN MODE — contract not compiled yet.');
       }
 
       // Show pending state
       setPendingBet({
-        txId,
-        betId,
         amount,
         choiceLabel: choice === 0 ? 'Heads' : 'Tails',
       });
@@ -357,30 +346,18 @@ export default function BetForm() {
         <div className="bf-pending">
           <div className="bf-pending-title">
             <span className="bf-pending-spinner" />
-            Bet Pending Confirmation
-          </div>
-          <div className="bf-pending-row">
-            <span className="bf-pending-row-label">Bet ID</span>
-            <span className="bf-pending-row-value">{pendingBet.betId.slice(0, 16)}...</span>
+            Bet Placed — Waiting for Result
           </div>
           <div className="bf-pending-row">
             <span className="bf-pending-row-label">Amount</span>
             <span className="bf-pending-row-value">{pendingBet.amount} ERG</span>
           </div>
           <div className="bf-pending-row">
-            <span className="bf-pending-row-label">Choice</span>
+            <span className="bf-pending-row-label">Your Pick</span>
             <span className="bf-pending-row-value">{pendingBet.choiceLabel}</span>
           </div>
-          <div className="bf-pending-row">
-            <span className="bf-pending-row-label">TX</span>
-            <a
-              className="bf-pending-link"
-              href={getExplorerTxUrl(pendingBet.txId)}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {pendingBet.txId.slice(0, 16)}...
-            </a>
+          <div className="bf-pending-note">
+            Your bet is being processed. The result will appear here shortly.
           </div>
         </div>
       )}

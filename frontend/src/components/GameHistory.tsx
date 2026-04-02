@@ -9,10 +9,6 @@ import './GameHistory.css';
 
 const REFRESH_INTERVAL = 30_000;
 
-function getExplorerTxUrl(txId: string): string {
-  return `https://explorer.ergoplatform.com/en/transactions/${txId}`;
-}
-
 function formatDate(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString(undefined, {
@@ -107,7 +103,6 @@ export default function GameHistory() {
               <div className="gh-skeleton-cell" style={{ width: 60 }} />
               <div className="gh-skeleton-cell" style={{ width: 70 }} />
               <div className="gh-skeleton-cell" style={{ width: 60 }} />
-              <div className="gh-skeleton-cell" style={{ width: 90 }} />
             </div>
           ))}
         </div>
@@ -123,7 +118,6 @@ export default function GameHistory() {
                 <th>Amount</th>
                 <th>Outcome</th>
                 <th>Payout</th>
-                <th>TX</th>
               </tr>
             </thead>
             <tbody>
@@ -145,16 +139,6 @@ export default function GameHistory() {
                     {bet.payout && bet.payout !== '0'
                       ? `${formatErg(bet.payout)} ERG`
                       : '—'}
-                  </td>
-                  <td>
-                    <a
-                      className="gh-tx-link"
-                      href={getExplorerTxUrl(bet.txId)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {bet.txId.slice(0, 10)}...
-                    </a>
                   </td>
                 </tr>
               ))}
