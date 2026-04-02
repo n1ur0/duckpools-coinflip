@@ -237,10 +237,16 @@ async def root():
 
 @app.get("/health")
 async def health():
-    """Health check: verify node connectivity."""
+    """Health check: verify node connectivity when configured."""
     import httpx
 
-    health_data = {"status": "ok", "node": NODE_URL}
+    health_data: dict = {"status": "ok", "mode": "on-chain" if NODE_CONFIGURED else "off-chain"}
+
+    if not NODE_CONFIGURED:
+        health_data["node"] = "not configured"
+        return health_data
+
+    health_data["node"] = NODE_URL
 
     # Check node connectivity
     try:

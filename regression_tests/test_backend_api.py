@@ -44,7 +44,8 @@ class TestHealthCheck:
             assert "node" in data, "Response missing 'node' field"
             assert "status" in data, "Response missing 'status' field"
             # May include node_height if node is up
-            assert data["node"] == NODE_URL, f"Unexpected node URL: {data['node']}"
+            # XER-12: node may be "not configured" in off-chain mode
+            assert data["node"] in (NODE_URL, "not configured"), f"Unexpected node: {data['node']}"
 
     @pytest.mark.asyncio
     async def test_health_includes_wallet_status(self):

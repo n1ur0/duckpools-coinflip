@@ -930,16 +930,17 @@ def test_ws_limits_are_reasonable():
 
 
 # ═══════════════════════════════════════════════════════════════
-# 14. BE-8: FAIL-FAST ON EMPTY NODE_API_KEY
-#    Server must refuse to start without NODE_API_KEY.
+# 14. XER-12: ERGO NODE IS OPTIONAL
+#    Server must start without NODE_API_KEY in off-chain mode.
 # ═══════════════════════════════════════════════════════════════
 
-def test_failfast_on_empty_node_api_key():
+def test_node_is_optional():
     """
-    BE-8: api_server.py must sys.exit(1) when NODE_API_KEY is empty.
+    XER-12: api_server.py must NOT fail-fast when NODE_API_KEY is empty.
 
-    Without this check, the server starts in a degraded state where
-    every blockchain call silently fails. This is a launch blocker.
+    The server should start in off-chain mode when no node is configured,
+    allowing the game UI and backend APIs to function without a blockchain
+    connection. On-chain features (reveal, refund) should gracefully degrade.
     """
     api_server_path = os.path.join(
         os.path.dirname(__file__), "..", "..", "..",
@@ -953,22 +954,32 @@ def test_failfast_on_empty_node_api_key():
     with open(api_server_path, "r") as f:
         source = f.read()
 
-    # Must check NODE_API_KEY and call sys.exit(1) if empty
-    has_check = "NODE_API_KEY" in source and "sys.exit" in source
-    if not has_check:
+    # Must NOT have the old fail-fast sys.exit(1) on empty NODE_API_KEY
+    if "sys.exit(1)" in source and "NODE_API_KEY" in source:
+        # Check it's not the old pattern where NODE_API_KEY check causes exit
+        lines = source.split("\n")
+        for i, line in enumerate(lines):
+            if "NODE_API_KEY" in line and i + 1 < len(lines):
+                next_line = lines[i + 1]
+                if "sys.exit" in next_line:
+                    pytest.fail(
+                        "XER-12: api_server.py must NOT fail-fast when NODE_API_KEY "
+                        "is empty. Node is optional — server runs in off-chain mode."
+                    )
+
+    # Must have the NODE_CONFIGURED flag or equivalent off-chain mode logic
+    has_optional_flag = "NODE_CONFIGURED" in source or "off-chain" in source.lower()
+    if not has_optional_flag:
         pytest.fail(
-            "BE-8: api_server.py must fail-fast when NODE_API_KEY is empty. "
-            "Add: if not NODE_API_KEY: sys.exit(1)"
+            "XER-12: api_server.py must have NODE_CONFIGURED flag or off-chain "
+            "mode logic to gracefully handle missing Ergo node."
         )
 
-    # The check must happen BEFORE the app is created (module-level, not in lifespan)
-    # Find the sys.exit line and verify it comes before "app = FastAPI"
-    exit_pos = source.find("sys.exit")
-    app_pos = source.find("app = FastAPI")
-    if exit_pos > app_pos and app_pos > 0:
+    # Health endpoint must report mode
+    has_mode = '"mode"' in source or "'mode'" in source
+    if not has_mode:
         pytest.fail(
-            "BE-8: NODE_API_KEY fail-fast check must be at module level, "
-            "not inside lifespan or route handlers."
+            "XER-12: /health endpoint must report 'mode' field (on-chain/off-chain)."
         )
 
 
