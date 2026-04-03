@@ -2,17 +2,20 @@
  * DuckPools Coinflip Service
  *
  * Builds unsigned EIP-12 transactions for all three coinflip phases
- * using Fleet SDK. The wallet (Nautilus) then signs and submits.
+ * using the DuckPools SDK TransactionBuilder. The wallet (Nautilus)
+ * then signs and submits.
+ *
+ * This service is the BRIDGE between the frontend (CoinFlipGame.tsx)
+ * and the SDK (sdk/src/transaction/TransactionBuilder.ts).
+ *
+ * Architecture:
+ *   CoinFlipGame.tsx → coinflipService.ts → SDK TransactionBuilder → EIP-12 tx
+ *                                       → wallet.signTransaction() → broadcast
  *
  * Phases:
  *   1. COMMIT (buildPlaceBetTx)  — player locks ERG in contract box
  *   2. REVEAL (buildRevealTx)    — house spends box, pays winner via RNG
  *   3. REFUND (buildRefundTx)    — player reclaims after timeout
- *
- * Dependencies:
- *   - @fleet-sdk/core (TransactionBuilder, OutputBuilder, BoxSelector)
- *   - @fleet-sdk/serializer (SInt, SColl, SByte)
- *   - @fleet-sdk/crypto (blake2b256)
  *
  * Register layout MUST match coinflip_v2.es (compiled 2026-03-28):
  *   R4: Coll[Byte]  — house's compressed public key (33 bytes)
@@ -26,15 +29,8 @@
  * and only included for off-chain box indexing convenience.
  */
 
-import {
-  TransactionBuilder,
-  OutputBuilder,
-  BoxSelector,
-  ErgoAddress,
-  type Box,
-  type Amount,
-} from '@fleet-sdk/core';
-import { SInt, SColl, SByte } from '@fleet-sdk/serializer';
+import { TransactionBuilder } from '../../../sdk/src/transaction/TransactionBuilder';
+import type { EIP12UnsignedTransaction } from '../../../sdk/src/transaction/TransactionBuilder';
 import { blake2b256 } from '@fleet-sdk/crypto';
 import {
   P2S_ADDRESS,
@@ -49,6 +45,18 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────
 
+/** UTXO from wallet.getUtxos() — compatible with Fleet SDK and Nautilus */
+export interface WalletUtxo {
+  boxId: string;
+  value: string | bigint;
+  ergoTree?: string;
+  assets?: Array<{ tokenId: string; amount: string | bigint }>;
+  creationHeight?: number;
+  transactionId?: string;
+  index?: number;
+  additionalRegisters?: Record<string, unknown>;
+}
+
 export interface PlaceBetParams {
   /** Player's wallet address (change address) */
   changeAddress: string;
@@ -60,31 +68,85 @@ export interface PlaceBetParams {
   commitment: string;
   /** 0 = heads, 1 = tails */
   choice: number;
-  /** Player's random secret (8 bytes) */
+  /** Player's random secret (raw bytes) */
   secret: Uint8Array;
   /** Unique bet identifier (hex) */
   betId: string;
   /** Current blockchain height */
   currentHeight: number;
   /** Player's UTXOs (from wallet.getUtxos()) */
-  utxos: Box<Amount>[];
+  utxos: WalletUtxo[];
 }
 
 export interface PlaceBetResult {
   /** The unsigned EIP-12 transaction ready for wallet.signTransaction() */
-  unsignedTx: ReturnType<InstanceType<typeof TransactionBuilder>['build']> extends { toEIP12Object: () => infer R } ? R : never;
+  unsignedTx: EIP12UnsignedTransaction;
   /** The bet's timeout height */
   timeoutHeight: number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
+/**
+ * Convert raw secret bytes to hex string for the SDK TransactionBuilder.
+ * The contract (coinflip_v2.es) reads playerSecret as Coll[Byte] from R9
+ * and uses it directly in blake2b256(playerSecret ++ Coll(choiceByte)).
+ * This MUST match the bytes used in generateCommitment() in CoinFlipGame.tsx.
+ */
 function secretToHex(secret: Uint8Array): string {
-  // Convert the raw secret bytes to a hex string for SColl(SByte, ...) encoding.
-  // The contract (coinflip_v2.es) reads playerSecret as Coll[Byte] from R9
-  // and uses it directly in blake2b256(playerSecret ++ Coll(choiceByte)).
-  // This MUST match the bytes used in generateCommitment() in CoinFlipGame.tsx.
   return Array.from(secret).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Select UTXOs to cover a target amount + fee using a greedy algorithm.
+ *
+ * The SDK TransactionBuilder delegates coin selection to the caller,
+ * giving full control over the algorithm (greedy, knapsack, etc).
+ * This uses greedy (pick largest first) for simplicity and low input count.
+ *
+ * @param utxos - Available UTXOs from wallet.getUtxos()
+ * @param targetAmount - Amount needed (bet amount in nanoERG)
+ * @param fee - Transaction fee in nanoERG
+ * @returns Array of { boxId, value } for the SDK TransactionBuilder
+ * @throws Error if insufficient balance
+ */
+function selectUtxos(
+  utxos: WalletUtxo[],
+  targetAmount: bigint,
+  fee: bigint
+): Array<{ boxId: string; value: bigint }> {
+  if (utxos.length === 0) {
+    throw new Error('No UTXOs available in wallet. Fund your wallet first.');
+  }
+
+  const totalNeeded = targetAmount + fee;
+
+  // Sort by value descending (greedy: pick largest UTXOs first)
+  const sorted = [...utxos].sort((a, b) => {
+    const va = typeof a.value === 'string' ? BigInt(a.value) : a.value;
+    const vb = typeof b.value === 'string' ? BigInt(b.value) : b.value;
+    return Number(vb - va);
+  });
+
+  const selected: Array<{ boxId: string; value: bigint }> = [];
+  let totalValue = 0n;
+
+  for (const utxo of sorted) {
+    const value = typeof utxo.value === 'string' ? BigInt(utxo.value) : utxo.value;
+    selected.push({ boxId: utxo.boxId, value });
+    totalValue += value;
+    if (totalValue >= totalNeeded) break;
+  }
+
+  if (totalValue < totalNeeded) {
+    throw new Error(
+      `Insufficient ERG balance to place bet. You need at least ` +
+      `${(Number(targetAmount) / 1e9).toFixed(4)} ERG plus fee. ` +
+      `Available: ${(Number(totalValue) / 1e9).toFixed(4)} ERG.`
+    );
+  }
+
+  return selected;
 }
 
 // ─── Build Place Bet Transaction ─────────────────────────────────
@@ -101,6 +163,11 @@ function secretToHex(secret: Uint8Array): string {
  * which triggers the Nautilus popup, then wallet.submitTransaction()
  * to broadcast.
  *
+ * Uses the SDK TransactionBuilder for:
+ *   - Input/output balancing and change box creation
+ *   - Register serialization (Sigma-state VLQ encoding)
+ *   - EIP-12 format output for wallet signing
+ *
  * @throws Error if on-chain flow is not enabled (contract not configured)
  * @throws Error if insufficient UTXOs to cover bet + fee
  */
@@ -112,54 +179,37 @@ export async function buildPlaceBetTx(params: PlaceBetParams): Promise<PlaceBetR
   }
 
   const timeoutHeight = params.currentHeight + TIMEOUT_DELTA;
-
-  // Build the contract output box with all registers
-  // Register layout (matching coinflip_v2.es compiled 2026-03-28):
-  //   R4: housePkBytes    (Coll[Byte])   — house's compressed public key
-  //   R5: playerPkBytes   (Coll[Byte])   — player's compressed public key
-  //   R6: commitmentHash  (Coll[Byte])   — blake2b256(secret || choice)
-  //   R7: playerChoice    (Int)          — 0=heads, 1=tails
-  //   R8: timeoutHeight   (Int)          — block height for timeout
-  //   R9: playerSecret    (Coll[Byte])   — player's random secret (raw bytes)
-
-  const contractAddress = ErgoAddress.fromBase58(P2S_ADDRESS);
-
-  const betBox = new OutputBuilder(params.amountNanoErg, contractAddress, params.currentHeight);
-  if (GAME_NFT_ID) {
-    betBox.addNfts(GAME_NFT_ID);
-  }
-  betBox.setAdditionalRegisters({
-    R4: SColl(SByte, HOUSE_PUB_KEY),                  // housePkBytes (Coll[Byte])
-    R5: SColl(SByte, params.playerPubKey),             // playerPkBytes (Coll[Byte])
-    R6: SColl(SByte, params.commitment),             // commitmentHash (Coll[Byte])
-    R7: SInt(params.choice),                         // playerChoice (Int)
-    R8: SInt(timeoutHeight),                         // timeoutHeight (Int)
-    R9: SColl(SByte, secretToHex(params.secret)),    // playerSecret (Coll[Byte])
-  });
+  const fee = 1000000n; // 0.001 ERG default fee
 
   // Select UTXOs to cover bet amount + fee
-  const target = { nanoErgs: params.amountNanoErg };
-  const selectedInputs = new BoxSelector(params.utxos as Box<bigint>[]).select(target);
+  const inputs = selectUtxos(params.utxos, params.amountNanoErg, fee);
 
-  if (selectedInputs.length === 0) {
-    throw new Error(
-      'Insufficient ERG balance to place bet. You need at least ' +
-      `${(Number(params.amountNanoErg) / 1e9).toFixed(4)} ERG.`
-    );
-  }
+  // Build the unsigned transaction using SDK TransactionBuilder
+  const txBuilder = new TransactionBuilder({
+    fee,
+    changeAddress: params.changeAddress,
+    minBoxValue: 100000n, // 0.0001 ERG minimum box value
+  });
 
-  // Build the transaction
-  const txBuilder = new TransactionBuilder(params.currentHeight)
-    .from(selectedInputs as Box<Amount>[])
-    .to(betBox)
-    .sendChangeTo(params.changeAddress)
-    .payMinFee();
+  const tx = txBuilder.buildPlaceBetTransaction({
+    playerAddress: params.changeAddress,
+    pendingBetAddress: P2S_ADDRESS,
+    amount: params.amountNanoErg,
+    housePubKey: HOUSE_PUB_KEY,
+    playerPubKey: params.playerPubKey,
+    commitment: params.commitment,
+    choice: params.choice,
+    secret: secretToHex(params.secret),
+    timeoutHeight,
+    inputs,
+    gameNftId: GAME_NFT_ID || undefined,
+  });
 
-  const unsignedTx = txBuilder.build();
+  // Convert to EIP-12 format for wallet signing
+  const unsignedTx = txBuilder.toEIP12Object(tx);
 
   return {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    unsignedTx: unsignedTx.toEIP12Object() as any,
+    unsignedTx,
     timeoutHeight,
   };
 }
@@ -209,14 +259,14 @@ export interface RevealParams {
   /** Current blockchain height */
   currentHeight: number;
   /** House UTXOs to pay the fee (house signs this tx) */
-  houseUtxos: Box<Amount>[];
+  houseUtxos: WalletUtxo[];
   /** House change address */
   houseChangeAddress: string;
 }
 
 export interface RevealResult {
   /** The unsigned EIP-12 transaction for house wallet.signTransaction() */
-  unsignedTx: ReturnType<InstanceType<typeof TransactionBuilder>['build']> extends { toEIP12Object: () => infer R } ? R : never;
+  unsignedTx: EIP12UnsignedTransaction;
   /** Whether the player won (determined by on-chain RNG) */
   playerWins: boolean;
   /** Payout amount in nanoERG */
@@ -229,7 +279,7 @@ export interface RefundParams {
   /** The commit box to spend */
   commitBox: CommitBox;
   /** Player's UTXOs to pay the fee */
-  playerUtxos: Box<Amount>[];
+  playerUtxos: WalletUtxo[];
   /** Player's change address */
   changeAddress: string;
   /** Current blockchain height (must be >= timeoutHeight in R8) */
@@ -238,7 +288,7 @@ export interface RefundParams {
 
 export interface RefundResult {
   /** The unsigned EIP-12 transaction for player wallet.signTransaction() */
-  unsignedTx: ReturnType<InstanceType<typeof TransactionBuilder>['build']> extends { toEIP12Object: () => infer R } ? R : never;
+  unsignedTx: EIP12UnsignedTransaction;
   /** Refund amount in nanoERG (98% of bet) */
   refundAmount: bigint;
 }
@@ -376,49 +426,41 @@ export async function buildRevealTx(params: RevealParams): Promise<RevealResult>
   const outputAddress = playerWins ? playerAddress : HOUSE_ADDRESS;
   const outputValue = playerWins ? winPayout : betAmount;
 
-  const payoutBox = new OutputBuilder(outputValue, ErgoAddress.fromBase58(outputAddress), currentHeight);
-
-  // If the commit box had tokens (NFT), pass them to the first output.
-  if (commitBox.tokens && commitBox.tokens.length > 0) {
-    for (const token of commitBox.tokens) {
-      payoutBox.addTokens({ tokenId: token.tokenId, amount: token.amount });
-    }
-  }
-
-  // Build the transaction: spend commit box, create payout box.
-  // The commit box is a P2S box — it doesn't need a signing wallet input for data inputs.
-  // But Fleet SDK's TransactionBuilder needs it as an input.
-  // The house's UTXOs are needed to pay the transaction fee.
-  const commitInput = {
-    boxId: commitBox.boxId,
-    value: commitBox.value,
-    ergoTree: CONTRACT_ERGO_TREE,
-    creationHeight: commitBox.creationHeight,
-    assets: commitBox.tokens?.map(t => ({ tokenId: t.tokenId, amount: t.amount as bigint })) || [],
-    additionalRegisters: {} as Record<string, unknown>,
-    transactionId: commitBox.txId,
-    index: commitBox.index,
-  };
+  // Use SDK TransactionBuilder for the reveal transaction
+  const fee = 1000000n;
+  const txBuilder = new TransactionBuilder({
+    fee,
+    changeAddress: houseChangeAddress,
+    minBoxValue: 100000n,
+  });
 
   // Select house UTXOs for the fee
-  const feeTarget = { nanoErgs: 1_000_000n }; // minimum fee
-  const selectedHouseInputs = new BoxSelector(houseUtxos as Box<bigint>[]).select(feeTarget);
+  const houseInputs = selectUtxos(houseUtxos, 0n, fee);
 
-  if (selectedHouseInputs.length === 0) {
-    throw new Error('House wallet has no UTXOs to pay the reveal transaction fee.');
-  }
+  // Build combined inputs: commit box + house UTXOs for fee
+  const allInputs = [
+    { boxId: commitBox.boxId, value: commitBox.value },
+    ...houseInputs,
+  ];
 
-  const txBuilder = new TransactionBuilder(currentHeight)
-    .from([commitInput as Box<Amount>, ...selectedHouseInputs] as Box<Amount>[])
-    .to(payoutBox)
-    .sendChangeTo(houseChangeAddress)
-    .payMinFee();
+  // Build reveal transaction manually (no register output needed for payout box)
+  const tx = txBuilder.build(
+    allInputs,
+    [{
+      address: outputAddress,
+      value: outputValue,
+      creationHeight: currentHeight,
+      // Pass through NFT if present
+      assets: commitBox.tokens && commitBox.tokens.length > 0
+        ? commitBox.tokens.map(t => ({ tokenId: t.tokenId, amount: t.amount }))
+        : undefined,
+    }]
+  );
 
-  const unsignedTx = txBuilder.build();
+  const unsignedTx = txBuilder.toEIP12Object(tx);
 
   return {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    unsignedTx: unsignedTx.toEIP12Object() as any,
+    unsignedTx,
     playerWins,
     payoutAmount: outputValue,
     blockHash: prevBlockHeaderId,
@@ -453,51 +495,39 @@ export async function buildRefundTx(params: RefundParams): Promise<RefundResult>
   // Matching coinflip_v2.es line 57: val refundAmount = betAmount - betAmount / 50L
   const refundAmount = betAmount - betAmount / 50n;
 
-  // Build the commit box as an input for Fleet SDK
-  const commitInput = {
-    boxId: commitBox.boxId,
-    value: commitBox.value,
-    ergoTree: CONTRACT_ERGO_TREE,
-    creationHeight: commitBox.creationHeight,
-    assets: commitBox.tokens?.map(t => ({ tokenId: t.tokenId, amount: t.amount as bigint })) || [],
-    additionalRegisters: {} as Record<string, unknown>,
-    transactionId: commitBox.txId,
-    index: commitBox.index,
-  };
-
-  // Build the refund output box: goes to the player
-  const refundBox = new OutputBuilder(
-    refundAmount,
-    ErgoAddress.fromBase58(changeAddress),
-    currentHeight
-  );
-
-  // If the commit box had tokens (NFT), pass them to the refund output.
-  if (commitBox.tokens && commitBox.tokens.length > 0) {
-    for (const token of commitBox.tokens) {
-      refundBox.addTokens({ tokenId: token.tokenId, amount: token.amount });
-    }
-  }
+  const fee = 1000000n;
+  const txBuilder = new TransactionBuilder({
+    fee,
+    changeAddress,
+    minBoxValue: 100000n,
+  });
 
   // Select player UTXOs for the transaction fee
-  const feeTarget = { nanoErgs: 1_000_000n };
-  const selectedInputs = new BoxSelector(playerUtxos as Box<bigint>[]).select(feeTarget);
+  const playerInputs = selectUtxos(playerUtxos, 0n, fee);
 
-  if (selectedInputs.length === 0) {
-    throw new Error('Insufficient UTXOs to pay the refund transaction fee.');
-  }
+  // Build combined inputs: commit box + player UTXOs for fee
+  const allInputs = [
+    { boxId: commitBox.boxId, value: commitBox.value },
+    ...playerInputs,
+  ];
 
-  const txBuilder = new TransactionBuilder(currentHeight)
-    .from([commitInput as Box<Amount>, ...selectedInputs] as Box<Amount>[])
-    .to(refundBox)
-    .sendChangeTo(changeAddress)
-    .payMinFee();
+  const tx = txBuilder.build(
+    allInputs,
+    [{
+      address: changeAddress,
+      value: refundAmount,
+      creationHeight: currentHeight,
+      // Pass through NFT if present
+      assets: commitBox.tokens && commitBox.tokens.length > 0
+        ? commitBox.tokens.map(t => ({ tokenId: t.tokenId, amount: t.amount }))
+        : undefined,
+    }]
+  );
 
-  const unsignedTx = txBuilder.build();
+  const unsignedTx = txBuilder.toEIP12Object(tx);
 
   return {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    unsignedTx: unsignedTx.toEIP12Object() as any,
+    unsignedTx,
     refundAmount,
   };
 }

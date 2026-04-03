@@ -3,10 +3,14 @@
  * Builds Ergo transactions for the coinflip protocol.
  *
  * Handles input/output balancing, fee deduction, and change box creation.
- * Callers must provide resolved input box values (fetched from node).
+ * Callers must provide resolved input box values (fetched from node or wallet).
+ *
+ * Output formats:
+ *   - toEIP12Object()  — for browser wallet signing (Nautilus EIP-12)
+ *   - toWalletFormat()  — for node wallet API (/wallet/transaction/send)
+ *   - toPaymentFormat() — for node payment API (/wallet/payment/send)
  */
 
-import { Buffer } from 'buffer';
 import type {
   ErgoTransaction,
   TransactionInput,
@@ -20,6 +24,7 @@ export class TransactionBuilder {
   private fee: bigint;
   private changeAddress: string | undefined;
   private minBoxValue: bigint;
+  private creationHeight: number | undefined;
 
   constructor(options: TransactionBuilderOptions = {}) {
     this.fee = options.fee ?? 1000000n; // Default 0.001 ERG
@@ -47,6 +52,14 @@ export class TransactionBuilder {
    */
   setChangeAddress(address: string): this {
     this.changeAddress = address;
+    return this;
+  }
+
+  /**
+   * Set creation height (block height when the transaction is created)
+   */
+  setCreationHeight(height: number): this {
+    this.creationHeight = height;
     return this;
   }
 
@@ -124,29 +137,33 @@ export class TransactionBuilder {
    *   R6: Coll[Byte] — blake2b256(playerSecret ++ Coll(choiceByte))
    *   R7: Int        — player's choice: 0=heads, 1=tails
    *   R8: Int        — block height for timeout/refund
-   *   R9: Coll[Byte] — player's random secret (32 bytes)
+   *   R9: Coll[Byte] — player's random secret (raw bytes)
    *
    * NOTE: Ergo boxes only have R0-R9. R0-R3 are reserved. No R10.
    * NOTE: betId is tracked off-chain only, NOT in contract registers.
    * NOTE: Contract uses blake2b256(playerSecret ++ Coll(choiceByte))
    *       where playerSecret is raw bytes (R9) and choiceByte is 0 or 1.
+   *
+   * @param inputs - UTXO inputs to spend (from wallet.getUtxos())
+   *   Each input needs boxId and value. The wallet handles signing proofs.
    */
   buildPlaceBetTransaction(params: {
     playerAddress: string;
     pendingBetAddress: string;
     amount: bigint;
     housePubKey: string;       // House's compressed public key (hex, 33 bytes)
-    playerPubKey: string;      // Player's compressed public key (hex)
+    playerPubKey: string;      // Player's compressed public key (hex, 33 bytes)
     commitment: string;        // blake2b256(playerSecret ++ Coll(choiceByte)) (hex, 64 chars)
     choice: number;            // Player's choice: 0=heads, 1=tails
-    secret: string;            // Player's random secret as hex string (32 bytes, Coll[Byte])
+    secret: string;            // Player's random secret as hex string (raw bytes as hex)
     timeoutHeight: number;     // Block height for timeout/refund
-    inputBoxId: string;
-    inputBoxValue: bigint;
+    inputs: Array<{ boxId: string; value: bigint }>; // UTXO inputs from wallet
+    gameNftId?: string;        // Optional NFT token ID for off-chain indexing
   }): ErgoTransaction {
     const output: TransactionOutput = {
       address: params.pendingBetAddress,
       value: params.amount,
+      creationHeight: this.creationHeight,
       additionalRegisters: {
         R4: { type: 'Coll[Byte]' as const, value: params.housePubKey },
         R5: { type: 'Coll[Byte]' as const, value: params.playerPubKey },
@@ -155,10 +172,15 @@ export class TransactionBuilder {
         R8: { type: 'Int' as const, value: params.timeoutHeight },
         R9: { type: 'Coll[Byte]' as const, value: params.secret },
       } as Record<string, SValue>,
+    };
+
+    // Optionally add NFT to the output for off-chain indexing
+    if (params.gameNftId) {
+      output.assets = [{ tokenId: params.gameNftId, amount: 1n }];
     }
 
     return this.build(
-      [{ boxId: params.inputBoxId, value: params.inputBoxValue }],
+      params.inputs,
       [output]
     );
   }
@@ -196,6 +218,7 @@ export class TransactionBuilder {
     const output: TransactionOutput = {
       address: recipient,
       value: payout,
+      creationHeight: this.creationHeight,
     };
 
     return this.build(
@@ -217,6 +240,7 @@ export class TransactionBuilder {
     const output: TransactionOutput = {
       address: params.playerAddress,
       value: params.betAmount,
+      creationHeight: this.creationHeight,
     };
 
     return this.build(
@@ -225,11 +249,56 @@ export class TransactionBuilder {
     );
   }
 
+  // ─── Format Converters ───────────────────────────────────────────
+
+  /**
+   * Convert transaction to EIP-12 format for browser wallet signing.
+   *
+   * EIP-12 (Ergo Improvement Proposal 12) defines the format that
+   * Nautilus and other browser wallets expect for signTransaction().
+   *
+   * This is the primary format for frontend wallet integration.
+   */
+  toEIP12Object(tx: ErgoTransaction): EIP12UnsignedTransaction {
+    return {
+      inputs: tx.inputs.map(input => ({
+        boxId: input.boxId,
+        extension: input.extension ?? {},
+      })),
+      dataInputs: tx.dataInputs?.map(input => ({
+        boxId: input.boxId,
+        extension: input.extension ?? {},
+      })) ?? [],
+      outputs: tx.outputs.map(output => {
+        const eip12Output: EIP12Output = {
+          value: output.value.toString(),
+          ergoTree: output.ergoTree ?? '',
+          creationHeight: output.creationHeight ?? 0,
+          assets: output.assets?.map(a => ({
+            tokenId: a.tokenId,
+            amount: a.amount.toString(),
+          })) ?? [],
+          additionalRegisters: {},
+        };
+
+        // Serialize registers using Sigma-state encoding
+        if (output.additionalRegisters) {
+          for (const [key, svalue] of Object.entries(output.additionalRegisters)) {
+            eip12Output.additionalRegisters[key] = serializeSValue(svalue);
+          }
+        }
+
+        return eip12Output;
+      }),
+      fee: tx.fee?.toString() ?? '0',
+    };
+  }
+
   /**
    * Convert transaction to node wallet format
+   * For /wallet/transaction/send endpoint
    */
   toWalletFormat(tx: ErgoTransaction): any {
-    // Convert to format expected by /wallet/transaction/send
     return {
       requests: tx.outputs.map(output => ({
         address: output.address,
@@ -256,9 +325,9 @@ export class TransactionBuilder {
 
   /**
    * Convert transaction to payment format
+   * For /wallet/payment/send endpoint
    */
   toPaymentFormat(tx: ErgoTransaction): any {
-    // Convert to format expected by /wallet/payment/send
     return {
       requests: tx.outputs.map(output => ({
         address: output.address,
@@ -282,4 +351,39 @@ export class TransactionBuilder {
       fee: tx.fee?.toString(),
     };
   }
+}
+
+// ─── EIP-12 Type Definitions ──────────────────────────────────────
+
+/**
+ * EIP-12 unsigned transaction format.
+ * This is what Nautilus (and other EIP-12 wallets) expect for signTransaction().
+ *
+ * Reference: https://github.com/ergoplatform/eips/blob/eip-12/eip-12.md
+ */
+export interface EIP12UnsignedTransaction {
+  inputs: Array<{
+    boxId: string;
+    extension: Record<string, unknown>;
+  }>;
+  dataInputs: Array<{
+    boxId: string;
+    extension: Record<string, unknown>;
+  }>;
+  outputs: EIP12Output[];
+  fee: string;
+}
+
+/**
+ * EIP-12 output box format.
+ */
+export interface EIP12Output {
+  value: string;
+  ergoTree: string;
+  creationHeight: number;
+  assets: Array<{
+    tokenId: string;
+    amount: string;
+  }>;
+  additionalRegisters: Record<string, string>;
 }

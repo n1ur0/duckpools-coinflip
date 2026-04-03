@@ -12,6 +12,7 @@ export { DuckPoolsClient } from './client/DuckPoolsClient';
 
 // Transaction
 export { TransactionBuilder } from './transaction/TransactionBuilder';
+export type { EIP12UnsignedTransaction, EIP12Output } from './transaction/TransactionBuilder';
 
 // Bet
 export { BetManager } from './bet/BetManager';

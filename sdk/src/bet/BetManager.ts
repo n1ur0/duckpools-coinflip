@@ -80,6 +80,9 @@ export class BetManager {
     const timeoutHeight = currentHeight + timeoutDelta;
 
     // Build bet transaction
+    // NOTE: Caller must provide actual UTXO inputs via options.inputs.
+    // The SDK does not select UTXOs — this is intentional to give the
+    // caller full control over coin selection (greedy, knapsack, etc).
     const tx = this.txBuilder.buildPlaceBetTransaction({
       playerAddress: this.pendingBetAddress,
       pendingBetAddress: this.pendingBetAddress,
@@ -89,10 +92,8 @@ export class BetManager {
       commitment,
       choice: options.choice,
       secret: secret,
-      betId,
       timeoutHeight,
-      inputBoxId: '', // Will be filled by wallet
-      inputBoxValue: 0n, // Will be filled by wallet
+      inputs: options.inputs || [],
     });
 
     // Submit transaction
