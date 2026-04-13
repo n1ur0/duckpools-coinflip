@@ -13,7 +13,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field, field_validator
 
-from validators import validate_ergo_address, ValidationError as ErgoValidationError
+from backend.validators import validate_ergo_address, ValidationError as ErgoValidationError
 
 router = APIRouter(tags=["game"])
 
