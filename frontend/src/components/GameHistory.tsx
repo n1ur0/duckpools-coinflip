@@ -147,14 +147,18 @@ export default function GameHistory() {
                       : '—'}
                   </td>
                   <td>
-                    <a
-                      className="gh-tx-link"
-                      href={getExplorerTxUrl(bet.txId)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {bet.txId.slice(0, 10)}...
-                    </a>
+                    {bet.txId ? (
+                      <a
+                        className="gh-tx-link"
+                        href={getExplorerTxUrl(bet.txId)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {bet.txId.slice(0, 10)}...
+                      </a>
+                    ) : (
+                      <span className="gh-tx-pending">Pending</span>
+                    )}
                   </td>
                 </tr>
               ))}

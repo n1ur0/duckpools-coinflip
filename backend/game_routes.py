@@ -7,15 +7,17 @@ These routes match the API contract expected by the React frontend.
 MAT-309: Rebuild backend API to match frontend contract.
 """
 
+import logging
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field, field_validator
 
 from validators import validate_ergo_address, ValidationError as ErgoValidationError
 
 router = APIRouter(tags=["game"])
+logger = logging.getLogger("duckpools.game")
 
 # ─── Compiled Contract Constants ──────────────────────────────────
 # coinflip_v2.es compiled 2026-03-28 against node v6.0.3 (Lithos testnet)
@@ -131,6 +133,31 @@ class PlaceBetResponse(BaseModel):
     txId: str = ""
     betId: str = ""
     message: str = ""
+
+
+class ResolveBetRequest(BaseModel):
+    betId: str
+    outcome: str  # "win", "loss", "refunded"
+    txId: str = ""
+    boxId: str = ""
+    payout: str = "0"
+    resolvedAtHeight: Optional[int] = None
+
+    @field_validator("outcome")
+    @classmethod
+    def validate_outcome(cls, v: str) -> str:
+        if v not in ("win", "loss", "refunded"):
+            raise ValueError("outcome must be 'win', 'loss', or 'refunded'")
+        return v
+
+    @field_validator("payout")
+    @classmethod
+    def validate_payout(cls, v: str) -> str:
+        try:
+            int(v)
+        except (ValueError, TypeError):
+            raise ValueError("payout must be a valid integer string (nanoERG)")
+        return v
 
 
 class PlayerStats(BaseModel):
@@ -396,3 +423,109 @@ async def place_bet(req: PlaceBetRequest):
         betId=req.betId,
         message="Bet placed. Waiting for on-chain confirmation.",
     )
+
+
+@router.post("/resolve-bet", response_model=PlaceBetResponse)
+async def resolve_bet(req: ResolveBetRequest, request: Request):
+    """
+    Resolve a pending bet after on-chain reveal/settle.
+
+    Updates the in-memory bet record with the outcome, transaction ID,
+    payout, and resolved height. Called by the house bot or frontend
+    after the reveal transaction is confirmed on-chain.
+
+    Also broadcasts a WebSocket event so subscribed clients see the update
+    in real-time without polling.
+    """
+    for bet in _bets:
+        if bet["betId"] == req.betId:
+            if bet["outcome"] != "pending":
+                return PlaceBetResponse(
+                    success=False,
+                    betId=req.betId,
+                    message=f"Bet already resolved with outcome '{bet['outcome']}'",
+                )
+
+            old_outcome = bet["outcome"]
+            bet["outcome"] = req.outcome
+            bet["txId"] = req.txId or bet.get("txId", "")
+            bet["boxId"] = req.boxId or bet.get("boxId", "")
+            bet["payout"] = req.payout
+            bet["resolvedAtHeight"] = req.resolvedAtHeight
+
+            # Update pool stats
+            if req.outcome == "win":
+                _pool_stats["playerWins"] += 1
+            elif req.outcome == "loss":
+                _pool_stats["houseWins"] += 1
+
+            # Broadcast via WebSocket
+            try:
+                ws_manager = request.app.state.ws_manager
+                from game_events import (
+                    BetEventType,
+                    make_bet_settled_event,
+                    make_bet_refunded_event,
+                    broadcast_bet_event,
+                )
+
+                player_addr = bet["playerAddress"]
+                bet_amount = int(bet["betAmount"])
+                choice_label = bet["choice"].get("side", "heads") if isinstance(bet["choice"], dict) else "heads"
+
+                if req.outcome == "refunded":
+                    event = make_bet_refunded_event(
+                        bet_id=req.betId,
+                        player_address=player_addr,
+                        refund_nanoerg=bet_amount,
+                    )
+                else:
+                    event = make_bet_settled_event(
+                        bet_id=req.betId,
+                        player_address=player_addr,
+                        outcome=req.outcome,
+                        payout_nanoerg=int(req.payout),
+                        player_choice=choice_label,
+                        rng_result="heads",  # Not tracked in PoC backend
+                    )
+
+                await broadcast_bet_event(ws_manager, event, player_address=player_addr)
+                logger.info(
+                    "Bet %s resolved: %s -> %s (broadcast to %s)",
+                    req.betId[:8], old_outcome, req.outcome, player_addr[:10],
+                )
+            except Exception as e:
+                logger.warning("Failed to broadcast resolve event for %s: %s", req.betId[:8], e)
+
+            return PlaceBetResponse(
+                success=True,
+                txId=req.txId,
+                betId=req.betId,
+                message=f"Bet resolved: {req.outcome}",
+            )
+
+    return PlaceBetResponse(
+        success=False,
+        betId=req.betId,
+        message="Bet not found",
+    )
+
+
+@router.get("/history")
+async def get_all_history(request: Request):
+    """
+    Admin endpoint: return ALL bets without address filtering.
+    Requires admin API key to prevent data leakage.
+
+    Used for debugging and operational visibility.
+    """
+    import os
+    import hmac as hmac_mod
+
+    api_key = request.query_params.get("api_key", "")
+    expected = os.getenv("ADMIN_API_KEY", "")
+    if not expected or not api_key or not hmac_mod.compare_digest(api_key, expected):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail="Admin API key required")
+
+    return [BetRecord(**b) for b in _bets]
